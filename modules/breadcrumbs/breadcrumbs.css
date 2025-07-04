@@ -1,0 +1,61 @@
+/**
+ * Breadcrumbs Module CSS
+ * 
+ * Provides styling for the breadcrumbs navigation
+ */
+
+.breadcrumbs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.breadcrumbs li {
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-s);  
+  letter-spacing: -0.02rem;
+}
+
+/* Default separator between items */
+.breadcrumbs li:not(:last-child)::after {
+  content: " > ";
+  margin: 0 0.25rem;
+}
+
+/* Custom separators based on data attributes */
+.breadcrumbs li.home-item:not(:last-child)::after {
+  content: attr(data-separator);
+}
+
+.breadcrumbs li.niche-item:not(:last-child)::after {
+  content: attr(data-separator);
+}
+
+.breadcrumbs li.city-item:not(:last-child)::after {
+  content: attr(data-separator);
+}
+
+.breadcrumbs li.state-item:not(:last-child)::after {
+  content: attr(data-separator);
+}
+
+/* Style for the current page */
+.breadcrumbs li[aria-current="page"] {
+  font-weight: normal;
+}
+
+/* Basic link styling */
+.breadcrumbs a {
+  color: var(--primary); 
+  transition: color 0.2s ease;    
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}

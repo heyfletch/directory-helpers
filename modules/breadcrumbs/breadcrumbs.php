@@ -32,11 +32,19 @@ class DH_Breadcrumbs {
      * Constructor
      */
     public function __construct() {
-        // Register shortcode
+        $this->text_domain = 'directory-helpers';
+        
+        // Cache translations to avoid early textdomain loading
+        $this->cache_translations();
+        
+        // Add shortcode
         add_shortcode('dh_breadcrumbs', array($this, 'breadcrumbs_shortcode'));
         
-        // Register settings after init
+        // Register settings
         add_action('admin_init', array($this, 'register_settings'));
+        
+        // Register and enqueue styles
+        add_action('wp_enqueue_scripts', array($this, 'enqueue_styles'));
         
         // Make sure we initialize after WordPress is fully loaded
         add_action('init', array($this, 'init'), 20); // Higher priority to ensure textdomain is loaded
@@ -48,6 +56,23 @@ class DH_Breadcrumbs {
     public function init() {
         // Cache translations after textdomain is loaded
         $this->cache_translations();
+    }
+    
+    /**
+     * Register and enqueue styles
+     */
+    public function enqueue_styles() {
+        $css_path = plugin_dir_path(__FILE__) . 'breadcrumbs.css';
+        $css_url = plugin_dir_url(__FILE__) . 'breadcrumbs.css';
+        
+        if (file_exists($css_path)) {
+            wp_enqueue_style(
+                'directory-helpers-breadcrumbs',
+                $css_url,
+                array(),
+                filemtime($css_path)
+            );
+        }
     }
     
     /**
@@ -402,10 +427,10 @@ class DH_Breadcrumbs {
         $city_separator = '',
         $state_separator = ''
     ) {
-        // Start output
-        $output = '<div class="directory-helpers-breadcrumbs">';
+        // Start output with semantic nav and ol elements
+        $output = '<nav aria-label="Breadcrumb"><ol class="breadcrumbs">';
         $items = array();
-        $separators = array();
+        $separators = array(); // We'll keep this for structured data but not use for visual separators
         
         // For structured data
         $json_ld_items = array();
@@ -418,8 +443,9 @@ class DH_Breadcrumbs {
             // Add home link if needed
             if ($show_home) {
                 $home_url = home_url('/');
-                $items[] = '<a href="' . esc_url($home_url) . '">' . esc_html($home_text) . '</a>';
-                $separators[] = !empty($home_separator) ? $home_separator : $separator;
+                $home_sep = !empty($home_separator) ? $home_separator : $separator;
+                $items[] = '<li class="home-item" data-separator="' . esc_attr($home_sep) . '"><a href="' . esc_url($home_url) . '">' . esc_html($home_text) . '</a></li>';
+                $separators[] = $home_sep;
                 
                 // Add to structured data
                 $json_ld_items[] = array(
@@ -438,8 +464,9 @@ class DH_Breadcrumbs {
                 $niche_url = get_term_link($niche_term);
                 
                 // Add niche to breadcrumbs with link to taxonomy archive
-                $items[] = '<a href="' . esc_url($niche_url) . '">' . esc_html($niche_term->name) . '</a>';
-                $separators[] = !empty($niche_separator) ? $niche_separator : $separator;
+                $niche_sep = !empty($niche_separator) ? $niche_separator : $separator;
+                $items[] = '<li class="niche-item" data-separator="' . esc_attr($niche_sep) . '"><a href="' . esc_url($niche_url) . '">' . esc_html($niche_term->name) . '</a></li>';
+                $separators[] = $niche_sep;
                 
                 // Add to structured data
                 $json_ld_items[] = array(
@@ -461,8 +488,9 @@ class DH_Breadcrumbs {
                 
                 if ($city_listing) {
                     $city_url = get_permalink($city_listing);
-                    $items[] = '<a href="' . esc_url($city_url) . '">' . esc_html($city_term->name) . '</a>';
-                    $separators[] = !empty($city_separator) ? $city_separator : $separator;
+                    $city_sep = !empty($city_separator) ? $city_separator : $separator;
+                    $items[] = '<li class="city-item" data-separator="' . esc_attr($city_sep) . '"><a href="' . esc_url($city_url) . '">' . esc_html($city_term->name) . '</a></li>';
+                    $separators[] = $city_sep;
                     
                     // Add to structured data
                     $json_ld_items[] = array(
@@ -485,8 +513,9 @@ class DH_Breadcrumbs {
                 
                 if ($state_listing) {
                     $state_url = get_permalink($state_listing);
-                    $items[] = '<a href="' . esc_url($state_url) . '">' . esc_html($state_term->name) . '</a>';
-                    $separators[] = !empty($state_separator) ? $state_separator : $separator;
+                    $state_sep = !empty($state_separator) ? $state_separator : $separator;
+                    $items[] = '<li class="state-item" data-separator="' . esc_attr($state_sep) . '"><a href="' . esc_url($state_url) . '">' . esc_html($state_term->name) . '</a></li>';
+                    $separators[] = $state_sep;
                     
                     // Add to structured data
                     $json_ld_items[] = array(
@@ -498,9 +527,9 @@ class DH_Breadcrumbs {
                 }
             }
             
-            // Add current page (no separator needed after the last item)
+            // Add current page with aria-current attribute
             $current_title = get_the_title();
-            $items[] = $current_title;
+            $items[] = '<li aria-current="page">' . esc_html($current_title) . '</li>';
             
             // Add current page to structured data (without item property as it's the current page)
             $json_ld_items[] = array(
@@ -510,18 +539,12 @@ class DH_Breadcrumbs {
             );
         }
         
-        // Build the breadcrumbs with custom separators
+        // Build the breadcrumbs (no need for visual separators in HTML)
         if (!empty($items)) {
-            $output .= $items[0];
-            
-            // Add remaining items with their custom separators
-            for ($i = 1; $i < count($items); $i++) {
-                $current_separator = isset($separators[$i-1]) ? $separators[$i-1] : $separator;
-                $output .= $current_separator . $items[$i];
-            }
+            $output .= implode('', $items);
         }
         
-        $output .= '</div>';
+        $output .= '</ol></nav>';
         
         // Add JSON-LD structured data if we have items
         if (!empty($json_ld_items)) {
