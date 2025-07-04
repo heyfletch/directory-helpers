@@ -388,7 +388,7 @@ class DH_Breadcrumbs {
      * @param string $niche_separator Custom separator after niche
      * @param string $city_separator Custom separator after city
      * @param string $state_separator Custom separator after state
-     * @return string Breadcrumbs HTML
+     * @return string Breadcrumbs HTML with JSON-LD structured data
      */
     private function generate_breadcrumbs(
         $separator, 
@@ -407,14 +407,27 @@ class DH_Breadcrumbs {
         $items = array();
         $separators = array();
         
+        // For structured data
+        $json_ld_items = array();
+        $position = 1;
+        
         // Check if we're on a profile page
         if (is_singular('profile')) {
             global $post;
             
             // Add home link if needed
             if ($show_home) {
-                $items[] = '<a href="' . esc_url(home_url('/')) . '">' . esc_html($home_text) . '</a>';
+                $home_url = home_url('/');
+                $items[] = '<a href="' . esc_url($home_url) . '">' . esc_html($home_text) . '</a>';
                 $separators[] = !empty($home_separator) ? $home_separator : $separator;
+                
+                // Add to structured data
+                $json_ld_items[] = array(
+                    '@type' => 'ListItem',
+                    'position' => $position++,
+                    'name' => $home_text,
+                    'item' => $home_url
+                );
             }
             
             // Get the profile's niche term and move it after Home
@@ -422,10 +435,19 @@ class DH_Breadcrumbs {
             if ($show_niche && !empty($niche_terms) && !is_wp_error($niche_terms)) {
                 // Get the first niche term
                 $niche_term = $niche_terms[0];
+                $niche_url = get_term_link($niche_term);
                 
                 // Add niche to breadcrumbs with link to taxonomy archive
-                $items[] = '<a href="' . esc_url(get_term_link($niche_term)) . '">' . esc_html($niche_term->name) . '</a>';
+                $items[] = '<a href="' . esc_url($niche_url) . '">' . esc_html($niche_term->name) . '</a>';
                 $separators[] = !empty($niche_separator) ? $niche_separator : $separator;
+                
+                // Add to structured data
+                $json_ld_items[] = array(
+                    '@type' => 'ListItem',
+                    'position' => $position++,
+                    'name' => $niche_term->name,
+                    'item' => $niche_url
+                );
             }
             
             // Get the profile's city term (area taxonomy)
@@ -438,8 +460,17 @@ class DH_Breadcrumbs {
                 $city_listing = $this->get_cpt_by_term('city-listing', 'area', $city_term->term_id);
                 
                 if ($city_listing) {
-                    $items[] = '<a href="' . esc_url(get_permalink($city_listing)) . '">' . esc_html($city_term->name) . '</a>';
+                    $city_url = get_permalink($city_listing);
+                    $items[] = '<a href="' . esc_url($city_url) . '">' . esc_html($city_term->name) . '</a>';
                     $separators[] = !empty($city_separator) ? $city_separator : $separator;
+                    
+                    // Add to structured data
+                    $json_ld_items[] = array(
+                        '@type' => 'ListItem',
+                        'position' => $position++,
+                        'name' => $city_term->name,
+                        'item' => $city_url
+                    );
                 }
             }
             
@@ -453,13 +484,30 @@ class DH_Breadcrumbs {
                 $state_listing = $this->get_cpt_by_term('state-listing', 'state', $state_term->term_id);
                 
                 if ($state_listing) {
-                    $items[] = '<a href="' . esc_url(get_permalink($state_listing)) . '">' . esc_html($state_term->name) . '</a>';
+                    $state_url = get_permalink($state_listing);
+                    $items[] = '<a href="' . esc_url($state_url) . '">' . esc_html($state_term->name) . '</a>';
                     $separators[] = !empty($state_separator) ? $state_separator : $separator;
+                    
+                    // Add to structured data
+                    $json_ld_items[] = array(
+                        '@type' => 'ListItem',
+                        'position' => $position++,
+                        'name' => $state_term->name,
+                        'item' => $state_url
+                    );
                 }
             }
             
             // Add current page (no separator needed after the last item)
-            $items[] = get_the_title();
+            $current_title = get_the_title();
+            $items[] = $current_title;
+            
+            // Add current page to structured data (without item property as it's the current page)
+            $json_ld_items[] = array(
+                '@type' => 'ListItem',
+                'position' => $position++,
+                'name' => $current_title
+            );
         }
         
         // Build the breadcrumbs with custom separators
@@ -474,6 +522,17 @@ class DH_Breadcrumbs {
         }
         
         $output .= '</div>';
+        
+        // Add JSON-LD structured data if we have items
+        if (!empty($json_ld_items)) {
+            $json_ld = array(
+                '@context' => 'https://schema.org',
+                '@type' => 'BreadcrumbList',
+                'itemListElement' => $json_ld_items
+            );
+            
+            $output .= '<script type="application/ld+json">' . wp_json_encode($json_ld) . '</script>';
+        }
         
         return $output;
     }
