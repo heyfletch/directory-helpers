@@ -1,0 +1,26 @@
+/**
+ * Directory Helpers Admin Styles
+ */
+.directory-helpers-admin {
+    margin-top: 20px;
+}
+
+.directory-helpers-modules {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.directory-helpers-modules h2 {
+    margin-top: 0;
+}
+
+.directory-helpers-module-settings {
+    margin-top: 20px;
+    display: none;
+}
+
+.directory-helpers-module-settings.active {
+    display: block;
+}

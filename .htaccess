@@ -1,0 +1,11 @@
+# Prevent access to the .git directory
+<FilesMatch "^\.git">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+
+# Prevent access to .gitignore and other git files
+<FilesMatch "\.(gitignore|gitattributes)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
