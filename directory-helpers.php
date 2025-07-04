@@ -209,7 +209,7 @@ class Directory_Helpers {
         $this->modules = array(
             'breadcrumbs' => array(
                 'name' => __('Breadcrumbs', 'directory-helpers'),
-                'description' => __('Adds breadcrumb navigation for custom post types and taxonomies. Use [dh_breadcrumbs] shortcode to display breadcrumbs.', 'directory-helpers'),
+                'description' => __('Adds breadcrumb navigation for custom post types and taxonomies. Example: [dh_breadcrumbs home_text="Dog Trainers" home_separator=" in " show_niche="false" show_city="false" show_state="false" show_home="true" separator=" > "]', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/breadcrumbs/breadcrumbs.php',
                 'class' => 'DH_Breadcrumbs'
             )
