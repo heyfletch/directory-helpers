@@ -443,7 +443,11 @@ class DH_Breadcrumbs {
             // Add home link if needed
             if ($show_home) {
                 $home_url = home_url('/');
+                // We'll set the separator temporarily but may change it later
                 $home_sep = !empty($home_separator) ? $home_separator : $separator;
+                
+                // We'll store the home item index to possibly update its separator later
+                $home_item_index = count($items);
                 $items[] = '<li class="home-item" data-separator="' . esc_attr($home_sep) . '"><a href="' . esc_url($home_url) . '">' . esc_html($home_text) . '</a></li>';
                 $separators[] = $home_sep;
                 
@@ -537,6 +541,21 @@ class DH_Breadcrumbs {
                 'position' => $position++,
                 'name' => $current_title
             );
+            
+            // Check if we need to update the home separator
+            // If no city or state is shown, use default separator for home
+            if ($show_home && isset($home_item_index) && 
+                ((!$show_city || empty($city_term) || empty($city_listing)) && 
+                 (!$show_state || empty($state_term) || empty($state_listing)))) {
+                // Update the home item to use default separator
+                $default_sep = $separator;
+                $items[$home_item_index] = str_replace(
+                    'data-separator="' . esc_attr($home_sep) . '"', 
+                    'data-separator="' . esc_attr($default_sep) . '"', 
+                    $items[$home_item_index]
+                );
+                $separators[$home_item_index] = $default_sep;
+            }
         }
         
         // Build the breadcrumbs (no need for visual separators in HTML)
