@@ -491,44 +491,48 @@ class DH_Breadcrumbs {
                 $state_listing = $this->get_cpt_by_term('state-listing', 'state', $state_term->term_id);
                 
                 if ($state_listing) {
+                    // Use the term description if available, otherwise use the term name
+                    $state_display_name = !empty($state_term->description) ? $state_term->description : $state_term->name;
+                    
                     $state_url = get_permalink($state_listing);
                     $state_sep = !empty($state_separator) ? $state_separator : $separator;
-                    $items[] = '<li class="state-item" data-separator="' . esc_attr($state_sep) . '"><a href="' . esc_url($state_url) . '">' . esc_html($state_term->name) . '</a></li>';
+                    $items[] = '<li class="state-item" data-separator="' . esc_attr($state_sep) . '"><a href="' . esc_url($state_url) . '">' . esc_html($state_display_name) . '</a></li>';
                     $separators[] = $state_sep;
                     
                     // Add to structured data
                     $json_ld_items[] = array(
                         '@type' => 'ListItem',
                         'position' => $position++,
-                        'name' => $state_term->name,
+                        'name' => $state_display_name,
                         'item' => $state_url
                     );
                 }
-            }
-            
-            // Get the profile's city term (area taxonomy)
-            $city_terms = get_the_terms($post->ID, 'area');
-            if ($show_city && !empty($city_terms) && !is_wp_error($city_terms)) {
-                // Get the first city term (or primary term if implemented)
-                $city_term = $city_terms[0];
                 
-                // Find the corresponding City Listing CPT
-                $city_listing = $this->get_cpt_by_term('city-listing', 'area', $city_term->term_id);
-                
-                if ($city_listing) {
-                    $city_url = get_permalink($city_listing);
-                    $city_sep = !empty($city_separator) ? $city_separator : $separator;
-                    $items[] = '<li class="city-item" data-separator="' . esc_attr($city_sep) . '"><a href="' . esc_url($city_url) . '">' . esc_html($city_term->name) . '</a></li>';
-                    $separators[] = $city_sep;
+                // Get the profile's city term (area taxonomy)
+                $city_terms = get_the_terms($post->ID, 'area');
+                if ($show_city && !empty($city_terms) && !is_wp_error($city_terms)) {
+                    // Get the first city term (or primary term if implemented)
+                    $city_term = $city_terms[0];
                     
-                    // Add to structured data
-                    $json_ld_items[] = array(
-                        '@type' => 'ListItem',
-                        'position' => $position++,
-                        'name' => $city_term->name,
-                        'item' => $city_url
-                    );
+                    // Find the corresponding City Listing CPT
+                    $city_listing = $this->get_cpt_by_term('city-listing', 'area', $city_term->term_id);
+                
+                    if ($city_listing) {
+                        $city_url = get_permalink($city_listing);
+                        $city_sep = !empty($city_separator) ? $city_separator : $separator;
+                        $items[] = '<li class="city-item" data-separator="' . esc_attr($city_sep) . '"><a href="' . esc_url($city_url) . '">' . esc_html($city_term->name) . '</a></li>';
+                        $separators[] = $city_sep;
+                        
+                        // Add to structured data
+                        $json_ld_items[] = array(
+                            '@type' => 'ListItem',
+                            'position' => $position++,
+                            'name' => $city_term->name,
+                            'item' => $city_url
+                        );
+                    }
                 }
+            
             }
             
             // Add current page with aria-current attribute
