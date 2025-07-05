@@ -253,6 +253,7 @@ class DH_Profile_Rankings {
         $atts = shortcode_atts(
             array(
                 'show_ranking_data' => 'false',
+                'show_prefix' => 'true',
             ),
             $atts,
             'dh_city_rank'
@@ -260,6 +261,7 @@ class DH_Profile_Rankings {
         
         // Convert string 'true'/'false' to boolean
         $show_ranking_data = filter_var($atts['show_ranking_data'], FILTER_VALIDATE_BOOLEAN);
+        $show_prefix = filter_var($atts['show_prefix'], FILTER_VALIDATE_BOOLEAN);
         
         $post_id = get_the_ID();
         $rank_data = $this->get_city_rank($post_id);
@@ -268,12 +270,20 @@ class DH_Profile_Rankings {
             return '';
         }
         
-        // Base output with "Ranked" prefix
-        $output = sprintf(
-            'Ranked #%d in %s',
-            $rank_data['position'],
-            $rank_data['city_name']
-        );
+        // Base output with optional "Ranked" prefix
+        if ($show_prefix) {
+            $output = sprintf(
+                'Ranked #%d in %s',
+                $rank_data['position'],
+                $rank_data['city_name']
+            );
+        } else {
+            $output = sprintf(
+                '#%d in %s',
+                $rank_data['position'],
+                $rank_data['city_name']
+            );
+        }
         
         // Add rating data if requested
         if ($show_ranking_data) {
@@ -303,6 +313,7 @@ class DH_Profile_Rankings {
         $atts = shortcode_atts(
             array(
                 'show_ranking_data' => 'false',
+                'show_prefix' => 'true',
             ),
             $atts,
             'dh_state_rank'
@@ -310,6 +321,7 @@ class DH_Profile_Rankings {
         
         // Convert string 'true'/'false' to boolean
         $show_ranking_data = filter_var($atts['show_ranking_data'], FILTER_VALIDATE_BOOLEAN);
+        $show_prefix = filter_var($atts['show_prefix'], FILTER_VALIDATE_BOOLEAN);
         
         $post_id = get_the_ID();
         $rank_data = $this->get_state_rank($post_id);
@@ -318,12 +330,20 @@ class DH_Profile_Rankings {
             return '';
         }
         
-        // Base output with "Ranked" prefix
-        $output = sprintf(
-            'Ranked #%d in %s',
-            $rank_data['position'],
-            $rank_data['state_name']
-        );
+        // Base output with optional "Ranked" prefix
+        if ($show_prefix) {
+            $output = sprintf(
+                'Ranked #%d in %s',
+                $rank_data['position'],
+                $rank_data['state_name']
+            );
+        } else {
+            $output = sprintf(
+                '#%d in %s',
+                $rank_data['position'],
+                $rank_data['state_name']
+            );
+        }
         
         // Add rating data if requested
         if ($show_ranking_data) {
