@@ -246,6 +246,18 @@ class DH_Profile_Rankings {
             return '';
         }
         
+        // Parse attributes
+        $atts = shortcode_atts(
+            array(
+                'show_ranking_data' => 'false',
+            ),
+            $atts,
+            'dh_city_rank'
+        );
+        
+        // Convert string 'true'/'false' to boolean
+        $show_ranking_data = filter_var($atts['show_ranking_data'], FILTER_VALIDATE_BOOLEAN);
+        
         $post_id = get_the_ID();
         $rank_data = $this->get_city_rank($post_id);
         
@@ -253,13 +265,21 @@ class DH_Profile_Rankings {
             return '';
         }
         
+        // Base output with "Ranked" prefix
         $output = sprintf(
-            '#%d in %s based on %d reviews and a %.1f rating',
+            'Ranked #%d in %s',
             $rank_data['position'],
-            $rank_data['city_name'],
-            $rank_data['review_count'],
-            $rank_data['rating']
+            $rank_data['city_name']
         );
+        
+        // Add rating data if requested
+        if ($show_ranking_data) {
+            $output .= sprintf(
+                ' based on %d reviews and a %.1f rating',
+                $rank_data['review_count'],
+                $rank_data['rating']
+            );
+        }
         
         return $output;
     }
@@ -276,6 +296,18 @@ class DH_Profile_Rankings {
             return '';
         }
         
+        // Parse attributes
+        $atts = shortcode_atts(
+            array(
+                'show_ranking_data' => 'false',
+            ),
+            $atts,
+            'dh_state_rank'
+        );
+        
+        // Convert string 'true'/'false' to boolean
+        $show_ranking_data = filter_var($atts['show_ranking_data'], FILTER_VALIDATE_BOOLEAN);
+        
         $post_id = get_the_ID();
         $rank_data = $this->get_state_rank($post_id);
         
@@ -283,13 +315,21 @@ class DH_Profile_Rankings {
             return '';
         }
         
+        // Base output with "Ranked" prefix
         $output = sprintf(
-            '#%d in %s based on %d reviews and a %.1f rating',
+            'Ranked #%d in %s',
             $rank_data['position'],
-            $rank_data['state_name'],
-            $rank_data['review_count'],
-            $rank_data['rating']
+            $rank_data['state_name']
         );
+        
+        // Add rating data if requested
+        if ($show_ranking_data) {
+            $output .= sprintf(
+                ' based on %d reviews and a %.1f rating',
+                $rank_data['review_count'],
+                $rank_data['rating']
+            );
+        }
         
         return $output;
     }
