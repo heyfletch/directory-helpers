@@ -225,9 +225,12 @@ class DH_Profile_Rankings {
             }
         }
         
+        // Use the term description if available, otherwise use the term name
+        $state_display_name = !empty($state_term->description) ? $state_term->description : $state_term->name;
+        
         return array(
             'position' => $position,
-            'state_name' => $state_term->name,
+            'state_name' => $state_display_name,
             'total' => $total,
             'rating' => isset($scores[$post_id]) ? $scores[$post_id]['rating'] : 0,
             'review_count' => isset($scores[$post_id]) ? $scores[$post_id]['review_count'] : 0
