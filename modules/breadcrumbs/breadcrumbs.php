@@ -481,31 +481,6 @@ class DH_Breadcrumbs {
                 );
             }
             
-            // Get the profile's city term (area taxonomy)
-            $city_terms = get_the_terms($post->ID, 'area');
-            if ($show_city && !empty($city_terms) && !is_wp_error($city_terms)) {
-                // Get the first city term (or primary term if implemented)
-                $city_term = $city_terms[0];
-                
-                // Find the corresponding City Listing CPT
-                $city_listing = $this->get_cpt_by_term('city-listing', 'area', $city_term->term_id);
-                
-                if ($city_listing) {
-                    $city_url = get_permalink($city_listing);
-                    $city_sep = !empty($city_separator) ? $city_separator : $separator;
-                    $items[] = '<li class="city-item" data-separator="' . esc_attr($city_sep) . '"><a href="' . esc_url($city_url) . '">' . esc_html($city_term->name) . '</a></li>';
-                    $separators[] = $city_sep;
-                    
-                    // Add to structured data
-                    $json_ld_items[] = array(
-                        '@type' => 'ListItem',
-                        'position' => $position++,
-                        'name' => $city_term->name,
-                        'item' => $city_url
-                    );
-                }
-            }
-            
             // Get the profile's state term
             $state_terms = get_the_terms($post->ID, 'state');
             if ($show_state && !empty($state_terms) && !is_wp_error($state_terms)) {
@@ -527,6 +502,31 @@ class DH_Breadcrumbs {
                         'position' => $position++,
                         'name' => $state_term->name,
                         'item' => $state_url
+                    );
+                }
+            }
+            
+            // Get the profile's city term (area taxonomy)
+            $city_terms = get_the_terms($post->ID, 'area');
+            if ($show_city && !empty($city_terms) && !is_wp_error($city_terms)) {
+                // Get the first city term (or primary term if implemented)
+                $city_term = $city_terms[0];
+                
+                // Find the corresponding City Listing CPT
+                $city_listing = $this->get_cpt_by_term('city-listing', 'area', $city_term->term_id);
+                
+                if ($city_listing) {
+                    $city_url = get_permalink($city_listing);
+                    $city_sep = !empty($city_separator) ? $city_separator : $separator;
+                    $items[] = '<li class="city-item" data-separator="' . esc_attr($city_sep) . '"><a href="' . esc_url($city_url) . '">' . esc_html($city_term->name) . '</a></li>';
+                    $separators[] = $city_sep;
+                    
+                    // Add to structured data
+                    $json_ld_items[] = array(
+                        '@type' => 'ListItem',
+                        'position' => $position++,
+                        'name' => $city_term->name,
+                        'item' => $city_url
                     );
                 }
             }
