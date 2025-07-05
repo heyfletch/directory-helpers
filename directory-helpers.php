@@ -162,15 +162,6 @@ class Directory_Helpers {
             return;
         }
         
-        // Save settings if form is submitted
-        if (isset($_POST['directory_helpers_save_settings']) && check_admin_referer('directory_helpers_save_settings', 'directory_helpers_nonce')) {
-            $this->save_settings();
-        }
-        
-        // Get current settings
-        $options = get_option('directory_helpers_options', array());
-        $active_modules = isset($options['active_modules']) ? $options['active_modules'] : array();
-        
         // Include admin view
         include DIRECTORY_HELPERS_PATH . 'views/admin-page.php';
     }
@@ -182,8 +173,20 @@ class Directory_Helpers {
         $options = get_option('directory_helpers_options', array());
         
         // Update active modules
-        $active_modules = isset($_POST['active_modules']) ? (array) $_POST['active_modules'] : array();
-        $options['active_modules'] = array_map('sanitize_text_field', $active_modules);
+        if (isset($_POST['active_modules'])) {
+            // Ensure active_modules is an array
+            $active_modules = is_array($_POST['active_modules']) ? $_POST['active_modules'] : array($_POST['active_modules']);
+            
+            // Sanitize each module ID
+            $sanitized_modules = array();
+            foreach ($active_modules as $module) {
+                $sanitized_modules[] = sanitize_text_field($module);
+            }
+            
+            $options['active_modules'] = $sanitized_modules;
+        } else {
+            $options['active_modules'] = array();
+        }
         
         // Save options
         update_option('directory_helpers_options', $options);
@@ -218,6 +221,12 @@ class Directory_Helpers {
                 'description' => __('Rankings for profiles based on ratings and review counts within respective cities and states. Use shortcodes [dh_city_rank] and [dh_state_rank]. [dh_state_rank show_ranking_data="true"] to show rating and review count used. [dh_state_rank show_prefix="false"] to remove "Ranked " prefix. ', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-rankings/profile-rankings.php',
                 'class' => 'DH_Profile_Rankings'
+            ),
+            'profile-structured-data' => array(
+                'name' => __('Profile Structured Data', 'directory-helpers'),
+                'description' => __('Generates structured data for profile pages including LocalBusiness, ProfilePage, and Service List schemas. Automatically adds structured data to profile pages.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-structured-data/profile-structured-data.php',
+                'class' => 'DH_Profile_Structured_Data'
             )
             // Add more modules here as needed
         );
@@ -228,14 +237,15 @@ class Directory_Helpers {
     }
 
     /**
-     * Initialize active modules
+     * Initialize all available modules
      */
     private function init_active_modules() {
-        foreach ($this->active_modules as $module_id) {
-            if (isset($this->modules[$module_id]) && file_exists($this->modules[$module_id]['file'])) {
-                require_once $this->modules[$module_id]['file'];
+        // Initialize all available modules
+        foreach ($this->modules as $module_id => $module) {
+            if (file_exists($module['file'])) {
+                require_once $module['file'];
                 
-                $class_name = $this->modules[$module_id]['class'];
+                $class_name = $module['class'];
                 if (class_exists($class_name)) {
                     new $class_name();
                 }
