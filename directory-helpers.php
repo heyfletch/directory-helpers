@@ -212,6 +212,12 @@ class Directory_Helpers {
                 'description' => __('Adds breadcrumb navigation for custom post types and taxonomies. Example: [dh_breadcrumbs home_text="Dog Trainers" home_separator=" in " show_niche="false" show_city="false" show_state="false" show_home="true" separator=" > "]', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/breadcrumbs/breadcrumbs.php',
                 'class' => 'DH_Breadcrumbs'
+            ),
+            'profile-rankings' => array(
+                'name' => __('Profile Rankings', 'directory-helpers'),
+                'description' => __('Calculates and stores rankings for profiles based on ratings and review counts within their respective cities and states. Use shortcodes [dh_city_rank] and [dh_state_rank] to display the rank of the current profile in the format "#X in City, State".', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-rankings/profile-rankings.php',
+                'class' => 'DH_Profile_Rankings'
             )
             // Add more modules here as needed
         );
