@@ -264,6 +264,23 @@ class DH_Profile_Rankings {
         $show_prefix = filter_var($atts['show_prefix'], FILTER_VALIDATE_BOOLEAN);
         
         $post_id = get_the_ID();
+        
+        // Check if this profile has rating data
+        $rating = get_field('rating_value', $post_id);
+        $review_count = get_field('rating_votes_count', $post_id);
+        
+        // Get city name for the profile
+        $city_terms = get_the_terms($post_id, 'area');
+        if (empty($city_terms) || is_wp_error($city_terms)) {
+            return '';
+        }
+        $city_name = $city_terms[0]->name;
+        
+        // If no rating or reviews, show "not yet ranked"
+        if (empty($rating) || empty($review_count)) {
+            return 'not yet ranked in ' . $city_name;
+        }
+        
         $rank_data = $this->get_city_rank($post_id);
         
         if (!$rank_data) {
@@ -324,6 +341,25 @@ class DH_Profile_Rankings {
         $show_prefix = filter_var($atts['show_prefix'], FILTER_VALIDATE_BOOLEAN);
         
         $post_id = get_the_ID();
+        
+        // Check if this profile has rating data
+        $rating = get_field('rating_value', $post_id);
+        $review_count = get_field('rating_votes_count', $post_id);
+        
+        // Get state name for the profile
+        $state_terms = get_the_terms($post_id, 'state');
+        if (empty($state_terms) || is_wp_error($state_terms)) {
+            return '';
+        }
+        
+        // Use the term description if available, otherwise use the term name
+        $state_display_name = !empty($state_terms[0]->description) ? $state_terms[0]->description : $state_terms[0]->name;
+        
+        // If no rating or reviews, show "not yet ranked"
+        if (empty($rating) || empty($review_count)) {
+            return 'not yet ranked in ' . $state_display_name;
+        }
+        
         $rank_data = $this->get_state_rank($post_id);
         
         if (!$rank_data) {

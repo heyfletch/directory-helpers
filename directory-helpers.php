@@ -115,7 +115,7 @@ class Directory_Helpers {
      * Add admin menu
      */
     public function add_admin_menu() {
-        add_menu_page(
+        $hook = add_menu_page(
             __('Directory Helpers', 'directory-helpers'),
             __('Directory Helpers', 'directory-helpers'),
             'manage_options',
@@ -124,6 +124,8 @@ class Directory_Helpers {
             'dashicons-networking',
             30
         );
+
+        add_action("load-{$hook}", array($this, 'handle_settings_save'));
     }
 
     /**
@@ -167,35 +169,51 @@ class Directory_Helpers {
     }
 
     /**
+     * Handle settings save
+     */
+    public function handle_settings_save() {
+        if (isset($_POST['submit']) && isset($_POST['directory_helpers_nonce']) && wp_verify_nonce($_POST['directory_helpers_nonce'], 'directory_helpers_save_settings')) {
+            $this->save_settings();
+        }
+    }
+
+    /**
      * Save plugin settings
      */
-    private function save_settings() {
-        $options = get_option('directory_helpers_options', array());
-        
-        // Update active modules
-        if (isset($_POST['active_modules'])) {
-            // Ensure active_modules is an array
-            $active_modules = is_array($_POST['active_modules']) ? $_POST['active_modules'] : array($_POST['active_modules']);
-            
-            // Sanitize each module ID
-            $sanitized_modules = array();
-            foreach ($active_modules as $module) {
-                $sanitized_modules[] = sanitize_text_field($module);
-            }
-            
-            $options['active_modules'] = $sanitized_modules;
-        } else {
-            $options['active_modules'] = array();
+    public function save_settings() {
+        if (!current_user_can('manage_options')) {
+            return;
         }
-        
-        // Save options
+
+        $options = get_option('directory_helpers_options', []);
+        if (!is_array($options)) {
+            $options = [];
+        }
+
+        // Handle AI Content Generator settings
+        if (isset($_POST['directory_helpers_options']) && is_array($_POST['directory_helpers_options'])) {
+            $submitted_options = $_POST['directory_helpers_options'];
+            $options['n8n_webhook_url'] = isset($submitted_options['n8n_webhook_url']) ? esc_url_raw($submitted_options['n8n_webhook_url']) : '';
+            $options['shared_secret_key'] = isset($submitted_options['shared_secret_key']) ? sanitize_text_field($submitted_options['shared_secret_key']) : '';
+        }
+
+        // Handle active modules
+        // This part is not currently used for activation/deactivation from the UI, but we keep it for future use.
+        if (isset($_POST['active_modules']) && is_array($_POST['active_modules'])) {
+            $options['active_modules'] = array_map('sanitize_text_field', $_POST['active_modules']);
+        } else {
+            // Ensure 'active_modules' is an array, even if not submitted.
+            if (!isset($options['active_modules']) || !is_array($options['active_modules'])) {
+                $options['active_modules'] = [];
+            }
+        }
+
         update_option('directory_helpers_options', $options);
-        
+
         // Reinitialize active modules
         $this->active_modules = $options['active_modules'];
         $this->init_active_modules();
-        
-        // Add success message
+
         add_settings_error(
             'directory_helpers_messages',
             'directory_helpers_message',
@@ -227,6 +245,12 @@ class Directory_Helpers {
                 'description' => __('Generates structured data for profile pages including LocalBusiness, ProfilePage, and Service List schemas. Automatically adds structured data to profile pages.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-structured-data/profile-structured-data.php',
                 'class' => 'DH_Profile_Structured_Data'
+            ),
+            'ai-content-generator' => array(
+                'name' => __('AI Content Generator', 'directory-helpers'),
+                'description' => __('Triggers an n8n workflow to generate AI content for posts.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/ai-content-generator/ai-content-generator.php',
+                'class' => 'DH_AI_Content_Generator'
             )
             // Add more modules here as needed
         );
