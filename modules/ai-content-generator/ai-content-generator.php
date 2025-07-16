@@ -70,7 +70,7 @@ class DH_AI_Content_Generator {
             'dh-ai-content-generator-js',
             plugin_dir_url(__FILE__) . 'assets/js/ai-content-generator.js',
             array('jquery'),
-            '1.0.0',
+            filemtime(plugin_dir_path(__FILE__) . 'assets/js/ai-content-generator.js'),
             true
         );
 

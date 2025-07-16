@@ -9,11 +9,16 @@ jQuery(document).ready(function ($) {
     }
 
     generateBtn.addEventListener('click', function () {
+        const originalKeyword = keywordInput.value;
+        console.log('Original Keyword:', originalKeyword);
+
         // Sanitize the keyword to remove special characters like colons, quotes, brackets, and commas.
-        const keyword = keywordInput.value.replace(/[:"\]\[,]/g, '');
+        const sanitizedKeyword = originalKeyword.replace(/[\[\]":,]/g, '');
+        console.log('Sanitized Keyword:', sanitizedKeyword);
+
         const webhookUrl = aiContentGenerator.webhookUrl;
 
-        if (!keyword) {
+        if (!sanitizedKeyword) {
             statusDiv.textContent = 'Please enter a keyword.';
             statusDiv.style.color = 'red';
             return;
@@ -35,7 +40,7 @@ jQuery(document).ready(function ($) {
             },
             body: JSON.stringify({ 
                 postId: postId,
-                keyword: keyword 
+                keyword: sanitizedKeyword 
             }),
         })
         .then(response => {
