@@ -112,6 +112,11 @@ class Directory_Helpers {
         
         // Initialize active modules
         $this->init_active_modules();
+
+        // Register WP-CLI commands
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            $this->register_cli_commands();
+        }
     }
 
     /**
@@ -178,6 +183,14 @@ class Directory_Helpers {
         if (isset($_POST['submit']) && isset($_POST['directory_helpers_nonce']) && wp_verify_nonce($_POST['directory_helpers_nonce'], 'directory_helpers_save_settings')) {
             $this->save_settings();
         }
+    }
+
+    /**
+     * Register WP-CLI commands.
+     */
+    public function register_cli_commands() {
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-deduplicate-area-terms-command.php';
+        WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
     }
 
     /**
