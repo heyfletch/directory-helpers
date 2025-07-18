@@ -40,11 +40,23 @@ class DH_AI_Content_Generator {
      * Render the meta box content.
      */
     public function render_meta_box($post) {
+        // Get the terms from the 'area' taxonomy.
+        $terms = get_the_terms($post->ID, 'area');
+        $default_keyword = '';
+
+        // If an area term is found, create the default keyword string.
+        if ($terms && !is_wp_error($terms)) {
+            $area_name = $terms[0]->name;
+            $default_keyword = 'dog training in ' . $area_name;
+        } else {
+            // Fallback to the post title if no area is assigned.
+            $default_keyword = $post->post_title;
+        }
         ?>
         <div class="dh-ai-content-generator-wrapper">
             <p>
                 <label for="dh-ai-keyword"><?php esc_html_e('Keyword', 'directory-helpers'); ?></label>
-                <input type="text" id="dh-ai-keyword" name="dh-ai-keyword" value="<?php echo esc_attr($post->post_title); ?>" style="width: 100%;" />
+                <input type="text" id="dh-ai-keyword" name="dh-ai-keyword" value="<?php echo esc_attr($default_keyword); ?>" style="width: 100%;" />
             </p>
             <button type="button" id="dh-generate-ai-content" class="button button-primary" style="width: 100%;">
                 <?php esc_html_e('Generate AI Content', 'directory-helpers'); ?>

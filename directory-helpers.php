@@ -104,6 +104,9 @@ class Directory_Helpers {
         // Load text domain for internationalization directly on init
         load_plugin_textdomain('directory-helpers', false, dirname(plugin_basename(__FILE__)) . '/languages');
         
+        // Load the City Listing Generator module.
+        require_once plugin_dir_path( __FILE__ ) . 'modules/city-listing-generator/city-listing-generator.php';
+
         // Load modules
         $this->load_modules();
         
