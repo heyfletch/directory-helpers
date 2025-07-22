@@ -80,4 +80,64 @@ class DH_Deduplicate_Area_Terms_Command extends WP_CLI_Command {
 			WP_CLI::success( sprintf( 'Operation complete. Updated %d term(s).', $updated_count ) );
 		}
 	}
+
+	/**
+	 * Updates area term names from "City, ST" format to "City - ST" format.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--dry-run]
+	 * : If set, the command will only report the changes that would be made, without executing them.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp directory-helpers update_area_term_format
+	 *     wp directory-helpers update_area_term_format --dry-run
+	 *
+	 * @when after_wp_load
+	 */
+	public function update_area_term_format( $args, $assoc_args ) {
+		$dry_run = isset( $assoc_args['dry-run'] );
+
+		if ( $dry_run ) {
+			WP_CLI::line( 'Running in dry-run mode. No changes will be made.' );
+		}
+
+		$terms = get_terms( array(
+			'taxonomy'   => 'area',
+			'hide_empty' => false,
+		) );
+
+		if ( is_wp_error( $terms ) ) {
+			WP_CLI::error( 'Could not retrieve area terms.' );
+		}
+
+		$updated_count = 0;
+
+		foreach ( $terms as $term ) {
+			// Check if the term name matches the "City, ST" pattern
+			if ( preg_match( '/^(.+), ([A-Z]{2})$/', $term->name, $matches ) ) {
+				$city_name  = $matches[1];
+				$state_abbr = $matches[2];
+				$new_name   = $city_name . ' - ' . $state_abbr;
+
+				WP_CLI::line( sprintf( 'Term ID %d: "%s" will be renamed to "%s"', $term->term_id, $term->name, $new_name ) );
+
+				if ( ! $dry_run ) {
+					$result = wp_update_term( $term->term_id, 'area', array( 'name' => $new_name ) );
+					if ( is_wp_error( $result ) ) {
+						WP_CLI::warning( sprintf( '  Failed to update term %d: %s', $term->term_id, $result->get_error_message() ) );
+					} else {
+						$updated_count++;
+					}
+				}
+			}
+		}
+
+		if ( $dry_run ) {
+			WP_CLI::success( 'Dry run complete. No changes were made.' );
+		} else {
+			WP_CLI::success( sprintf( 'Operation complete. Updated %d term(s).', $updated_count ) );
+		}
+	}
 }
