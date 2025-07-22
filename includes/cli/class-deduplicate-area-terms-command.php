@@ -140,4 +140,70 @@ class DH_Deduplicate_Area_Terms_Command extends WP_CLI_Command {
 			WP_CLI::success( sprintf( 'Operation complete. Updated %d term(s).', $updated_count ) );
 		}
 	}
+
+	/**
+	 * Updates state listing post titles from "State Dog Trainers" to just "State".
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--dry-run]
+	 * : If set, the command will only report the changes that would be made, without executing them.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp directory-helpers update_state_listing_titles
+	 *     wp directory-helpers update_state_listing_titles --dry-run
+	 *
+	 * @when after_wp_load
+	 */
+	public function update_state_listing_titles( $args, $assoc_args ) {
+		$dry_run = isset( $assoc_args['dry-run'] );
+
+		if ( $dry_run ) {
+			WP_CLI::line( 'Running in dry-run mode. No changes will be made.' );
+		}
+
+		$posts = get_posts( array(
+			'post_type'      => 'state-listing',
+			'post_status'    => 'any',
+			'posts_per_page' => -1,
+		) );
+
+		if ( empty( $posts ) ) {
+			WP_CLI::error( 'No state-listing posts found.' );
+		}
+
+		WP_CLI::line( sprintf( 'Found %d state-listing posts to check.', count( $posts ) ) );
+		$updated_count = 0;
+
+		foreach ( $posts as $post ) {
+			// Check if the post title ends with " Dog Trainers"
+			if ( preg_match( '/^(.+) Dog Trainers$/', $post->post_title, $matches ) ) {
+				$state_name = trim( $matches[1] );
+				$new_title  = $state_name;
+
+				WP_CLI::line( sprintf( 'Post ID %d: "%s" will be renamed to "%s"', $post->ID, $post->post_title, $new_title ) );
+
+				if ( ! $dry_run ) {
+					$result = wp_update_post( array(
+						'ID'         => $post->ID,
+						'post_title' => $new_title,
+					) );
+					if ( is_wp_error( $result ) ) {
+						WP_CLI::warning( sprintf( '  Failed to update post %d: %s', $post->ID, $result->get_error_message() ) );
+					} elseif ( $result === 0 ) {
+						WP_CLI::warning( sprintf( '  Failed to update post %d: Unknown error', $post->ID ) );
+					} else {
+						$updated_count++;
+					}
+				}
+			}
+		}
+
+		if ( $dry_run ) {
+			WP_CLI::success( 'Dry run complete. No changes were made.' );
+		} else {
+			WP_CLI::success( sprintf( 'Operation complete. Updated %d post(s).', $updated_count ) );
+		}
+	}
 }
