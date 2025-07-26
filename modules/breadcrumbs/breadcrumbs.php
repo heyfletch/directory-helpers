@@ -429,6 +429,9 @@ class DH_Breadcrumbs {
     ) {
         // Start output with semantic nav and ol elements
         $output = '<nav aria-label="Breadcrumb"><ol class="breadcrumbs">';
+        
+        // DEBUG: Uncomment line below for debugging post type detection
+        // $output = '<div style="background: red; color: white; padding: 5px; margin: 5px 0;">DEBUG: Post type = ' . get_post_type() . ', is_singular(city-listing) = ' . (is_singular('city-listing') ? 'YES' : 'NO') . ', is_singular(profile) = ' . (is_singular('profile') ? 'YES' : 'NO') . '</div>' . $output;
         $items = array();
         $separators = array(); // We'll keep this for structured data but not use for visual separators
         
@@ -560,6 +563,94 @@ class DH_Breadcrumbs {
                 );
                 $separators[$home_item_index] = $default_sep;
             }
+        }
+        
+        // Check if we're on a city page
+        if (is_singular('city-listing')) {
+            global $post;
+            
+            // Add home link if needed
+            if ($show_home) {
+                $home_url = home_url('/');
+                $home_sep = !empty($home_separator) ? $home_separator : $separator;
+                
+                $items[] = '<li class="home-item" data-separator="' . esc_attr($home_sep) . '"><a href="' . esc_url($home_url) . '">' . esc_html($home_text) . '</a></li>';
+                $separators[] = $home_sep;
+                
+                // Add to structured data
+                $json_ld_items[] = array(
+                    '@type' => 'ListItem',
+                    'position' => $position++,
+                    'name' => $home_text,
+                    'item' => $home_url
+                );
+            }
+            
+            // Find the corresponding state listing by analyzing the city post slug
+            // City slugs contain state slug in format: city-name-state-slug-dog-trainers
+            $city_slug = $post->post_name;
+            
+            // DEBUG: Uncomment line below for debugging city slug extraction
+            // $items[] = '<li style="background: orange; color: black;">DEBUG: City slug = ' . $city_slug . '</li>';
+            
+            if ($show_state) {
+                // Extract potential state slug from city slug
+                // Pattern: city-name-STATE-dog-trainers
+                if (preg_match('/^(.+)-([a-z]{2})-dog-trainers$/', $city_slug, $matches)) {
+                    $state_slug = $matches[2]; // Extract the 2-letter state code
+                    
+                    // Find state-listing post with this state slug
+                    $state_listing_args = array(
+                        'post_type' => 'state-listing',
+                        'post_status' => 'publish',
+                        'posts_per_page' => 1,
+                        'tax_query' => array(
+                            array(
+                                'taxonomy' => 'state',
+                                'field' => 'slug',
+                                'terms' => $state_slug,
+                            ),
+                        ),
+                    );
+                    
+                    $state_query = new WP_Query($state_listing_args);
+                    
+                    if ($state_query->have_posts()) {
+                        $state_listing = $state_query->posts[0];
+                        
+                        // Get the state term to get proper display name
+                        $state_terms = get_the_terms($state_listing->ID, 'state');
+                        if (!empty($state_terms) && !is_wp_error($state_terms)) {
+                            $state_term = $state_terms[0];
+                            $state_display_name = !empty($state_term->description) ? $state_term->description : $state_term->name;
+                            
+                            $state_url = get_permalink($state_listing);
+                            $state_sep = !empty($state_separator) ? $state_separator : $separator;
+                            $items[] = '<li class="state-item" data-separator="' . esc_attr($state_sep) . '"><a href="' . esc_url($state_url) . '">' . esc_html($state_display_name) . '</a></li>';
+                            $separators[] = $state_sep;
+                            
+                            // Add to structured data
+                            $json_ld_items[] = array(
+                                '@type' => 'ListItem',
+                                'position' => $position++,
+                                'name' => $state_display_name,
+                                'item' => $state_url
+                            );
+                        }
+                    }
+                }
+            }
+            
+            // Add current city page (no link since it's the current page)
+            $current_title = get_the_title();
+            $items[] = '<li aria-current="page">' . esc_html($current_title) . '</li>';
+            
+            // Add current page to structured data
+            $json_ld_items[] = array(
+                '@type' => 'ListItem',
+                'position' => $position++,
+                'name' => $current_title
+            );
         }
         
         // Build the breadcrumbs (no need for visual separators in HTML)
