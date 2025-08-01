@@ -116,13 +116,15 @@ class DH_Profile_Rankings {
             );
         }
         
-        // Sort by score in descending order
+        // Sort by score in descending order (highest score = rank #1)
         uasort($scores, function($a, $b) {
-            if ($a['score'] == $b['score']) {
-                // If scores are equal, use review count as tiebreaker
+            if (bccomp((string)$a['score'], (string)$b['score'], 8) === 0) {
+                // If scores are equal, higher review count wins (gets better rank)
                 return $b['review_count'] - $a['review_count'];
             }
-            return $b['score'] - $a['score'];
+            // For different scores, a higher score should come first.
+            // A negative return value means $a comes before $b.
+            return bccomp((string)$b['score'], (string)$a['score'], 8);
         });
         
         // Find the current post's position
@@ -205,13 +207,15 @@ class DH_Profile_Rankings {
             );
         }
         
-        // Sort by score in descending order
+        // Sort by score in descending order (highest score = rank #1)
         uasort($scores, function($a, $b) {
-            if ($a['score'] == $b['score']) {
-                // If scores are equal, use review count as tiebreaker
+            if (bccomp((string)$a['score'], (string)$b['score'], 8) === 0) {
+                // If scores are equal, higher review count wins (gets better rank)
                 return $b['review_count'] - $a['review_count'];
             }
-            return $b['score'] - $a['score'];
+            // For different scores, a higher score should come first.
+            // A negative return value means $a comes before $b.
+            return bccomp((string)$b['score'], (string)$a['score'], 8);
         });
         
         // Find the current post's position
