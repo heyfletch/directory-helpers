@@ -30,6 +30,9 @@ class DH_Profile_Rankings {
         // Add shortcodes
         add_shortcode('dh_city_rank', array($this, 'city_rank_shortcode'));
         add_shortcode('dh_state_rank', array($this, 'state_rank_shortcode'));
+
+        // Hook to update ranks when a profile is saved
+        add_action('acf/save_post', array($this, 'update_ranks_on_save'), 20);
     }
     
     /**
@@ -42,7 +45,7 @@ class DH_Profile_Rankings {
      * @param int $review_count Number of reviews
      * @return float Calculated score
      */
-    private function calculate_ranking_score($rating, $review_count) {
+    private function calculate_ranking_score($rating, $review_count, $boost = 0) {
         // Formula: (rating * 0.8) + (min(1, log10($review_count + 1) / 2) * 5 * 0.2)
         // This gives 80% weight to rating and 20% to review count using logarithmic scaling
         // The log10 function helps prevent reviews from dominating the score while still giving them weight
@@ -52,193 +55,7 @@ class DH_Profile_Rankings {
         
         $rating_component = $rating * 0.8;
         $review_component = min(1, log10($review_count + 1) / 2) * 5 * 0.2;
-        
-        return $rating_component + $review_component;
-    }
-    
-    /**
-     * Get city rank
-     * 
-     * @param int $post_id Post ID
-     * @return array Rank data with position, city name, and total profiles
-     */
-    private function get_city_rank($post_id) {
-        // Get the post's city term (area taxonomy) - using the same approach as breadcrumbs
-        $city_terms = get_the_terms($post_id, 'area');
-        
-        if (empty($city_terms) || is_wp_error($city_terms)) {
-            return false;
-        }
-        
-        // Get the first city term (same as breadcrumbs)
-        $city_term = $city_terms[0];
-        
-        // Get all profiles with this city term
-        $args = array(
-            'post_type' => 'profile',
-            'post_status' => 'publish',
-            'posts_per_page' => -1,
-            'tax_query' => array(
-                array(
-                    'taxonomy' => 'area',
-                    'field' => 'term_id',
-                    'terms' => $city_term->term_id,
-                ),
-            ),
-        );
-        
-        $query = new WP_Query($args);
-        
-        if (!$query->have_posts()) {
-            return false;
-        }
-        
-        // Calculate scores for all profiles
-        $scores = array();
-        
-        foreach ($query->posts as $profile) {
-            $rating = get_field('rating_value', $profile->ID);
-            $review_count = get_field('rating_votes_count', $profile->ID);
-            
-            // Skip if no rating or reviews
-            if (empty($rating) || empty($review_count)) {
-                continue;
-            }
-            
-            $score = $this->calculate_ranking_score($rating, $review_count);
-            
-            // Store with post ID to handle ties correctly
-            $scores[$profile->ID] = array(
-                'post_id' => $profile->ID,
-                'score' => $score,
-                'rating' => $rating,
-                'review_count' => $review_count
-            );
-        }
-        
-        // Sort by score in descending order (highest score = rank #1)
-        uasort($scores, function($a, $b) {
-            if (bccomp((string)$a['score'], (string)$b['score'], 8) === 0) {
-                // If scores are equal, higher review count wins (gets better rank)
-                return $b['review_count'] - $a['review_count'];
-            }
-            // For different scores, a higher score should come first.
-            // A negative return value means $a comes before $b.
-            return bccomp((string)$b['score'], (string)$a['score'], 8);
-        });
-        
-        // Find the current post's position
-        $position = 0;
-        $total = count($scores);
-        
-        foreach ($scores as $index => $data) {
-            $position++;
-            if ($data['post_id'] == $post_id) {
-                break;
-            }
-        }
-        
-        return array(
-            'position' => $position,
-            'city_name' => $city_term->name,
-            'total' => $total,
-            'rating' => isset($scores[$post_id]) ? $scores[$post_id]['rating'] : 0,
-            'review_count' => isset($scores[$post_id]) ? $scores[$post_id]['review_count'] : 0
-        );
-    }
-    
-    /**
-     * Get state rank
-     * 
-     * @param int $post_id Post ID
-     * @return array Rank data with position, state name, and total profiles
-     */
-    private function get_state_rank($post_id) {
-        // Get the post's state term
-        $state_terms = get_the_terms($post_id, 'state');
-        
-        if (empty($state_terms) || is_wp_error($state_terms)) {
-            return false;
-        }
-        
-        // Get the first state term (same as breadcrumbs)
-        $state_term = $state_terms[0];
-        
-        // Get all profiles with this state term
-        $args = array(
-            'post_type' => 'profile',
-            'post_status' => 'publish',
-            'posts_per_page' => -1,
-            'tax_query' => array(
-                array(
-                    'taxonomy' => 'state',
-                    'field' => 'term_id',
-                    'terms' => $state_term->term_id,
-                ),
-            ),
-        );
-        
-        $query = new WP_Query($args);
-        
-        if (!$query->have_posts()) {
-            return false;
-        }
-        
-        // Calculate scores for all profiles
-        $scores = array();
-        
-        foreach ($query->posts as $profile) {
-            $rating = get_field('rating_value', $profile->ID);
-            $review_count = get_field('rating_votes_count', $profile->ID);
-            
-            // Skip if no rating or reviews
-            if (empty($rating) || empty($review_count)) {
-                continue;
-            }
-            
-            $score = $this->calculate_ranking_score($rating, $review_count);
-            
-            // Store with post ID to handle ties correctly
-            $scores[$profile->ID] = array(
-                'post_id' => $profile->ID,
-                'score' => $score,
-                'rating' => $rating,
-                'review_count' => $review_count
-            );
-        }
-        
-        // Sort by score in descending order (highest score = rank #1)
-        uasort($scores, function($a, $b) {
-            if (bccomp((string)$a['score'], (string)$b['score'], 8) === 0) {
-                // If scores are equal, higher review count wins (gets better rank)
-                return $b['review_count'] - $a['review_count'];
-            }
-            // For different scores, a higher score should come first.
-            // A negative return value means $a comes before $b.
-            return bccomp((string)$b['score'], (string)$a['score'], 8);
-        });
-        
-        // Find the current post's position
-        $position = 0;
-        $total = count($scores);
-        
-        foreach ($scores as $index => $data) {
-            $position++;
-            if ($data['post_id'] == $post_id) {
-                break;
-            }
-        }
-        
-        // Use the term description if available, otherwise use the term name
-        $state_display_name = !empty($state_term->description) ? $state_term->description : $state_term->name;
-        
-        return array(
-            'position' => $position,
-            'state_name' => $state_display_name,
-            'total' => $total,
-            'rating' => isset($scores[$post_id]) ? $scores[$post_id]['rating'] : 0,
-            'review_count' => isset($scores[$post_id]) ? $scores[$post_id]['review_count'] : 0
-        );
+        return $rating_component + $review_component + (float)$boost;
     }
     
     /**
@@ -281,28 +98,25 @@ class DH_Profile_Rankings {
         $city_name = $city_terms[0]->name;
         
         // If no rating or reviews, show "not yet ranked"
-        if (empty($rating) || empty($review_count)) {
+        $city_rank = get_field('city_rank', $post_id);
+
+        // If no rating/reviews or rank is 0/empty, show "not yet ranked"
+        if (empty($rating) || empty($review_count) || empty($city_rank)) {
             return 'not yet ranked in ' . $city_name;
-        }
-        
-        $rank_data = $this->get_city_rank($post_id);
-        
-        if (!$rank_data) {
-            return '';
         }
         
         // Base output with optional "Ranked" prefix
         if ($show_prefix) {
             $output = sprintf(
                 'Ranked #%d in %s',
-                $rank_data['position'],
-                $rank_data['city_name']
+                $city_rank,
+                $city_name
             );
         } else {
             $output = sprintf(
                 '#%d in %s',
-                $rank_data['position'],
-                $rank_data['city_name']
+                $city_rank,
+                $city_name
             );
         }
         
@@ -310,8 +124,8 @@ class DH_Profile_Rankings {
         if ($show_ranking_data) {
             $output .= sprintf(
                 ' based on %d reviews and a %.1f rating',
-                $rank_data['review_count'],
-                $rank_data['rating']
+                $review_count,
+                $rating
             );
         }
         
@@ -360,28 +174,25 @@ class DH_Profile_Rankings {
         $state_display_name = !empty($state_terms[0]->description) ? $state_terms[0]->description : $state_terms[0]->name;
         
         // If no rating or reviews, show "not yet ranked"
-        if (empty($rating) || empty($review_count)) {
+        $state_rank = get_field('state_rank', $post_id);
+
+        // If no rating/reviews or rank is 0/empty, show "not yet ranked"
+        if (empty($rating) || empty($review_count) || empty($state_rank)) {
             return 'not yet ranked in ' . $state_display_name;
         }
-        
-        $rank_data = $this->get_state_rank($post_id);
-        
-        if (!$rank_data) {
-            return '';
-        }
-        
+
         // Base output with optional "Ranked" prefix
         if ($show_prefix) {
             $output = sprintf(
                 'Ranked #%d in %s',
-                $rank_data['position'],
-                $rank_data['state_name']
+                $state_rank,
+                $state_display_name
             );
         } else {
             $output = sprintf(
                 '#%d in %s',
-                $rank_data['position'],
-                $rank_data['state_name']
+                $state_rank,
+                $state_display_name
             );
         }
         
@@ -389,12 +200,118 @@ class DH_Profile_Rankings {
         if ($show_ranking_data) {
             $output .= sprintf(
                 ' based on %d reviews and a %.1f rating',
-                $rank_data['review_count'],
-                $rank_data['rating']
+                $review_count,
+                $rating
             );
         }
         
         return $output;
+    }
+
+    /**
+     * Trigger rank updates when a profile is saved.
+     *
+     * @param int $post_id The ID of the post being saved.
+     */
+    public function update_ranks_on_save($post_id) {
+        // Check if the post is a 'profile'
+        if (get_post_type($post_id) !== 'profile') {
+            return;
+        }
+
+        // To prevent infinite loops, remove the action before updating fields and add it back after.
+        remove_action('acf/save_post', array($this, 'update_ranks_on_save'), 20);
+
+        $this->recalculate_and_save_ranks($post_id);
+
+        add_action('acf/save_post', array($this, 'update_ranks_on_save'), 20);
+    }
+
+    /**
+     * Recalculate and save ranks for all profiles in the same city and state as the given profile.
+     *
+     * @param int $post_id The ID of the profile that was updated.
+     */
+    private function recalculate_and_save_ranks($post_id) {
+        // Recalculate for City
+        $city_terms = get_the_terms($post_id, 'area');
+        if (!empty($city_terms) && !is_wp_error($city_terms)) {
+            $this->update_ranks_for_term($city_terms[0], 'area', 'city_rank');
+        }
+
+        // Recalculate for State
+        $state_terms = get_the_terms($post_id, 'state');
+        if (!empty($state_terms) && !is_wp_error($state_terms)) {
+            $this->update_ranks_for_term($state_terms[0], 'state', 'state_rank');
+        }
+    }
+
+    /**
+     * Helper function to update ranks for a given term.
+     *
+     * @param WP_Term $term The term object (city or state).
+     * @param string  $taxonomy The taxonomy ('area' or 'state').
+     * @param string  $rank_field The ACF field name to save the rank to ('city_rank' or 'state_rank').
+     */
+    private function update_ranks_for_term($term, $taxonomy, $rank_field) {
+        $args = array(
+            'post_type' => 'profile',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'tax_query' => array(
+                array(
+                    'taxonomy' => $taxonomy,
+                    'field' => 'term_id',
+                    'terms' => $term->term_id,
+                ),
+            ),
+            'fields' => 'ids', // We only need post IDs
+        );
+
+        $query = new WP_Query($args);
+        $profiles = $query->posts;
+
+        if (empty($profiles)) {
+            return;
+        }
+
+        $scores = array();
+        foreach ($profiles as $profile_id) {
+            $rating = get_field('rating_value', $profile_id);
+            $review_count = get_field('rating_votes_count', $profile_id);
+            $boost = get_field('ranking_boost', $profile_id) ?: 0;
+
+            if (empty($rating) || empty($review_count)) {
+                // Profiles without reviews are not ranked
+                $scores[$profile_id] = ['score' => -1, 'review_count' => 0]; 
+                continue;
+            }
+
+            $scores[$profile_id] = [
+                'score' => $this->calculate_ranking_score($rating, $review_count, $boost),
+                'review_count' => (int)$review_count,
+            ];
+        }
+
+        // Sort by score descending
+        uasort($scores, function($a, $b) {
+            if (bccomp((string)$a['score'], (string)$b['score'], 8) === 0) {
+                return $b['review_count'] - $a['review_count'];
+            }
+            return bccomp((string)$b['score'], (string)$a['score'], 8);
+        });
+
+        // Update rank field for each profile
+        $rank = 1;
+        foreach ($scores as $profile_id => $data) {
+            if ($data['score'] < 0) {
+                // Not ranked, update field to 0 or null
+                update_field($rank_field, 0, $profile_id);
+            } else {
+                update_field($rank_field, $rank, $profile_id);
+                $rank++;
+            }
+        }
     }
 }
 
