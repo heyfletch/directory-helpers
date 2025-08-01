@@ -47,14 +47,14 @@ class DH_Profile_Rankings {
      */
     private function calculate_ranking_score($rating, $review_count, $boost = 0) {
         // Formula: (rating * 0.8) + (min(1, log10($review_count + 1) / 2) * 5 * 0.2)
-        // This gives 80% weight to rating and 20% to review count using logarithmic scaling
+        // This gives 90% weight to rating and 10% to review count using logarithmic scaling
         // The log10 function helps prevent reviews from dominating the score while still giving them weight
         // Adding 1 to review_count prevents log10(0) errors
         // Dividing by 2 scales the log value (log10(100) = 2, so we divide by 2 to get a value between 0-1)
         // Multiplying by 5 scales it to the same range as ratings (0-5)
         
-        $rating_component = $rating * 0.8;
-        $review_component = min(1, log10($review_count + 1) / 2) * 5 * 0.2;
+        $rating_component = $rating * 0.9;
+        $review_component = min(1, log10($review_count + 1) / 2) * 5 * 0.1;
         return $rating_component + $review_component + (float)$boost;
     }
     
