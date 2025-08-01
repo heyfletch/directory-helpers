@@ -224,6 +224,9 @@ class DH_Profile_Rankings {
 
         $this->recalculate_and_save_ranks($post_id);
 
+        // Clear the WordPress object cache to ensure changes are reflected immediately.
+        wp_cache_flush();
+
         add_action('acf/save_post', array($this, 'update_ranks_on_save'), 20);
     }
 
