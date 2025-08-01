@@ -100,8 +100,8 @@ class DH_Profile_Rankings {
         // If no rating or reviews, show "not yet ranked"
         $city_rank = get_field('city_rank', $post_id);
 
-        // If no rating/reviews or rank is 0/empty, show "not yet ranked"
-        if (empty($rating) || empty($review_count) || empty($city_rank)) {
+        // If no rating/reviews or rank is 0/empty/99999, show "not yet ranked"
+        if (empty($rating) || empty($review_count) || empty($city_rank) || $city_rank == 99999) {
             return 'not yet ranked in ' . $city_name;
         }
         
@@ -176,8 +176,8 @@ class DH_Profile_Rankings {
         // If no rating or reviews, show "not yet ranked"
         $state_rank = get_field('state_rank', $post_id);
 
-        // If no rating/reviews or rank is 0/empty, show "not yet ranked"
-        if (empty($rating) || empty($review_count) || empty($state_rank)) {
+        // If no rating/reviews or rank is 0/empty/99999, show "not yet ranked"
+        if (empty($rating) || empty($review_count) || empty($state_rank) || $state_rank == 99999) {
             return 'not yet ranked in ' . $state_display_name;
         }
 
@@ -305,8 +305,8 @@ class DH_Profile_Rankings {
         $rank = 1;
         foreach ($scores as $profile_id => $data) {
             if ($data['score'] < 0) {
-                // Not ranked, update field to 0 or null
-                update_field($rank_field, 0, $profile_id);
+                // Not ranked, update field to a high number so it sorts last
+                update_field($rank_field, 99999, $profile_id);
             } else {
                 update_field($rank_field, $rank, $profile_id);
                 $rank++;
