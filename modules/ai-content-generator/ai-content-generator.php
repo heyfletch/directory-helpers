@@ -30,7 +30,7 @@ class DH_AI_Content_Generator {
             'dh_ai_content_generator',
             __('AI Content Generator', 'directory-helpers'),
             array($this, 'render_meta_box'),
-            'city-listing', // Target custom post type
+            array('city-listing', 'state-listing'),
             'side',
             'high'
         );
@@ -40,17 +40,26 @@ class DH_AI_Content_Generator {
      * Render the meta box content.
      */
     public function render_meta_box($post) {
-        // Get the terms from the 'area' taxonomy.
-        $terms = get_the_terms($post->ID, 'area');
         $default_keyword = '';
 
-        // If an area term is found, create the default keyword string.
-        if ($terms && !is_wp_error($terms)) {
-            $area_name = $terms[0]->name;
-            $default_keyword = 'dog training in ' . $area_name;
+        if ($post->post_type === 'state-listing') {
+            // For state listings, use the 'state' taxonomy; prefer description for display if available
+            $terms = get_the_terms($post->ID, 'state');
+            if ($terms && !is_wp_error($terms)) {
+                $state_display = !empty($terms[0]->description) ? $terms[0]->description : $terms[0]->name;
+                $default_keyword = 'dog training in ' . $state_display;
+            } else {
+                $default_keyword = $post->post_title;
+            }
         } else {
-            // Fallback to the post title if no area is assigned.
-            $default_keyword = $post->post_title;
+            // For city listings, use the 'area' taxonomy
+            $terms = get_the_terms($post->ID, 'area');
+            if ($terms && !is_wp_error($terms)) {
+                $area_name = $terms[0]->name;
+                $default_keyword = 'dog training in ' . $area_name;
+            } else {
+                $default_keyword = $post->post_title;
+            }
         }
         ?>
         <div class="dh-ai-content-generator-wrapper">
@@ -74,7 +83,7 @@ class DH_AI_Content_Generator {
         if ('post.php' != $hook && 'post-new.php' != $hook) {
             return;
         }
-        if ('city-listing' !== $post->post_type) {
+        if (!in_array($post->post_type, array('city-listing', 'state-listing'), true)) {
             return;
         }
 
