@@ -12,9 +12,19 @@ jQuery(document).ready(function ($) {
         const originalKeyword = keywordInput.value;
         console.log('Original Keyword:', originalKeyword);
 
-        // Sanitize the keyword to remove special characters like colons, quotes, brackets, and commas.
-        const sanitizedKeyword = originalKeyword.replace(/[\[\]":,]/g, '');
+        // Sanitize the keyword:
+        // 1) Convert hyphens to spaces
+        // 2) Remove characters that are not letters, numbers, or spaces (handles quotes, brackets, punctuation, etc.)
+        // 3) Collapse multiple spaces
+        // 4) Trim leading/trailing spaces
+        const sanitizedKeyword = originalKeyword
+            .replace(/-/g, ' ')
+            .replace(/[^\p{L}\p{N} ]+/gu, '')
+            .replace(/\s+/g, ' ')
+            .trim();
         console.log('Sanitized Keyword:', sanitizedKeyword);
+        // Reflect the cleaned keyword back into the input so the user sees the final value
+        keywordInput.value = sanitizedKeyword;
 
         const webhookUrl = aiContentGenerator.webhookUrl;
 
