@@ -41,14 +41,15 @@ class DH_Prep_Profiles_By_State {
         return $terms;
     }
 
-    private function query_profiles_by_state_and_status($state_slug, $post_status) {
+    private function query_profiles_by_state_and_status($state_slug, $post_status, $min_count = 2, $city_slug = '') {
         global $wpdb;
         if (empty($state_slug)) {
             return array();
         }
+        $min_count = max(1, min(5, (int) $min_count));
         $prefix = $wpdb->prefix;
         $sql = "
-            SELECT p.*, t2.name AS area_name
+            SELECT p.*, t2.name AS area_name, t2.slug AS area_slug, t2.term_id AS area_id
             FROM {$prefix}posts p
             JOIN {$prefix}term_relationships tr1 ON p.ID = tr1.object_id
             JOIN {$prefix}term_taxonomy tt1 ON tr1.term_taxonomy_id = tt1.term_taxonomy_id
@@ -60,8 +61,15 @@ class DH_Prep_Profiles_By_State {
               AND tt1.taxonomy = 'state'
               AND t1.slug = %s
               AND p.post_status = %s
-              AND tt2.taxonomy = 'area'
-              AND t2.term_id IN (
+              AND tt2.taxonomy = 'area'";
+
+        $params = array($state_slug, $post_status);
+        if (!empty($city_slug)) {
+            $sql .= "\n              AND t2.slug = %s";
+            $params[] = $city_slug;
+        }
+
+        $sql .= "\n              AND t2.term_id IN (
                 SELECT t3.term_id
                 FROM {$prefix}posts p3
                 JOIN {$prefix}term_relationships tr3 ON p3.ID = tr3.object_id
@@ -76,11 +84,14 @@ class DH_Prep_Profiles_By_State {
                   AND p3.post_status = %s
                   AND tt3.taxonomy = 'area'
                 GROUP BY t3.term_id
-                HAVING COUNT(DISTINCT p3.ID) > 1
+                HAVING COUNT(DISTINCT p3.ID) >= %d
               )
-            ORDER BY t2.name ASC, p.post_title ASC
-        ";
-        $prepared = $wpdb->prepare($sql, $state_slug, $post_status, $state_slug, $post_status);
+            ORDER BY t2.name ASC, p.post_title ASC";
+        $params[] = $state_slug;
+        $params[] = $post_status;
+        $params[] = $min_count;
+
+        $prepared = $wpdb->prepare($sql, $params);
         return $wpdb->get_results($prepared);
     }
 
@@ -185,6 +196,8 @@ class DH_Prep_Profiles_By_State {
 
         $state_slug = isset($_REQUEST['state']) ? sanitize_text_field(wp_unslash($_REQUEST['state'])) : '';
         $post_status = isset($_REQUEST['post_status']) ? sanitize_key($_REQUEST['post_status']) : 'refining';
+        $min_count = isset($_REQUEST['min_count']) ? max(1, min(5, (int) $_REQUEST['min_count'])) : 2;
+        $city_slug = isset($_REQUEST['city']) ? sanitize_title(wp_unslash($_REQUEST['city'])) : '';
         if (!in_array($post_status, array('refining', 'publish'), true)) {
             $post_status = 'refining';
         }
@@ -195,14 +208,14 @@ class DH_Prep_Profiles_By_State {
         if (isset($_POST['dh_action']) && isset($_POST['_wpnonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'dh_prepprofiles')) {
             $action = sanitize_text_field(wp_unslash($_POST['dh_action']));
             if ($action === 'publish_all' && !empty($state_slug)) {
-                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status);
+                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug);
                 $ids = wp_list_pluck($posts, 'ID');
                 $this->publish_posts($ids);
                 $post_status = 'publish';
                 $action_message = __('Published all filtered profiles.', 'directory-helpers');
             } elseif ($action === 'rerank' && !empty($state_slug)) {
                 // For re-ranking, use published profiles only
-                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish');
+                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug);
                 $ids = wp_list_pluck($published, 'ID');
                 $this->rerank_posts($ids, $state_slug);
                 $action_message = __('Re-ranked profiles for selected cities and state.', 'directory-helpers');
@@ -214,12 +227,12 @@ class DH_Prep_Profiles_By_State {
         if (empty($state_slug) && !empty($states)) {
             $state_slug = $states[0]->slug; // default to first
         }
-        $profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status) : array();
-        // Build unique city names from query results to match ordering and selection
-        $unique_cities = array();
+        $profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug) : array();
+        // Build unique city names and slugs from query results to match ordering and selection
+        $unique_cities = array(); // slug => name
         foreach ($profiles as $p) {
-            if (!empty($p->area_name)) {
-                $unique_cities[$p->area_name] = $p->area_name;
+            if (!empty($p->area_slug) && !empty($p->area_name)) {
+                $unique_cities[$p->area_slug] = $p->area_name;
             }
         }
 
@@ -245,11 +258,32 @@ class DH_Prep_Profiles_By_State {
         }
         echo '</select></label>';
 
+        // City selector
+        echo '<label><strong>' . esc_html__('City:', 'directory-helpers') . '</strong> ';
+        echo '<select name="city">';
+        printf('<option value="" %s>%s</option>', selected($city_slug, '', false), esc_html__('All Cities', 'directory-helpers'));
+        if (!empty($unique_cities)) {
+            // Sort by name
+            asort($unique_cities, SORT_FLAG_CASE | SORT_STRING);
+            foreach ($unique_cities as $slug => $name) {
+                printf('<option value="%s" %s>%s</option>', esc_attr($slug), selected($city_slug, $slug, false), esc_html($name));
+            }
+        }
+        echo '</select></label>';
+
         // Status selector
         echo '<label><strong>' . esc_html__('Status:', 'directory-helpers') . '</strong> ';
         echo '<select name="post_status">';
         printf('<option value="refining" %s>%s</option>', selected($post_status, 'refining', false), esc_html__('Refining', 'directory-helpers'));
         printf('<option value="publish" %s>%s</option>', selected($post_status, 'publish', false), esc_html__('Published', 'directory-helpers'));
+        echo '</select></label>';
+
+        // Min count selector
+        echo '<label><strong>' . esc_html__('Min profiles per city:', 'directory-helpers') . '</strong> ';
+        echo '<select name="min_count">';
+        for ($i = 1; $i <= 5; $i++) {
+            printf('<option value="%d" %s>≥ %d</option>', $i, selected($min_count, $i, false), $i);
+        }
         echo '</select></label>';
 
         submit_button(__('Filter'), 'secondary', '', false);
@@ -261,6 +295,8 @@ class DH_Prep_Profiles_By_State {
         wp_nonce_field('dh_prepprofiles');
         echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
         echo '<input type="hidden" name="post_status" value="' . esc_attr($post_status) . '" />';
+        echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
+        echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
         echo '<input type="hidden" name="dh_action" value="publish_all" />';
         submit_button(__('Publish All Profiles', 'directory-helpers'), 'primary', 'submit', false);
         echo '</form>';
@@ -269,6 +305,8 @@ class DH_Prep_Profiles_By_State {
             echo '<form method="post" style="display:inline-block;">';
             wp_nonce_field('dh_prepprofiles');
             echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
+            echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
+            echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
             echo '<input type="hidden" name="dh_action" value="rerank" />';
             submit_button(__('Rerank These Profiles', 'directory-helpers'), 'secondary', 'submit', false);
             echo '</form>';
