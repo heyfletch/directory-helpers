@@ -2,6 +2,21 @@
 /**
  * Prep Profiles by State Module
  *
+ * Overview:
+ * - Adds "Prep Profiles" submenu under State Listings and renders the admin page.
+ * - Provides filter form: State, City, Status (All/Refining/Published/Private), Niche, and minimum Profiles count.
+ * - Lists unique Cities in Results and links each city (with confirmation) to create a draft city-listing.
+ * - Action buttons:
+ *   - Publish All Profiles: publishes filtered profiles (hidden when Status = Published).
+ *   - Rerank These Profiles: available when Status = Published; triggers ACF save hooks per city/state to re-rank.
+ * - Query respects selected niche and 'All' status (skips post_status filter) and enforces minimum profile count per city.
+ * - City-listing creation flow (admin-post `dh_create_city_listing`):
+ *   - Capability + nonce checks; builds title "City, ST" and slug "city-st-niche(+s)".
+ *   - Assigns area and niche terms; redirects to edit screen with success + next steps notice.
+ * - Security: nonce verification for actions; capability checks; sanitization of all inputs.
+ *
+ * Related docs: see docs/CITY-STATE-RELATIONSHIPS.md for city/state slug conventions.
+ *
  * @package Directory_Helpers
  */
 
