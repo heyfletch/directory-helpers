@@ -70,6 +70,9 @@ class DH_AI_Content_Generator {
             <button type="button" id="dh-generate-ai-content" class="button button-primary" style="width: 100%;">
                 <?php esc_html_e('Generate AI Content', 'directory-helpers'); ?>
             </button>
+            <button type="button" id="dh-unsplash-photos-btn" class="button" style="width: 100%; margin-top: 8px;">
+                <?php echo esc_html( get_the_title( $post ) . ' ' . __( 'Photos', 'directory-helpers' ) ); ?>
+            </button>
             <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"></div>
         </div>
         <?php
@@ -98,6 +101,7 @@ class DH_AI_Content_Generator {
         $options = get_option('directory_helpers_options');
         wp_localize_script('dh-ai-content-generator-js', 'aiContentGenerator', array(
             'webhookUrl' => $options['n8n_webhook_url'] ?? '',
+            'postTitle'  => isset($post->post_title) ? wp_strip_all_tags(get_the_title($post)) : '',
         ));
     }
 

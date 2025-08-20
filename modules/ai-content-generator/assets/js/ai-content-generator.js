@@ -3,11 +3,13 @@ jQuery(document).ready(function ($) {
     const keywordInput = document.getElementById('dh-ai-keyword');
     const statusDiv = document.getElementById('dh-ai-status');
     const postId = document.getElementById('post_ID').value;
+    const photosBtn = document.getElementById('dh-unsplash-photos-btn');
 
-    if (!generateBtn) {
+    if (!generateBtn && !photosBtn) {
         return;
     }
 
+    if (generateBtn) {
     generateBtn.addEventListener('click', function () {
         const originalKeyword = keywordInput.value;
         console.log('Original Keyword:', originalKeyword);
@@ -78,4 +80,34 @@ jQuery(document).ready(function ($) {
             statusDiv.style.color = 'red';
         });
     });
+    }
+
+    // Unsplash Photos button: build a sanitized query from the post title and open Unsplash search
+    if (photosBtn) {
+        photosBtn.addEventListener('click', function () {
+            // Try to read the current title from the editor (Classic). Fallback to localized title.
+            const titleField = document.getElementById('title');
+            const originalTitle = (titleField && titleField.value) || (aiContentGenerator && aiContentGenerator.postTitle) || '';
+
+            // Sanitize the title similar to keyword cleaning:
+            // 1) Convert hyphens to spaces
+            // 2) Remove characters that are not letters, numbers, or spaces (strips commas, quotes, punctuation)
+            // 3) Collapse multiple spaces
+            // 4) Trim
+            const sanitizedTitle = originalTitle
+                .replace(/-/g, ' ')
+                .replace(/[\p{L}\p{N} ]+/gu, (m) => m) // keep allowed runs
+                .replace(/[^\p{L}\p{N} ]+/gu, '') // strip disallowed chars
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!sanitizedTitle) {
+                window.open('https://unsplash.com/s/photos', '_blank', 'noopener');
+                return;
+            }
+
+            const url = 'https://unsplash.com/s/photos/' + encodeURIComponent(sanitizedTitle);
+            window.open(url, '_blank', 'noopener');
+        });
+    }
 });
