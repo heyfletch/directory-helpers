@@ -48,7 +48,7 @@ class DH_Prep_Profiles_By_State {
         }
         $prefix = $wpdb->prefix;
         $sql = "
-            SELECT p.*
+            SELECT p.*, t2.name AS area_name
             FROM {$prefix}posts p
             JOIN {$prefix}term_relationships tr1 ON p.ID = tr1.object_id
             JOIN {$prefix}term_taxonomy tt1 ON tr1.term_taxonomy_id = tt1.term_taxonomy_id
@@ -78,7 +78,7 @@ class DH_Prep_Profiles_By_State {
                 GROUP BY t3.term_id
                 HAVING COUNT(DISTINCT p3.ID) > 1
               )
-            ORDER BY p.post_title ASC
+            ORDER BY t2.name ASC, p.post_title ASC
         ";
         $prepared = $wpdb->prepare($sql, $state_slug, $post_status, $state_slug, $post_status);
         return $wpdb->get_results($prepared);
@@ -215,8 +215,13 @@ class DH_Prep_Profiles_By_State {
             $state_slug = $states[0]->slug; // default to first
         }
         $profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status) : array();
-        $profile_ids = wp_list_pluck($profiles, 'ID');
-        $unique_cities = $this->get_unique_area_terms_for_posts($profile_ids);
+        // Build unique city names from query results to match ordering and selection
+        $unique_cities = array();
+        foreach ($profiles as $p) {
+            if (!empty($p->area_name)) {
+                $unique_cities[$p->area_name] = $p->area_name;
+            }
+        }
 
         echo '<div class="wrap">';
         echo '<h1>' . esc_html__('Prep Profiles by State', 'directory-helpers') . '</h1>';
@@ -244,7 +249,7 @@ class DH_Prep_Profiles_By_State {
         echo '<label><strong>' . esc_html__('Status:', 'directory-helpers') . '</strong> ';
         echo '<select name="post_status">';
         printf('<option value="refining" %s>%s</option>', selected($post_status, 'refining', false), esc_html__('Refining', 'directory-helpers'));
-        printf('<option value="publish" %s>%s</option>', selected($post_status, 'publish', false), esc_html__('Publish', 'directory-helpers'));
+        printf('<option value="publish" %s>%s</option>', selected($post_status, 'publish', false), esc_html__('Published', 'directory-helpers'));
         echo '</select></label>';
 
         submit_button(__('Filter'), 'secondary', '', false);
@@ -260,19 +265,23 @@ class DH_Prep_Profiles_By_State {
         submit_button(__('Publish All Profiles', 'directory-helpers'), 'primary', 'submit', false);
         echo '</form>';
 
-        echo '<form method="post" style="display:inline-block;">';
-        wp_nonce_field('dh_prepprofiles');
-        echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
-        echo '<input type="hidden" name="dh_action" value="rerank" />';
-        submit_button(__('Rerank These Profiles', 'directory-helpers'), 'secondary', 'submit', false);
-        echo '</form>';
+        if ($post_status === 'publish') {
+            echo '<form method="post" style="display:inline-block;">';
+            wp_nonce_field('dh_prepprofiles');
+            echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
+            echo '<input type="hidden" name="dh_action" value="rerank" />';
+            submit_button(__('Rerank These Profiles', 'directory-helpers'), 'secondary', 'submit', false);
+            echo '</form>';
+        }
 
         // Unique cities list
         echo '<h2 style="margin-top:24px;">' . esc_html__('Cities in Results', 'directory-helpers') . '</h2>';
         if (!empty($unique_cities)) {
             echo '<p>';
-            $city_names = array_map(function($t){ return esc_html($t->name); }, array_values($unique_cities));
-            echo implode(', ', $city_names);
+            $city_names = array_values($unique_cities);
+            usort($city_names, function($a, $b){ return strcasecmp($a, $b); });
+            $escaped = array_map('esc_html', $city_names);
+            echo implode(', ', $escaped);
             echo '</p>';
         } else {
             echo '<p>' . esc_html__('No cities found for current filters.', 'directory-helpers') . '</p>';
@@ -290,7 +299,7 @@ class DH_Prep_Profiles_By_State {
             foreach ($profiles as $p) {
                 $title = get_the_title($p->ID);
                 $edit_link = get_edit_post_link($p->ID, '');
-                $city = $this->get_first_area_term_name($p->ID);
+                $city = isset($p->area_name) ? $p->area_name : $this->get_first_area_term_name($p->ID);
                 $status = get_post_status($p->ID);
                 echo '<tr>';
                 echo '<td><a href="' . esc_url($edit_link) . '">' . esc_html($title) . '</a></td>';
