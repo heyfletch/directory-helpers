@@ -34,6 +34,16 @@ class DH_AI_Content_Generator {
             'side',
             'high'
         );
+
+        // New Process Shortcuts postbox
+        add_meta_box(
+            'dh_process_shortcuts',
+            __('Process Shortcuts', 'directory-helpers'),
+            array($this, 'render_shortcuts_meta_box'),
+            array('city-listing', 'state-listing'),
+            'side',
+            'high'
+        );
     }
 
     /**
@@ -70,10 +80,29 @@ class DH_AI_Content_Generator {
             <button type="button" id="dh-generate-ai-content" class="button button-primary" style="width: 100%;">
                 <?php esc_html_e('Generate AI Content', 'directory-helpers'); ?>
             </button>
-            <button type="button" id="dh-unsplash-photos-btn" class="button" style="width: 100%; margin-top: 8px;">
+            <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"></div>
+        </div>
+        <?php
+    }
+
+    /**
+     * Render the Process Shortcuts meta box.
+     */
+    public function render_shortcuts_meta_box($post) {
+        ?>
+        <div class="dh-process-shortcuts-wrapper">
+            <button type="button" id="dh-unsplash-photos-btn" class="button" style="width: 100%;">
                 <?php echo esc_html( get_the_title( $post ) . ' ' . __( 'Photos', 'directory-helpers' ) ); ?>
             </button>
-            <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"></div>
+            <p style="margin: 8px 0 0 0;">
+                <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://notebooklm.google.com/' ); ?>"><?php esc_html_e('Create Video (Notebook LM)', 'directory-helpers'); ?></a>
+            </p>
+            <p style="margin: 8px 0 0 0;">
+                <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://studio.youtube.com/channel/UC2KnlX0pbZrk5XFmwenKCWw/videos/upload?d=ud&filter=%5B%5D&sort=%7B%22columnType%22%3A%22date%22%2C%22sortOrder%22%3A%22DESCENDING%22%7D' ); ?>"><?php esc_html_e('Post to Youtube', 'directory-helpers'); ?></a>
+            </p>
+            <p style="margin: 8px 0 0 0;">
+                <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://chatgpt.com/' ); ?>"><?php esc_html_e('Create YT Thumbnail', 'directory-helpers'); ?></a>
+            </p>
         </div>
         <?php
     }
