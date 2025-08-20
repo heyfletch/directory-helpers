@@ -130,6 +130,8 @@ class DH_AI_Content_Generator {
 
         $post_id = isset($params['postId']) ? absint($params['postId']) : 0;
         $content = isset($params['content']) ? wp_kses_post($params['content']) : '';
+        // Optional: featured image attachment ID from media library
+        $featured_media_id = isset($params['featured_media']) ? absint($params['featured_media']) : 0;
 
         if (empty($post_id) || empty($content)) {
             return new WP_Error('missing_parameters', 'Missing postId or content.', array('status' => 400));
@@ -146,6 +148,33 @@ class DH_AI_Content_Generator {
             return new WP_Error('update_failed', 'Failed to update the post.', array('status' => 500));
         }
 
-        return new WP_REST_Response(array('message' => 'Content updated successfully.'), 200);
+        // If a featured media ID was provided, attempt to set it as the featured image
+        $featured_set = null;
+        $featured_error = '';
+        if ($featured_media_id) {
+            $attachment = get_post($featured_media_id);
+            if ($attachment && $attachment->post_type === 'attachment') {
+                $set = set_post_thumbnail($post_id, $featured_media_id);
+                if ($set) {
+                    $featured_set = true;
+                } else {
+                    $featured_set = false;
+                    $featured_error = 'Failed to set featured image (post type may not support thumbnails).';
+                }
+            } else {
+                $featured_set = false;
+                $featured_error = 'Invalid featured_media ID.';
+            }
+        }
+
+        $response = array('message' => 'Content updated successfully.');
+        if (!is_null($featured_set)) {
+            $response['featured_media_set'] = $featured_set;
+            if (!$featured_set && $featured_error) {
+                $response['warning'] = $featured_error;
+            }
+        }
+
+        return new WP_REST_Response($response, 200);
     }
 }
