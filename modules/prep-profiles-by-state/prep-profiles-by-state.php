@@ -249,6 +249,7 @@ class DH_Prep_Profiles_By_State {
         echo '<input type="hidden" name="page" value="dh-prep-profiles" />';
 
         echo '<div style="display:flex; gap:12px; align-items:center; margin:12px 0;">';
+        submit_button(__('Filter'), 'secondary', '', false);
         // State selector
         echo '<label><strong>' . esc_html__('State:', 'directory-helpers') . '</strong> ';
         echo '<select name="state">';
@@ -286,7 +287,9 @@ class DH_Prep_Profiles_By_State {
         }
         echo '</select></label>';
 
+        // Right-side Filter button
         submit_button(__('Filter'), 'secondary', '', false);
+
         echo '</div>';
         echo '</form>';
 
