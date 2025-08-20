@@ -13,6 +13,8 @@ class DH_Prep_Profiles_By_State {
     private static $submenu_registered = false;
     public function __construct() {
         add_action('admin_menu', array($this, 'register_submenu_page'));
+        add_action('admin_post_dh_create_city_listing', array($this, 'handle_create_city_listing'));
+        add_action('admin_notices', array($this, 'maybe_show_city_created_notice'));
     }
 
     public function register_submenu_page() {
@@ -203,6 +205,131 @@ class DH_Prep_Profiles_By_State {
         return 0;
     }
 
+    public function handle_create_city_listing() {
+        if (!current_user_can('edit_posts')) {
+            wp_die(esc_html__('You do not have permission to create posts.', 'directory-helpers'));
+        }
+        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'dh_create_city_listing')) {
+            wp_die(esc_html__('Security check failed.', 'directory-helpers'));
+        }
+
+        $area_slug  = isset($_GET['area']) ? sanitize_title(wp_unslash($_GET['area'])) : '';
+        $state_slug = isset($_GET['state']) ? sanitize_title(wp_unslash($_GET['state'])) : '';
+        $niche_slug = isset($_GET['niche']) ? sanitize_title(wp_unslash($_GET['niche'])) : 'dog-trainer';
+
+        if (empty($area_slug) || empty($state_slug)) {
+            wp_die(esc_html__('Missing required parameters.', 'directory-helpers'));
+        }
+
+        $area_term  = get_term_by('slug', $area_slug, 'area');
+        $state_term = get_term_by('slug', $state_slug, 'state');
+        $niche_term = get_term_by('slug', $niche_slug, 'niche');
+
+        if (!$area_term || is_wp_error($area_term)) {
+            wp_die(esc_html__('Invalid area term.', 'directory-helpers'));
+        }
+
+        // City Name: strip trailing " - ST"
+        $city_name = $area_term->name;
+        $city_name = preg_replace('/\s+-\s+[A-Za-z]{2}$/', '', $city_name);
+        $city_name = trim($city_name);
+
+        // Determine state code (prefer 2-letter slug, else term description, else parse from area name)
+        $state_code = '';
+        if ($state_term && !is_wp_error($state_term)) {
+            if (strlen($state_term->slug) === 2) {
+                $state_code = strtoupper($state_term->slug);
+            } elseif (!empty($state_term->description) && preg_match('/^[A-Za-z]{2}$/', $state_term->description)) {
+                $state_code = strtoupper($state_term->description);
+            }
+        }
+        if (!$state_code && preg_match('/\s-\s([A-Za-z]{2})$/', $area_term->name, $m)) {
+            $state_code = strtoupper($m[1]);
+        }
+        if (!$state_code && strlen($state_slug) >= 2) {
+            $state_code = strtoupper(substr($state_slug, 0, 2));
+        }
+
+        // Title: "City, ST"
+        $title = $city_name . ( $state_code ? ', ' . $state_code : '' );
+
+        // Niche pluralization (simple rules)
+        $niche_name = ($niche_term && !is_wp_error($niche_term)) ? $niche_term->name : str_replace('-', ' ', $niche_slug);
+        $plural_niche = $niche_name;
+        if (preg_match('/[^aeiou]y$/i', $plural_niche)) {
+            $plural_niche = preg_replace('/y$/i', 'ies', $plural_niche);
+        } elseif (!preg_match('/s$/i', $plural_niche)) {
+            $plural_niche .= 's';
+        }
+
+        // Slug base: "Title + plural niche"
+        $slug_base = $title . ' ' . $plural_niche;
+        $desired_slug = sanitize_title($slug_base);
+
+        $post_id = wp_insert_post(array(
+            'post_type'   => 'city-listing',
+            'post_status' => 'draft',
+            'post_title'  => $title,
+            'post_name'   => $desired_slug,
+        ), true);
+
+        if (is_wp_error($post_id) || !$post_id) {
+            wp_die(esc_html__('Failed to create city listing post.', 'directory-helpers'));
+        }
+
+        // Assign taxonomy terms
+        wp_set_object_terms($post_id, (int) $area_term->term_id, 'area', false);
+        if ($niche_term && !is_wp_error($niche_term)) {
+            wp_set_object_terms($post_id, (int) $niche_term->term_id, 'niche', false);
+        }
+
+        // Redirect to edit screen with recap vars
+        $edit_url = add_query_arg(array(
+            'post'           => $post_id,
+            'action'         => 'edit',
+            'dh_cl_created'  => '1',
+            'dh_cl_title'    => rawurlencode($title),
+            'dh_cl_slug'     => rawurlencode(get_post_field('post_name', $post_id)),
+            'dh_cl_area'     => rawurlencode($area_term->name),
+            'dh_cl_niche'    => rawurlencode($niche_name),
+        ), admin_url('post.php'));
+
+        wp_safe_redirect($edit_url);
+        exit;
+    }
+
+    public function maybe_show_city_created_notice() {
+        if (!is_admin()) {
+            return;
+        }
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || $screen->base !== 'post') {
+            return;
+        }
+        if (!isset($_GET['dh_cl_created']) || $_GET['dh_cl_created'] !== '1') {
+            return;
+        }
+        $title = isset($_GET['dh_cl_title']) ? sanitize_text_field(wp_unslash($_GET['dh_cl_title'])) : '';
+        $slug  = isset($_GET['dh_cl_slug']) ? sanitize_title(wp_unslash($_GET['dh_cl_slug'])) : '';
+        $area  = isset($_GET['dh_cl_area']) ? sanitize_text_field(wp_unslash($_GET['dh_cl_area'])) : '';
+        $niche = isset($_GET['dh_cl_niche']) ? sanitize_text_field(wp_unslash($_GET['dh_cl_niche'])) : '';
+
+        echo '<div class="notice notice-success is-dismissible"><p>'
+            . sprintf(
+                /* translators: 1: title, 2: slug, 3: area name, 4: niche name */
+                esc_html__('New city listing page "%1$s" created with slug "%2$s", area "%3$s", niche "%4$s".', 'directory-helpers'),
+                esc_html($title),
+                esc_html($slug),
+                esc_html($area),
+                esc_html($niche)
+            )
+            . '</p></div>';
+
+        echo '<div class="notice notice-warning is-dismissible"><p>'
+            . esc_html__('Your next step is to click Generate AI Content.', 'directory-helpers')
+            . '</p></div>';
+    }
+
     public function render_page() {
         static $rendered = false;
         if ($rendered) {
@@ -359,11 +486,24 @@ class DH_Prep_Profiles_By_State {
         echo '<h2 style="margin-top:24px;">' . esc_html__('Cities in Results', 'directory-helpers') . '</h2>';
         if (!empty($unique_cities)) {
             echo '<p>';
-            $city_names = array_values($unique_cities);
-            usort($city_names, function($a, $b){ return strcasecmp($a, $b); });
-            $escaped = array_map('esc_html', $city_names);
-            echo implode(', ', $escaped);
+            // Sort by name while keeping slug => name mapping
+            $cities = $unique_cities; // slug => name
+            asort($cities, SORT_FLAG_CASE | SORT_STRING);
+            $links = array();
+            $nonce = wp_create_nonce('dh_create_city_listing');
+            foreach ($cities as $slug => $name) {
+                $url = add_query_arg(array(
+                    'action'   => 'dh_create_city_listing',
+                    'area'     => $slug,
+                    'state'    => $state_slug,
+                    'niche'    => $niche_slug,
+                    '_wpnonce' => $nonce,
+                ), admin_url('admin-post.php'));
+                $links[] = '<a href="' . esc_url($url) . '" class="dh-city-create-link" target="_blank" rel="noopener">' . esc_html($name) . '</a>';
+            }
+            echo implode(', ', $links);
             echo '</p>';
+            echo '<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest(".dh-city-create-link");if(!a){return;}if(!confirm("Are you sure you want to create a new city listing page?")){e.preventDefault();}});})();</script>';
         } else {
             echo '<p>' . esc_html__('No cities found for current filters.', 'directory-helpers') . '</p>';
         }
