@@ -317,7 +317,7 @@ class DH_Prep_Profiles_By_State {
         echo '<div class="notice notice-success is-dismissible"><p>'
             . sprintf(
                 /* translators: 1: title, 2: slug, 3: area name, 4: niche name */
-                esc_html__('New city listing page "%1$s" created with slug "%2$s", area "%3$s", niche "%4$s".', 'directory-helpers'),
+                esc_html__('New city listing page "%1$s" created with slug "%2$s", area "%3$s", niche "%4$s". Next Steps: Generate AI Content, Create Thumbnail, Find Photos, Create Video, Post to Youtube.', 'directory-helpers'),
                 esc_html($title),
                 esc_html($slug),
                 esc_html($area),
@@ -459,16 +459,18 @@ class DH_Prep_Profiles_By_State {
         echo '</form>';
 
         // Action buttons
-        echo '<form method="post" style="display:inline-block; margin-right:8px;" onsubmit="return confirm(\'Are you sure you want to publish these profiles?\')">';
-        wp_nonce_field('dh_prepprofiles');
-        echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
-        echo '<input type="hidden" name="post_status" value="' . esc_attr($post_status) . '" />';
-        echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
-        echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
-        echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
-        echo '<input type="hidden" name="dh_action" value="publish_all" />';
-        submit_button(__('Publish All Profiles', 'directory-helpers'), 'primary', 'submit', false);
-        echo '</form>';
+        if ($post_status !== 'publish') {
+            echo '<form method="post" style="display:inline-block; margin-right:8px;" onsubmit="return confirm(\'Are you sure you want to publish these profiles?\')">';
+            wp_nonce_field('dh_prepprofiles');
+            echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
+            echo '<input type="hidden" name="post_status" value="' . esc_attr($post_status) . '" />';
+            echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
+            echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
+            echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
+            echo '<input type="hidden" name="dh_action" value="publish_all" />';
+            submit_button(__('Publish All Profiles', 'directory-helpers'), 'primary', 'submit', false);
+            echo '</form>';
+        }
 
         if ($post_status === 'publish') {
             echo '<form method="post" style="display:inline-block;" onsubmit="return confirm(\'Are you sure you want to re-rank these profiles?\')">';

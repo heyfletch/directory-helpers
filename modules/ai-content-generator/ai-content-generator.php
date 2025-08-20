@@ -91,17 +91,19 @@ class DH_AI_Content_Generator {
     public function render_shortcuts_meta_box($post) {
         ?>
         <div class="dh-process-shortcuts-wrapper">
-            <button type="button" id="dh-unsplash-photos-btn" class="button" style="width: 100%;">
-                <?php echo esc_html( get_the_title( $post ) . ' ' . __( 'Photos', 'directory-helpers' ) ); ?>
-            </button>
+            <p style="margin: 0;">
+                <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://chatgpt.com/' ); ?>"><?php esc_html_e('Create YT Thumbnail', 'directory-helpers'); ?></a>
+            </p>
+            <p style="margin: 8px 0 0 0;">
+                <button type="button" id="dh-unsplash-photos-btn" class="button" style="width: 100%;">
+                    <?php echo esc_html( get_the_title( $post ) . ' ' . __( 'Photos', 'directory-helpers' ) ); ?>
+                </button>
+            </p>
             <p style="margin: 8px 0 0 0;">
                 <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://notebooklm.google.com/' ); ?>"><?php esc_html_e('Create Video (Notebook LM)', 'directory-helpers'); ?></a>
             </p>
             <p style="margin: 8px 0 0 0;">
                 <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://studio.youtube.com/channel/UC2KnlX0pbZrk5XFmwenKCWw/videos/upload?d=ud&filter=%5B%5D&sort=%7B%22columnType%22%3A%22date%22%2C%22sortOrder%22%3A%22DESCENDING%22%7D' ); ?>"><?php esc_html_e('Post to Youtube', 'directory-helpers'); ?></a>
-            </p>
-            <p style="margin: 8px 0 0 0;">
-                <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://chatgpt.com/' ); ?>"><?php esc_html_e('Create YT Thumbnail', 'directory-helpers'); ?></a>
             </p>
             <p style="margin: 8px 0 0 0;">
                 <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://docs.google.com/document/d/15ULq4hfvtQc7qoDbkrmPjEJZXOcMRIyEF-VCgF85HxE/edit' ); ?>"><?php esc_html_e('Prompts, Process, Notes', 'directory-helpers'); ?></a>
