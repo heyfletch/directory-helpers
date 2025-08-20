@@ -41,7 +41,7 @@ class DH_Prep_Profiles_By_State {
         return $terms;
     }
 
-    private function query_profiles_by_state_and_status($state_slug, $post_status, $min_count = 2, $city_slug = '') {
+    private function query_profiles_by_state_and_status($state_slug, $post_status, $min_count = 2, $city_slug = '', $niche_slug = 'dog-trainer') {
         global $wpdb;
         if (empty($state_slug)) {
             return array();
@@ -57,13 +57,22 @@ class DH_Prep_Profiles_By_State {
             JOIN {$prefix}term_relationships tr2 ON p.ID = tr2.object_id
             JOIN {$prefix}term_taxonomy tt2 ON tr2.term_taxonomy_id = tt2.term_taxonomy_id
             JOIN {$prefix}terms t2 ON tt2.term_id = t2.term_id
+            JOIN {$prefix}term_relationships tr5 ON p.ID = tr5.object_id
+            JOIN {$prefix}term_taxonomy tt5 ON tr5.term_taxonomy_id = tt5.term_taxonomy_id
+            JOIN {$prefix}terms t5 ON tt5.term_id = t5.term_id
             WHERE p.post_type = 'profile'
               AND tt1.taxonomy = 'state'
               AND t1.slug = %s
-              AND p.post_status = %s
-              AND tt2.taxonomy = 'area'";
+              AND tt2.taxonomy = 'area'
+              AND tt5.taxonomy = 'niche'
+              AND t5.slug = %s";
 
-        $params = array($state_slug, $post_status);
+        $params = array($state_slug, $niche_slug);
+
+        if ($post_status !== 'all') {
+            $sql .= "\n              AND p.post_status = %s";
+            $params[] = $post_status;
+        }
         if (!empty($city_slug)) {
             $sql .= "\n              AND t2.slug = %s";
             $params[] = $city_slug;
@@ -78,17 +87,27 @@ class DH_Prep_Profiles_By_State {
                 JOIN {$prefix}term_relationships tr4 ON p3.ID = tr4.object_id
                 JOIN {$prefix}term_taxonomy tt4 ON tr4.term_taxonomy_id = tt4.term_taxonomy_id
                 JOIN {$prefix}terms t4 ON tt4.term_id = t4.term_id
+                JOIN {$prefix}term_relationships tr5b ON p3.ID = tr5b.object_id
+                JOIN {$prefix}term_taxonomy tt5b ON tr5b.term_taxonomy_id = tt5b.term_taxonomy_id
+                JOIN {$prefix}terms t5b ON tt5b.term_id = t5b.term_id
                 WHERE p3.post_type = 'profile'
                   AND tt4.taxonomy = 'state'
-                  AND t4.slug = %s
-                  AND p3.post_status = %s
-                  AND tt3.taxonomy = 'area'
+                  AND t4.slug = %s\n";
+        $params[] = $state_slug;
+
+        if ($post_status !== 'all') {
+            $sql .= "                  AND p3.post_status = %s\n";
+            $params[] = $post_status;
+        }
+
+        $sql .= "                  AND tt3.taxonomy = 'area'
+                  AND tt5b.taxonomy = 'niche'
+                  AND t5b.slug = %s
                 GROUP BY t3.term_id
                 HAVING COUNT(DISTINCT p3.ID) >= %d
               )
             ORDER BY t2.name ASC, p.post_title ASC";
-        $params[] = $state_slug;
-        $params[] = $post_status;
+        $params[] = $niche_slug;
         $params[] = $min_count;
 
         $prepared = $wpdb->prepare($sql, $params);
@@ -198,7 +217,8 @@ class DH_Prep_Profiles_By_State {
         $post_status = isset($_REQUEST['post_status']) ? sanitize_key($_REQUEST['post_status']) : 'refining';
         $min_count = isset($_REQUEST['min_count']) ? max(1, min(5, (int) $_REQUEST['min_count'])) : 2;
         $city_slug = isset($_REQUEST['city']) ? sanitize_title(wp_unslash($_REQUEST['city'])) : '';
-        if (!in_array($post_status, array('refining', 'publish'), true)) {
+        $niche_slug = isset($_REQUEST['niche']) ? sanitize_title(wp_unslash($_REQUEST['niche'])) : 'dog-trainer';
+        if (!in_array($post_status, array('refining', 'publish', 'private', 'all'), true)) {
             $post_status = 'refining';
         }
 
@@ -208,14 +228,14 @@ class DH_Prep_Profiles_By_State {
         if (isset($_POST['dh_action']) && isset($_POST['_wpnonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'dh_prepprofiles')) {
             $action = sanitize_text_field(wp_unslash($_POST['dh_action']));
             if ($action === 'publish_all' && !empty($state_slug)) {
-                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug);
+                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug);
                 $ids = wp_list_pluck($posts, 'ID');
                 $this->publish_posts($ids);
                 $post_status = 'publish';
                 $action_message = __('Published all filtered profiles.', 'directory-helpers');
             } elseif ($action === 'rerank' && !empty($state_slug)) {
                 // For re-ranking, use published profiles only
-                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug);
+                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug);
                 $ids = wp_list_pluck($published, 'ID');
                 $this->rerank_posts($ids, $state_slug);
                 $action_message = __('Re-ranked profiles for selected cities and state.', 'directory-helpers');
@@ -224,10 +244,14 @@ class DH_Prep_Profiles_By_State {
 
         // Fetch data for display
         $states = $this->get_state_terms();
+        $niches = get_terms(array(
+            'taxonomy' => 'niche',
+            'hide_empty' => false,
+        ));
         if (empty($state_slug) && !empty($states)) {
             $state_slug = $states[0]->slug; // default to first
         }
-        $profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug) : array();
+        $profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug) : array();
         // Build unique city names and slugs from query results to match ordering and selection
         $unique_cities = array(); // slug => name
         foreach ($profiles as $p) {
@@ -275,12 +299,26 @@ class DH_Prep_Profiles_By_State {
         // Status selector
         echo '<label><strong>' . esc_html__('Status:', 'directory-helpers') . '</strong> ';
         echo '<select name="post_status">';
+        printf('<option value="all" %s>%s</option>', selected($post_status, 'all', false), esc_html__('All', 'directory-helpers'));
         printf('<option value="refining" %s>%s</option>', selected($post_status, 'refining', false), esc_html__('Refining', 'directory-helpers'));
         printf('<option value="publish" %s>%s</option>', selected($post_status, 'publish', false), esc_html__('Published', 'directory-helpers'));
+        printf('<option value="private" %s>%s</option>', selected($post_status, 'private', false), esc_html__('Private', 'directory-helpers'));
+        echo '</select></label>';
+
+        // Niche selector
+        echo '<label><strong>' . esc_html__('Niche:', 'directory-helpers') . '</strong> ';
+        echo '<select name="niche">';
+        if (!is_wp_error($niches) && !empty($niches)) {
+            foreach ($niches as $term) {
+                printf('<option value="%s" %s>%s</option>', esc_attr($term->slug), selected($niche_slug, $term->slug, false), esc_html($term->name));
+            }
+        } else {
+            printf('<option value="%s" %s>%s</option>', 'dog-trainer', selected($niche_slug, 'dog-trainer', false), esc_html__('Dog Trainer', 'directory-helpers'));
+        }
         echo '</select></label>';
 
         // Min count selector
-        echo '<label><strong>' . esc_html__('Min profiles per city:', 'directory-helpers') . '</strong> ';
+        echo '<label><strong>' . esc_html__('Profiles:', 'directory-helpers') . '</strong> ';
         echo '<select name="min_count">';
         for ($i = 1; $i <= 5; $i++) {
             printf('<option value="%d" %s>≥ %d</option>', $i, selected($min_count, $i, false), $i);
@@ -300,6 +338,7 @@ class DH_Prep_Profiles_By_State {
         echo '<input type="hidden" name="post_status" value="' . esc_attr($post_status) . '" />';
         echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
         echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
+        echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
         echo '<input type="hidden" name="dh_action" value="publish_all" />';
         submit_button(__('Publish All Profiles', 'directory-helpers'), 'primary', 'submit', false);
         echo '</form>';
@@ -310,6 +349,7 @@ class DH_Prep_Profiles_By_State {
             echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
             echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
             echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
+            echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
             echo '<input type="hidden" name="dh_action" value="rerank" />';
             submit_button(__('Rerank These Profiles', 'directory-helpers'), 'secondary', 'submit', false);
             echo '</form>';
