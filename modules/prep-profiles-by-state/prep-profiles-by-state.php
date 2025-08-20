@@ -22,10 +22,10 @@ class DH_Prep_Profiles_By_State {
         self::$submenu_registered = true;
         add_submenu_page(
             'edit.php?post_type=state-listing',
-            __('Prep Profiles by State', 'directory-helpers'),
-            __('Prep Profiles by State', 'directory-helpers'),
+            __('Prep Profiles for Publishing', 'directory-helpers'),
+            __('Prep Profiles', 'directory-helpers'),
             'manage_options',
-            'dh-prep-profiles-by-state',
+            'dh-prep-profiles',
             array($this, 'render_page')
         );
     }
@@ -237,7 +237,7 @@ class DH_Prep_Profiles_By_State {
         }
 
         echo '<div class="wrap">';
-        echo '<h1>' . esc_html__('Prep Profiles by State', 'directory-helpers') . '</h1>';
+        echo '<h1>' . esc_html__('Prep Profiles for Publishing', 'directory-helpers') . '</h1>';
 
         if (!empty($action_message)) {
             echo '<div class="notice notice-success"><p>' . esc_html($action_message) . '</p></div>';
@@ -246,7 +246,7 @@ class DH_Prep_Profiles_By_State {
         // Filter form
         echo '<form method="get" action="">';
         echo '<input type="hidden" name="post_type" value="state-listing" />';
-        echo '<input type="hidden" name="page" value="dh-prep-profiles-by-state" />';
+        echo '<input type="hidden" name="page" value="dh-prep-profiles" />';
 
         echo '<div style="display:flex; gap:12px; align-items:center; margin:12px 0;">';
         // State selector
@@ -291,7 +291,7 @@ class DH_Prep_Profiles_By_State {
         echo '</form>';
 
         // Action buttons
-        echo '<form method="post" style="display:inline-block; margin-right:8px;">';
+        echo '<form method="post" style="display:inline-block; margin-right:8px;" onsubmit="return confirm(\'Are you sure you want to publish these profiles?\')">';
         wp_nonce_field('dh_prepprofiles');
         echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
         echo '<input type="hidden" name="post_status" value="' . esc_attr($post_status) . '" />';
@@ -302,7 +302,7 @@ class DH_Prep_Profiles_By_State {
         echo '</form>';
 
         if ($post_status === 'publish') {
-            echo '<form method="post" style="display:inline-block;">';
+            echo '<form method="post" style="display:inline-block;" onsubmit="return confirm(\'Are you sure you want to re-rank these profiles?\')">';
             wp_nonce_field('dh_prepprofiles');
             echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
             echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
