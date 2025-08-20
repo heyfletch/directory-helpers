@@ -103,6 +103,9 @@ class DH_AI_Content_Generator {
             <p style="margin: 8px 0 0 0;">
                 <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://chatgpt.com/' ); ?>"><?php esc_html_e('Create YT Thumbnail', 'directory-helpers'); ?></a>
             </p>
+            <p style="margin: 8px 0 0 0;">
+                <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://docs.google.com/document/d/15ULq4hfvtQc7qoDbkrmPjEJZXOcMRIyEF-VCgF85HxE/edit' ); ?>"><?php esc_html_e('Prompts, Process, Notes', 'directory-helpers'); ?></a>
+            </p>
         </div>
         <?php
     }
