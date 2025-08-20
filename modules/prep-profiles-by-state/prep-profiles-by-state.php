@@ -151,14 +151,46 @@ class DH_Prep_Profiles_By_State {
     }
 
     private function publish_posts($post_ids) {
+        $published_now = array();
         foreach ($post_ids as $pid) {
+            $pid = (int) $pid;
             // Only update if not already publish
             $current = get_post_status($pid);
             if ('publish' !== $current) {
-                wp_update_post(array(
+                $result = wp_update_post(array(
                     'ID' => $pid,
                     'post_status' => 'publish',
-                ));
+                ), true);
+                if (!is_wp_error($result) && $result) {
+                    $published_now[] = $pid;
+                }
+            }
+        }
+        return $published_now;
+    }
+
+    // Remove trailing " - ST" from area term names for posts that were just published
+    private function cleanup_area_terms_for_posts($post_ids) {
+        if (empty($post_ids)) {
+            return;
+        }
+        $unique_terms = array(); // term_id => WP_Term
+        foreach ($post_ids as $pid) {
+            $terms = get_the_terms((int)$pid, 'area');
+            if (!empty($terms) && !is_wp_error($terms)) {
+                foreach ($terms as $t) {
+                    $unique_terms[$t->term_id] = $t;
+                }
+            }
+        }
+        foreach ($unique_terms as $term) {
+            $name = $term->name;
+            if (preg_match('/\s-\s[A-Za-z]{2}$/', $name)) {
+                $new_name = trim(preg_replace('/\s-\s[A-Za-z]{2}$/', '', $name));
+                if ($new_name && $new_name !== $name) {
+                    // Update only the name; keep slug unchanged
+                    wp_update_term((int)$term->term_id, 'area', array('name' => $new_name));
+                }
             }
         }
     }
@@ -372,7 +404,10 @@ class DH_Prep_Profiles_By_State {
             if ($action === 'publish_all' && !empty($state_slug)) {
                 $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug);
                 $ids = wp_list_pluck($posts, 'ID');
-                $this->publish_posts($ids);
+                $published_now_ids = $this->publish_posts($ids);
+                if (!empty($published_now_ids)) {
+                    $this->cleanup_area_terms_for_posts($published_now_ids);
+                }
                 $post_status = 'publish';
                 $action_message = __('Published all filtered profiles.', 'directory-helpers');
             } elseif ($action === 'rerank' && !empty($state_slug)) {
