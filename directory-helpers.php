@@ -269,6 +269,12 @@ class Directory_Helpers {
                 'description' => __('Triggers an n8n workflow to generate AI content for posts.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/ai-content-generator/ai-content-generator.php',
                 'class' => 'DH_AI_Content_Generator'
+            ),
+            'prep-profiles-by-state' => array(
+                'name' => __('Prep Profiles by State', 'directory-helpers'),
+                'description' => __('Admin tools to prepare and publish profiles by state, list duplicate-city profiles, and trigger re-ranking.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/prep-profiles-by-state/prep-profiles-by-state.php',
+                'class' => 'DH_Prep_Profiles_By_State'
             )
             // Add more modules here as needed
         );
