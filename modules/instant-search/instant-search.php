@@ -68,10 +68,15 @@ if (!class_exists('DH_Instant_Search')) {
                 's' => isset($opts['instant_search_label_s']) && $opts['instant_search_label_s'] !== '' ? $opts['instant_search_label_s'] : __('States', 'directory-helpers'),
             );
             $labels = apply_filters('dh_instant_search_labels', $labels_from_opts);
+            // ZIP min digits option
+            $zip_min_digits = isset($opts['instant_search_zip_min_digits']) ? (int) $opts['instant_search_zip_min_digits'] : 3;
+            if ($zip_min_digits < 1) { $zip_min_digits = 1; }
+            if ($zip_min_digits > 5) { $zip_min_digits = 5; }
             wp_localize_script('dh-instant-search', 'dhInstantSearch', array(
                 'restUrl' => esc_url_raw( rest_url('dh/v1/instant-index') ),
                 'version' => (string) get_option(self::OPTION_VERSION, '0'),
                 'labels'  => $labels,
+                'zipMinDigits' => $zip_min_digits,
             ));
         }
 

@@ -82,6 +82,22 @@
                         </tr>
                         <tr>
                             <th scope="row">
+                                <label for="instant_search_zip_min_digits"><?php esc_html_e('Minimum digits for ZIP matches', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <?php $zip_min = isset($options['instant_search_zip_min_digits']) ? (int) $options['instant_search_zip_min_digits'] : 3; ?>
+                                <select id="instant_search_zip_min_digits" name="directory_helpers_options[instant_search_zip_min_digits]">
+                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                        <option value="<?php echo (int)$i; ?>" <?php selected($zip_min, $i); ?>><?php echo (int)$i; ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                                <p class="description">
+                                    <?php esc_html_e('Numeric queries with at least this many digits will return ZIP code matches. Default is 3.', 'directory-helpers'); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
                                 <label for="instant_search_label_p"><?php esc_html_e('Profiles Label', 'directory-helpers'); ?></label>
                             </th>
                             <td>

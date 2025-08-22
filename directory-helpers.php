@@ -219,6 +219,13 @@ class Directory_Helpers {
             $options['instant_search_label_c'] = isset($submitted_options['instant_search_label_c']) ? sanitize_text_field($submitted_options['instant_search_label_c']) : '';
             $options['instant_search_label_p'] = isset($submitted_options['instant_search_label_p']) ? sanitize_text_field($submitted_options['instant_search_label_p']) : '';
             $options['instant_search_label_s'] = isset($submitted_options['instant_search_label_s']) ? sanitize_text_field($submitted_options['instant_search_label_s']) : '';
+            // Handle Instant Search ZIP minimum digits
+            if (isset($submitted_options['instant_search_zip_min_digits'])) {
+                $min = (int) $submitted_options['instant_search_zip_min_digits'];
+                if ($min < 1) { $min = 1; }
+                if ($min > 5) { $min = 5; }
+                $options['instant_search_zip_min_digits'] = $min;
+            }
         }
 
         // Handle active modules

@@ -88,9 +88,9 @@
       });
   }
 
-  function groupAndLimit(ranked, limit){
+  function groupAndLimit(ranked, limit, capsOverride){
     // Per-type caps (client-side). Adjust if you want different mix per group.
-    var caps = {c:8, p:3, s:1};
+    var caps = capsOverride || {c:8, p:3, s:1};
     var used = new Set();
     var groups = {c:[], p:[], s:[]};
     ranked.forEach(function(r){
@@ -202,19 +202,32 @@
       var tokens = q.split(' ').filter(Boolean);
       loadIndex().then(function(idx){
         var items = idx.items.filter(function(it){ return allowed.indexOf(it.y) !== -1; });
-        // 5-digit ZIP fast path: if the normalized query is exactly 5 digits, prefer exact ZIP matches
+        // ZIP fast path logic (configurable minimum digits up to 5)
         var ranked;
+        var zipMin = parseInt((cfg && cfg.zipMinDigits) ? cfg.zipMinDigits : 3, 10);
+        if(!(zipMin >= 1 && zipMin <= 5)) zipMin = 3;
+        var isAllDigits = /^\d+$/.test(q);
+        var isZipNumericRange = isAllDigits && q.length >= zipMin && q.length <= 5;
+
         if(/^\d{5}$/.test(q)){
-          var zipMatches = items.filter(function(it){ return it.z && it.z === q; });
-          if(zipMatches.length){
-            ranked = zipMatches.map(function(it){ return {it: it, score: 0}; });
-          } else {
-            ranked = rankItems(items, tokens);
-          }
+          // Exact 5-digit fast path
+          var exact = items.filter(function(it){ return it.z && it.z === q; });
+          if(exact.length){ ranked = exact.map(function(it){ return {it: it, score: 0}; }); }
+          else { ranked = rankItems(items, tokens); }
+        } else if(isZipNumericRange){
+          // Prefix 3-4 digit (or admin-selected 1-4) fast path
+          var pref = items.filter(function(it){ return it.z && it.z.indexOf(q) === 0; });
+          if(pref.length){ ranked = pref.map(function(it){ return {it: it, score: 0}; }); }
+          else { ranked = rankItems(items, tokens); }
         } else {
           ranked = rankItems(items, tokens);
         }
-        state.results = groupAndLimit(ranked, limit);
+
+        // Increase profile cap during numeric ZIP queries: fill up to limit with profiles
+        var capsOverride = null;
+        if(/^\d{5}$/.test(q) || isZipNumericRange){ capsOverride = {c:0, p:limit, s:0}; }
+
+        state.results = groupAndLimit(ranked, limit, capsOverride);
         renderResults(state);
       });
     }
