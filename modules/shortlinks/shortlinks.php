@@ -79,7 +79,7 @@ class DH_Shortlinks {
             return;
         }
         $screen = get_current_screen();
-        if ( ! $screen || ! in_array( $screen->post_type, [ 'city-listing', 'state-listing' ], true ) ) {
+        if ( ! $screen || ! in_array( $screen->post_type, [ 'city-listing', 'state-listing', 'profile' ], true ) ) {
             return;
         }
 
@@ -88,7 +88,11 @@ class DH_Shortlinks {
         // Remove underline from the copy icon button, keep link styling intact
         $inline_css = '.dh-shortlinks-meta .dh-copy-shortlink{ text-decoration:none; box-shadow:none; }
             .dh-shortlinks-meta .dh-copy-shortlink:hover{ text-decoration:none; }
-            .dh-shortlinks-meta .dh-copy-shortlink .dashicons{ text-decoration:none; }';
+            .dh-shortlinks-meta .dh-copy-shortlink .dashicons{ text-decoration:none; }
+            /* Permalink copy icon next to Edit */
+            #edit-slug-box .dh-copy-permalink{ text-decoration:none; box-shadow:none; margin-left:6px; vertical-align:middle; }
+            #edit-slug-box .dh-copy-permalink:hover{ text-decoration:none; }
+            #edit-slug-box .dh-copy-permalink .dashicons{ text-decoration:none; }';
         wp_add_inline_style( 'dashicons', $inline_css );
         wp_enqueue_script(
             'dh-shortlinks-admin',
