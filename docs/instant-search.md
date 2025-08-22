@@ -30,7 +30,11 @@ Examples:
 [dh_instant_search theme="dark"]
 ```
 
-These map to data attributes on the input: data-post-types (letters), data-min-chars, data-debounce, data-limit.
+Shortcode mappings:
+
+- `post_types`, `min_chars`, `debounce`, `limit` → input data attributes `data-post-types` (letters), `data-min-chars`, `data-debounce`, `data-limit`.
+- `placeholder` → input `placeholder` attribute.
+- `theme` → adds `dhis--dark` to the wrapper when set to `dark`.
 
 ## Where to tweak defaults (code)
 
@@ -45,6 +49,7 @@ Under Directory Helpers → Settings, set:
 
 - Default Placeholder: saves to option `directory_helpers_options[instant_search_placeholder]`.
 - Profiles Label, City Listings Label, States Label: save to options `instant_search_label_p`, `instant_search_label_c`, `instant_search_label_s`.
+- ZIP Minimum Digits (1–5): saves to option `instant_search_zip_min_digits`. Controls how many digits typed before the ZIP fast-path engages client-side (localized to JS as `zipMinDigits`). Default: 3.
 
 These apply to all instances unless overridden by shortcode attributes. Developers may also use filters below.
 
@@ -116,14 +121,34 @@ You can fine-tune spacing, radius, icon size/offset, etc. via CSS variables on t
 }
 ```
 
-### Removing theme underlines
+### Centering the input
+
+Center via a helper class or the container:
+
+```css
+/* Add to the wrapper div */
+.dhis-center { margin: 0 auto; }
+
+/* Or center from the outer container (e.g., .search-wrap) */
+.search-wrap { display: flex; justify-content: center; }
+.search-wrap .dh-instant-search { margin: 0 auto; }
+```
+
+### Removing underlines and stray borders
 
 Some themes add underlines via box-shadow/appearance on inputs. The module proactively:
 
 - Resets native search appearances and hides WebKit decorations.
-- Forces no box-shadow by default and applies a custom focus ring.
+- Applies a custom focus ring while leaving theme box-shadows intact.
 
-If you still see an underline, ensure no higher-specificity selector targets `.dh-instant-search .dhis-input` with a box-shadow/border. Add your own override as needed.
+The results panel border/shadow is only applied when the wrapper is expanded: `.dh-instant-search[aria-expanded="true"] .dhis-results { … }`. This prevents a persistent gray line under the input when the panel is closed.
+
+If a theme still imposes a line, override as needed, e.g. `.dh-instant-search .dhis-input { box-shadow: none; }`.
+
+### Mobile/touch behavior
+
+- Result items are rendered as anchors (`<a href="…" class="dhis-item">`), so iOS Safari/Chrome navigate on first tap.
+- A subtle pressed state is shown on tap: `.dhis-item:active, .dhis-item.is-tapping { background: #e7f1ff; }`.
 
 ## Global post types (site-wide)
 
@@ -189,12 +214,15 @@ localStorage.removeItem('dhIS_data');
 
 - 5‑digit fast path:
   - If the normalized query is exactly 5 digits, results prioritize profiles whose `z` equals the ZIP.
-- Modest ranking boost:
+  
+  - Modest ranking boost:
   - For general queries, the base ranking uses the normalized title (`n`). If the query contains numeric tokens that match a profile ZIP (`z`), a small fractional boost is applied so matching profiles surface slightly higher without outranking strong title matches.
 - Data shape:
   - Profile items may include `z` (5-digit string). The ZIP meta key is filterable via `dh_instant_search_profile_zip_meta_key`.
 - Placeholder:
   - Default placeholder updated to “Search by City, State, Zip, or Name …”. You can still override via shortcode or `dh_instant_search_default_placeholder`.
+- ZIP Minimum Digits:
+  - Site-wide control of when the ZIP fast-path activates is available via the admin "ZIP Minimum Digits" setting (default 3). The value is exposed to the client as `zipMinDigits`.
 
 ### Optional enhancements
 
