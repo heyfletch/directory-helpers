@@ -19,12 +19,15 @@ Per-instance parameters (all optional):
 - label_c: Label for City Listings group. Overrides defaults/admin.
 - label_p: Label for Profiles group. Overrides defaults/admin.
 - label_s: Label for States group. Overrides defaults/admin.
+- theme: Visual theme for the input. "light" (default) or "dark". Adds the wrapper class `dhis--dark` when set to `dark`.
 
 Examples:
 ```
 [dh_instant_search post_types="city-listing,profile" min_chars="1" debounce="250" limit="20"]
 
 [dh_instant_search placeholder="Search trainers…" label_p="Trainers" label_c="Cities" label_s="States"]
+
+[dh_instant_search theme="dark"]
 ```
 
 These map to data attributes on the input: data-post-types (letters), data-min-chars, data-debounce, data-limit.
@@ -76,6 +79,51 @@ add_filter('dh_instant_search_profile_zip_meta_key', function($meta_key, $post_i
 
 - Placeholder: shortcode `placeholder` > filter `dh_instant_search_default_placeholder` (receives admin value) > admin option > built-in “Search by City, State, Zip, or Name …”.
 - Labels: shortcode `label_c/label_p/label_s` > filter `dh_instant_search_labels` (receives admin values) > admin options > built-in defaults (City Listings, Profiles, States).
+
+## Styling
+
+The input ships with a modern, pill-shaped design and two themes:
+
+- Light (default): white background, 2px border in `var(--primary)`, soft focus ring.
+- Dark (`theme="dark"`): white background, no border (on dark surfaces), subtle white focus ring.
+
+Shortcode switching:
+
+```
+[dh_instant_search]               ; light (default)
+[dh_instant_search theme="dark"]  ; dark variant
+```
+
+### Search icon and placeholder
+
+- A magnifying glass icon is rendered on the left via an SVG mask and inherits `var(--primary)`.
+- Placeholder color uses `var(--primary)` and fades to 0.2 opacity on focus.
+
+### CSS variables (easy overrides)
+
+You can fine-tune spacing, radius, icon size/offset, etc. via CSS variables on the wrapper `.dh-instant-search` or a parent:
+
+```css
+.dh-instant-search {
+  --primary: #0a84ff;         /* brand color */
+  --dhis-font-size: 18px;     /* input font size */
+  --dhis-radius: 9999px;      /* pill radius */
+  --dhis-padding-x: 18px;     /* horizontal padding */
+  --dhis-padding-y: 12px;     /* vertical padding */
+  --dhis-icon-size: 18px;     /* magnifier size */
+  --dhis-icon-left: 16px;     /* icon left inset */
+  --dhis-text-color: #111;    /* input text color */
+}
+```
+
+### Removing theme underlines
+
+Some themes add underlines via box-shadow/appearance on inputs. The module proactively:
+
+- Resets native search appearances and hides WebKit decorations.
+- Forces no box-shadow by default and applies a custom focus ring.
+
+If you still see an underline, ensure no higher-specificity selector targets `.dh-instant-search .dhis-input` with a box-shadow/border. Add your own override as needed.
 
 ## Global post types (site-wide)
 

@@ -104,6 +104,7 @@ if (!class_exists('DH_Instant_Search')) {
                 'label_c'    => '',
                 'label_p'    => '',
                 'label_s'    => '',
+                'theme'      => 'light', // 'light' (default) or 'dark'
             ), $atts, 'dh_instant_search');
 
             // Ensure assets are loaded
@@ -129,10 +130,15 @@ if (!class_exists('DH_Instant_Search')) {
                 $placeholder = apply_filters('dh_instant_search_default_placeholder', $default_ph);
             }
 
+            // Resolve theme class
+            $theme = is_string($atts['theme']) ? strtolower($atts['theme']) : 'light';
+            $theme = in_array($theme, array('light','dark'), true) ? $theme : 'light';
+            $theme_class = ($theme === 'dark') ? ' dhis--dark' : '';
+
             ob_start();
             ?>
             <!-- dh-instant-search: data-* props below map to shortcode attributes (min_chars, debounce, limit, post_types, labels) -->
-            <div class="dh-instant-search" id="<?php echo esc_attr($instance_id); ?>" role="combobox" aria-expanded="false" aria-haspopup="listbox"
+            <div class="dh-instant-search<?php echo esc_attr($theme_class); ?>" id="<?php echo esc_attr($instance_id); ?>" role="combobox" aria-expanded="false" aria-haspopup="listbox"
                 data-label-c="<?php echo esc_attr($atts['label_c']); ?>"
                 data-label-p="<?php echo esc_attr($atts['label_p']); ?>"
                 data-label-s="<?php echo esc_attr($atts['label_s']); ?>"
