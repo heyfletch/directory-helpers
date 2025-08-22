@@ -41,20 +41,27 @@ if (!class_exists('DH_Instant_Search')) {
         }
 
         public function register_assets() {
-            $base_url = DIRECTORY_HELPERS_URL . 'modules/instant-search/assets/';
+            $base_url  = DIRECTORY_HELPERS_URL . 'modules/instant-search/assets/';
+            $base_path = DIRECTORY_HELPERS_PATH . 'modules/instant-search/assets/';
+
+            // Cache-busting: append filemtime to versions to avoid stale assets in browser/CDN
+            $css_path = $base_path . 'css/instant-search.css';
+            $js_path  = $base_path . 'js/instant-search.js';
+            $css_ver  = DIRECTORY_HELPERS_VERSION . (file_exists($css_path) ? ('.' . filemtime($css_path)) : '');
+            $js_ver   = DIRECTORY_HELPERS_VERSION . (file_exists($js_path) ? ('.' . filemtime($js_path)) : '');
 
             wp_register_style(
                 'dh-instant-search',
                 $base_url . 'css/instant-search.css',
                 array(),
-                DIRECTORY_HELPERS_VERSION
+                $css_ver
             );
 
             wp_register_script(
                 'dh-instant-search',
                 $base_url . 'js/instant-search.js',
                 array(),
-                DIRECTORY_HELPERS_VERSION,
+                $js_ver,
                 true
             );
 
