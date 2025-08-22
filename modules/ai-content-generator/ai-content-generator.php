@@ -133,9 +133,23 @@ class DH_AI_Content_Generator {
         );
 
         $options = get_option('directory_helpers_options');
+
+        // Compute Unsplash slug from area term (without trailing " - ST") when on city-listing
+        $unsplash_slug = '';
+        if ($post && isset($post->post_type) && $post->post_type === 'city-listing') {
+            $area_terms = get_the_terms($post->ID, 'area');
+            if ($area_terms && !is_wp_error($area_terms)) {
+                $area_name = $area_terms[0]->name;
+                // Remove trailing " - ST" pattern if present
+                $area_no_state = preg_replace('/\s-\s[A-Za-z]{2}$/', '', $area_name);
+                $unsplash_slug = sanitize_title($area_no_state);
+            }
+        }
+
         wp_localize_script('dh-ai-content-generator-js', 'aiContentGenerator', array(
-            'webhookUrl' => $options['n8n_webhook_url'] ?? '',
-            'postTitle'  => isset($post->post_title) ? wp_strip_all_tags(get_the_title($post)) : '',
+            'webhookUrl'   => $options['n8n_webhook_url'] ?? '',
+            'postTitle'    => isset($post->post_title) ? wp_strip_all_tags(get_the_title($post)) : '',
+            'unsplashSlug' => $unsplash_slug,
         ));
     }
 

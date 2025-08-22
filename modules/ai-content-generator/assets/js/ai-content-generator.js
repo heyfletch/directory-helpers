@@ -88,7 +88,7 @@ jQuery(document).ready(function ($) {
     });
     }
 
-    // Unsplash Photos button: build a sanitized query from the post title and open Unsplash search
+    // Unsplash Photos button: open Unsplash search for the area slug (without " - ST")
     if (photosBtn) {
         photosBtn.addEventListener('click', function () {
             // Try to read the current title from the editor (Classic). Fallback to localized title.
@@ -107,12 +107,16 @@ jQuery(document).ready(function ($) {
                 .replace(/\s+/g, ' ')
                 .trim();
 
-            if (!sanitizedTitle) {
-                window.open('https://unsplash.com/s/photos', '_blank', 'noopener');
-                return;
-            }
+            // Prefer server-provided slug derived from area term (city-listing only)
+            const providedSlug = (typeof aiContentGenerator !== 'undefined' && aiContentGenerator.unsplashSlug) ? aiContentGenerator.unsplashSlug : '';
+            const fallbackSlug = sanitizedTitle ? sanitizedTitle.toLowerCase().replace(/\s+/g, '-') : '';
+            const slug = providedSlug || fallbackSlug;
 
-            const url = 'https://unsplash.com/s/photos/' + encodeURIComponent(sanitizedTitle);
+            let url = 'https://unsplash.com/s/photos';
+            if (slug) {
+                url += '/' + encodeURIComponent(slug);
+            }
+            url += '?license=free&orientation=landscape';
             window.open(url, '_blank', 'noopener');
         });
     }

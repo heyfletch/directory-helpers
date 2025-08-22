@@ -275,6 +275,12 @@ class Directory_Helpers {
                 'description' => __('Admin tools to prepare and publish profiles by state, list duplicate-city profiles, and trigger re-ranking.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/prep-profiles-by-state/prep-profiles-by-state.php',
                 'class' => 'DH_Prep_Profiles_By_State'
+            ),
+            'instant-search' => array(
+                'name' => __('Instant Search', 'directory-helpers'),
+                'description' => __('Client-side instant search for titles of selected post types with typeahead dropdown and ARIA support. Shortcode: [dh_instant_search].', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/instant-search/instant-search.php',
+                'class' => 'DH_Instant_Search'
             )
             // Add more modules here as needed
         );
