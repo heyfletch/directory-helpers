@@ -66,6 +66,47 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="directory-helpers-settings" style="margin-top: 20px;">
+                <h2><?php esc_html_e('Instant Search Settings', 'directory-helpers'); ?></h2>
+                <table class="form-table">
+                    <tbody>
+                        <tr>
+                            <th scope="row">
+                                <label for="instant_search_placeholder"><?php esc_html_e('Default Placeholder', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="text" id="instant_search_placeholder" name="directory_helpers_options[instant_search_placeholder]" value="<?php echo esc_attr($options['instant_search_placeholder'] ?? ''); ?>" class="regular-text" placeholder="<?php echo esc_attr__('Search…', 'directory-helpers'); ?>">
+                                <p class="description"><?php esc_html_e('Default text shown in the search input. Can be overridden per shortcode with placeholder="...".', 'directory-helpers'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="instant_search_label_p"><?php esc_html_e('Profiles Label', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="text" id="instant_search_label_p" name="directory_helpers_options[instant_search_label_p]" value="<?php echo esc_attr($options['instant_search_label_p'] ?? ''); ?>" class="regular-text" placeholder="<?php echo esc_attr__('Profiles', 'directory-helpers'); ?>">
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="instant_search_label_c"><?php esc_html_e('City Listings Label', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="text" id="instant_search_label_c" name="directory_helpers_options[instant_search_label_c]" value="<?php echo esc_attr($options['instant_search_label_c'] ?? ''); ?>" class="regular-text" placeholder="<?php echo esc_attr__('City Listings', 'directory-helpers'); ?>">
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="instant_search_label_s"><?php esc_html_e('States Label', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="text" id="instant_search_label_s" name="directory_helpers_options[instant_search_label_s]" value="<?php echo esc_attr($options['instant_search_label_s'] ?? ''); ?>" class="regular-text" placeholder="<?php echo esc_attr__('States', 'directory-helpers'); ?>">
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
         <?php submit_button(__('Save Settings', 'directory-helpers')); ?>
     </form>

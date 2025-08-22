@@ -120,7 +120,8 @@
     var idx = 0;
     ['c','p','s'].forEach(function(y){
       var arr = byType[y]; if(!arr || !arr.length) return;
-      var h = document.createElement('div'); h.className='dhis-heading'; h.textContent = cfg.labels[y] || y;
+      var labels = state.labels || cfg.labels || {};
+      var h = document.createElement('div'); h.className='dhis-heading'; h.textContent = labels[y] || y;
       h.setAttribute('role','presentation');
       panel.appendChild(h);
       arr.forEach(function(it){
@@ -175,7 +176,15 @@
     var limit = parseInt(input.dataset.limit || '12', 10);
     var allowed = (input.dataset.postTypes || 'c,p,s').split(',').map(function(s){return s.trim();}).filter(Boolean);
 
-    var state = {root: el, input: input, panel: panel, limit: limit, activeIndex: -1, results: []};
+    // Per-instance label overrides from container data attributes
+    var rootDS = el.dataset || {};
+    var labels = {
+      c: rootDS.labelC && rootDS.labelC.trim() ? rootDS.labelC : (cfg.labels && cfg.labels.c) || 'City Listings',
+      p: rootDS.labelP && rootDS.labelP.trim() ? rootDS.labelP : (cfg.labels && cfg.labels.p) || 'Profiles',
+      s: rootDS.labelS && rootDS.labelS.trim() ? rootDS.labelS : (cfg.labels && cfg.labels.s) || 'States'
+    };
+
+    var state = {root: el, input: input, panel: panel, limit: limit, activeIndex: -1, results: [], labels: labels};
 
     function runSearch(){
       var q = normalize(input.value);

@@ -59,15 +59,19 @@ if (!class_exists('DH_Instant_Search')) {
             );
 
             // Front-end config injected into window.dhInstantSearch for the JS.
-            // You can tweak label text here if needed.
+            // Defaults can be set in admin (directory_helpers_options) and overridden via the
+            // 'dh_instant_search_labels' filter.
+            $opts = get_option('directory_helpers_options', []);
+            $labels_from_opts = array(
+                'c' => isset($opts['instant_search_label_c']) && $opts['instant_search_label_c'] !== '' ? $opts['instant_search_label_c'] : __('City Listings', 'directory-helpers'),
+                'p' => isset($opts['instant_search_label_p']) && $opts['instant_search_label_p'] !== '' ? $opts['instant_search_label_p'] : __('Profiles', 'directory-helpers'),
+                's' => isset($opts['instant_search_label_s']) && $opts['instant_search_label_s'] !== '' ? $opts['instant_search_label_s'] : __('States', 'directory-helpers'),
+            );
+            $labels = apply_filters('dh_instant_search_labels', $labels_from_opts);
             wp_localize_script('dh-instant-search', 'dhInstantSearch', array(
                 'restUrl' => esc_url_raw( rest_url('dh/v1/instant-index') ),
                 'version' => (string) get_option(self::OPTION_VERSION, '0'),
-                'labels'  => array(
-                    'c' => __('City Listings', 'directory-helpers'),
-                    'p' => __('Profiles', 'directory-helpers'),
-                    's' => __('States', 'directory-helpers'),
-                ),
+                'labels'  => $labels,
             ));
         }
 
@@ -77,11 +81,17 @@ if (!class_exists('DH_Instant_Search')) {
             // - min_chars: minimum characters before search runs
             // - debounce: input debounce in milliseconds
             // - limit: maximum results to display
+            // - placeholder: input placeholder text (default filterable)
+            // - label_c/label_p/label_s: per-instance headings for result groups
             $atts = shortcode_atts(array(
                 'post_types' => implode(',', $this->default_post_types),
                 'min_chars'  => 2,
                 'debounce'   => 120,
                 'limit'      => 12,
+                'placeholder'=> '',
+                'label_c'    => '',
+                'label_p'    => '',
+                'label_s'    => '',
             ), $atts, 'dh_instant_search');
 
             // Ensure assets are loaded
@@ -97,16 +107,30 @@ if (!class_exists('DH_Instant_Search')) {
                 $pts_letters[] = isset($this->type_map[$pt]) ? $this->type_map[$pt] : substr(sanitize_key($pt), 0, 1);
             }
 
+            // Resolve placeholder default via admin option or filter when not provided.
+            $placeholder = $atts['placeholder'];
+            if ($placeholder === '' || $placeholder === null) {
+                $opts = get_option('directory_helpers_options', []);
+                $default_ph = isset($opts['instant_search_placeholder']) && $opts['instant_search_placeholder'] !== ''
+                    ? $opts['instant_search_placeholder']
+                    : __('Search…', 'directory-helpers');
+                $placeholder = apply_filters('dh_instant_search_default_placeholder', $default_ph);
+            }
+
             ob_start();
             ?>
-            <!-- dh-instant-search: data-* props below map to shortcode attributes (min_chars, debounce, limit, post_types) -->
-            <div class="dh-instant-search" id="<?php echo esc_attr($instance_id); ?>" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+            <!-- dh-instant-search: data-* props below map to shortcode attributes (min_chars, debounce, limit, post_types, labels) -->
+            <div class="dh-instant-search" id="<?php echo esc_attr($instance_id); ?>" role="combobox" aria-expanded="false" aria-haspopup="listbox"
+                data-label-c="<?php echo esc_attr($atts['label_c']); ?>"
+                data-label-p="<?php echo esc_attr($atts['label_p']); ?>"
+                data-label-s="<?php echo esc_attr($atts['label_s']); ?>"
+            >
                 <input type="search"
                     class="dhis-input"
                     aria-autocomplete="list"
                     aria-controls="<?php echo esc_attr($instance_id); ?>-list"
                     aria-activedescendant=""
-                    placeholder="<?php echo esc_attr__('Search…', 'directory-helpers'); ?>"
+                    placeholder="<?php echo esc_attr($placeholder); ?>"
                     data-min-chars="<?php echo (int) $atts['min_chars']; ?>"
                     data-debounce="<?php echo (int) $atts['debounce']; ?>"
                     data-limit="<?php echo (int) $atts['limit']; ?>"

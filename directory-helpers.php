@@ -213,6 +213,12 @@ class Directory_Helpers {
             $submitted_options = $_POST['directory_helpers_options'];
             $options['n8n_webhook_url'] = isset($submitted_options['n8n_webhook_url']) ? esc_url_raw($submitted_options['n8n_webhook_url']) : '';
             $options['shared_secret_key'] = isset($submitted_options['shared_secret_key']) ? sanitize_text_field($submitted_options['shared_secret_key']) : '';
+
+            // Handle Instant Search defaults (placeholder and labels)
+            $options['instant_search_placeholder'] = isset($submitted_options['instant_search_placeholder']) ? sanitize_text_field($submitted_options['instant_search_placeholder']) : '';
+            $options['instant_search_label_c'] = isset($submitted_options['instant_search_label_c']) ? sanitize_text_field($submitted_options['instant_search_label_c']) : '';
+            $options['instant_search_label_p'] = isset($submitted_options['instant_search_label_p']) ? sanitize_text_field($submitted_options['instant_search_label_p']) : '';
+            $options['instant_search_label_s'] = isset($submitted_options['instant_search_label_s']) ? sanitize_text_field($submitted_options['instant_search_label_s']) : '';
         }
 
         // Handle active modules

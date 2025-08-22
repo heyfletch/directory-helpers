@@ -15,10 +15,16 @@ Per-instance parameters (all optional):
 - min_chars: Minimum characters before searching. Default: 2
 - debounce: Input debounce in milliseconds. Default: 120
 - limit: Max number of results to display. Default: 12
+- placeholder: Placeholder text for the input. Default comes from admin setting or filter.
+- label_c: Label for City Listings group. Overrides defaults/admin.
+- label_p: Label for Profiles group. Overrides defaults/admin.
+- label_s: Label for States group. Overrides defaults/admin.
 
-Example:
+Examples:
 ```
 [dh_instant_search post_types="city-listing,profile" min_chars="1" debounce="250" limit="20"]
+
+[dh_instant_search placeholder="Search trainers…" label_p="Trainers" label_c="Cities" label_s="States"]
 ```
 
 These map to data attributes on the input: data-post-types (letters), data-min-chars, data-debounce, data-limit.
@@ -26,9 +32,42 @@ These map to data attributes on the input: data-post-types (letters), data-min-c
 ## Where to tweak defaults (code)
 
 - PHP shortcode defaults: modules/instant-search/instant-search.php → DH_Instant_Search::render_shortcode()
-- Type labels and REST config: modules/instant-search/instant-search.php → DH_Instant_Search::register_assets() (via wp_localize_script)
+- Type labels and REST config: modules/instant-search/instant-search.php → DH_Instant_Search::register_assets() (via wp_localize_script). Labels default from admin options, then filter.
 - Global post types for indexing: filter "dh_instant_search_post_types" used in build_index_items() and maybe_invalidate_index()
 - Client caps per group (result mix): modules/instant-search/assets/js/instant-search.js → caps in groupAndLimit()
+
+## Admin settings (site-wide defaults)
+
+Under Directory Helpers → Settings, set:
+
+- Default Placeholder: saves to option `directory_helpers_options[instant_search_placeholder]`.
+- Profiles Label, City Listings Label, States Label: save to options `instant_search_label_p`, `instant_search_label_c`, `instant_search_label_s`.
+
+These apply to all instances unless overridden by shortcode attributes. Developers may also use filters below.
+
+## Filters
+
+- `dh_instant_search_labels` (array labels): Override global labels passed to JS. Receives an array like `{ 'c' => 'City Listings', 'p' => 'Profiles', 's' => 'States' }` pre-filled from admin options.
+
+```php
+add_filter('dh_instant_search_labels', function($labels){
+  $labels['p'] = 'Trainers';
+  return $labels;
+});
+```
+
+- `dh_instant_search_default_placeholder` (string placeholder): Change default placeholder when shortcode does not provide one. Receives the admin option value (or built-in default) as the first arg.
+
+```php
+add_filter('dh_instant_search_default_placeholder', function($ph){
+  return 'Search…';
+});
+```
+
+## Override precedence
+
+- Placeholder: shortcode `placeholder` > filter `dh_instant_search_default_placeholder` (receives admin value) > admin option > built-in "Search…".
+- Labels: shortcode `label_c/label_p/label_s` > filter `dh_instant_search_labels` (receives admin values) > admin options > built-in defaults (City Listings, Profiles, States).
 
 ## Global post types (site-wide)
 
@@ -83,7 +122,7 @@ localStorage.removeItem('dhIS_data');
 - Filtering by types:
   - Ensure the shortcode post_types maps to valid letters; the server mapping is in $type_map in instant-search.php.
 - Labels:
-  - Adjust labels via wp_localize_script in register_assets().
+  - Adjust labels via admin settings or `dh_instant_search_labels` filter.
 
 ## Files of interest
 
