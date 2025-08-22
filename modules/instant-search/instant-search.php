@@ -12,7 +12,11 @@ if (!class_exists('DH_Instant_Search')) {
         const OPTION_VERSION = 'dh_instant_search_index_version';
         const TRANSIENT_INDEX = 'dh_instant_search_index_json';
 
+        // Default indexed post types. Adjust defaults here, or use the
+        // 'dh_instant_search_post_types' filter to set site-wide types.
         private $default_post_types = array('city-listing', 'state-listing', 'profile');
+        // Maps post type slugs to single-letter codes used by the client and
+        // the REST filter parameter ?pt= (e.g., c,p,s).
         private $type_map = array(
             'city-listing'  => 'c',
             'state-listing' => 's',
@@ -54,6 +58,8 @@ if (!class_exists('DH_Instant_Search')) {
                 true
             );
 
+            // Front-end config injected into window.dhInstantSearch for the JS.
+            // You can tweak label text here if needed.
             wp_localize_script('dh-instant-search', 'dhInstantSearch', array(
                 'restUrl' => esc_url_raw( rest_url('dh/v1/instant-index') ),
                 'version' => (string) get_option(self::OPTION_VERSION, '0'),
@@ -66,6 +72,11 @@ if (!class_exists('DH_Instant_Search')) {
         }
 
         public function render_shortcode($atts = array(), $content = '') {
+            // Shortcode attributes (per-instance). Tweak defaults here.
+            // - post_types: CSV of post type slugs to index/filter (mapped to letters for client)
+            // - min_chars: minimum characters before search runs
+            // - debounce: input debounce in milliseconds
+            // - limit: maximum results to display
             $atts = shortcode_atts(array(
                 'post_types' => implode(',', $this->default_post_types),
                 'min_chars'  => 2,
@@ -88,6 +99,7 @@ if (!class_exists('DH_Instant_Search')) {
 
             ob_start();
             ?>
+            <!-- dh-instant-search: data-* props below map to shortcode attributes (min_chars, debounce, limit, post_types) -->
             <div class="dh-instant-search" id="<?php echo esc_attr($instance_id); ?>" role="combobox" aria-expanded="false" aria-haspopup="listbox">
                 <input type="search"
                     class="dhis-input"
@@ -107,6 +119,7 @@ if (!class_exists('DH_Instant_Search')) {
         }
 
         public function register_rest_routes() {
+            // REST endpoint for the prebuilt index. Optional filter by type letters: ?pt=c,p
             register_rest_route('dh/v1', '/instant-index', array(
                 'methods'  => WP_REST_Server::READABLE,
                 'callback' => array($this, 'rest_get_index'),
@@ -139,6 +152,11 @@ if (!class_exists('DH_Instant_Search')) {
             return rest_ensure_response($index);
         }
 
+        /**
+         * Hooked to 'save_post' to invalidate the index when a target post type
+         * is published/trashed. Target post types are controlled via the
+         * 'dh_instant_search_post_types' filter.
+         */
         public function maybe_invalidate_index($post_ID, $post, $update) {
             if (!($post instanceof WP_Post)) {
                 return;
@@ -146,6 +164,7 @@ if (!class_exists('DH_Instant_Search')) {
             if ($post->post_status !== 'publish' && $post->post_status !== 'trash') {
                 return;
             }
+            // Allow site-wide control of which post types are indexed.
             $target_pts = apply_filters('dh_instant_search_post_types', $this->default_post_types);
             if (in_array($post->post_type, $target_pts, true)) {
                 $this->invalidate_index();
@@ -153,11 +172,14 @@ if (!class_exists('DH_Instant_Search')) {
         }
 
         public function invalidate_index($maybe_id = null) {
+            // Delete the server-side cached index and bump the version so
+            // browsers drop their localStorage cache.
             delete_transient(self::TRANSIENT_INDEX);
             $version = (string) ((int) get_option(self::OPTION_VERSION, 0) + 1);
             update_option(self::OPTION_VERSION, $version, false);
         }
 
+        // Retrieves cached index (12h transient). If missing/stale, rebuilds and caches.
         private function get_index_data() {
             $cached = get_transient(self::TRANSIENT_INDEX);
             if (is_array($cached) && isset($cached['items']) && isset($cached['version'])) {
@@ -175,6 +197,8 @@ if (!class_exists('DH_Instant_Search')) {
             return $data;
         }
 
+        // Builds the index: queries all published posts for configured post types
+        // and returns compact records used by the client.
         private function build_index_items() {
             $post_types = apply_filters('dh_instant_search_post_types', $this->default_post_types);
 
@@ -221,6 +245,7 @@ if (!class_exists('DH_Instant_Search')) {
             return $items;
         }
 
+        // Server-side normalization to match the client-side tokenizer.
         private function normalize($str) {
             if (!function_exists('remove_accents')) {
                 require_once ABSPATH . 'wp-includes/formatting.php';

@@ -1,7 +1,10 @@
 (function(){
   'use strict';
 
+  // Config injected by PHP via wp_localize_script. 'version' is used to decide
+  // when to refresh the localStorage cache.
   var cfg = window.dhInstantSearch || {restUrl:'', version:'0', labels:{c:'City Listings', p:'Profiles', s:'States'}};
+  // localStorage keys for client-side index caching.
   var INDEX_KEY = 'dhIS_data';
   var VERSION_KEY = 'dhIS_v';
   var indexCache = null; // { version: 'n', items: [...] }
@@ -76,6 +79,7 @@
   }
 
   function groupAndLimit(ranked, limit){
+    // Per-type caps (client-side). Adjust if you want different mix per group.
     var caps = {c:8, p:3, s:1};
     var used = new Set();
     var groups = {c:[], p:[], s:[]};
@@ -165,6 +169,7 @@
     var panel = el.querySelector('.dhis-results');
     if(!input || !panel) return;
 
+    // Read per-instance settings from data-* set by the PHP shortcode output
     var minChars = parseInt(input.dataset.minChars || '2', 10);
     var debounceMs = parseInt(input.dataset.debounce || '120', 10);
     var limit = parseInt(input.dataset.limit || '12', 10);
