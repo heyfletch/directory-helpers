@@ -270,15 +270,15 @@ if (!class_exists('DH_Instant_Search')) {
                     'n' => $n,                    // normalized title
                 );
 
-                // Attach ZIP (as 'z') for profiles when available. The meta key is filterable.
-                if ($pt === 'profile') {
+                // Attach ZIP (as 'z') for profiles (type letter 'p') when available. The meta key is filterable.
+                if (isset($item['y']) && $item['y'] === 'p') {
                     $zip_meta_key = apply_filters('dh_instant_search_profile_zip_meta_key', 'zip', $id);
                     $zip_raw = (string) get_post_meta($id, $zip_meta_key, true);
                     if ($zip_raw !== '') {
-                        // Keep only digits and use 5-digit ZIPs.
-                        $zip = preg_replace('/\D+/', '', $zip_raw);
-                        if (is_string($zip) && strlen($zip) === 5) {
-                            $item['z'] = $zip;
+                        // Keep only digits; store the first 5 digits if available (handles ZIP+4).
+                        $zip_digits = preg_replace('/\D+/', '', $zip_raw);
+                        if (is_string($zip_digits) && strlen($zip_digits) >= 5) {
+                            $item['z'] = substr($zip_digits, 0, 5);
                         }
                     }
                 }
