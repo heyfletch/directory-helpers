@@ -294,6 +294,12 @@ class Directory_Helpers {
                 'description' => __('Client-side instant search for titles of selected post types with typeahead dropdown and ARIA support. Shortcode: [dh_instant_search].', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/instant-search/instant-search.php',
                 'class' => 'DH_Instant_Search'
+            ),
+            'shortlinks' => array(
+                'name' => __('Shortlinks', 'directory-helpers'),
+                'description' => __('Creates one-time shortlinks for city/state listings and repairs malformed Rank Math redirection sources safely.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/shortlinks/shortlinks.php',
+                'class' => 'DH_Shortlinks'
             )
             // Add more modules here as needed
         );
