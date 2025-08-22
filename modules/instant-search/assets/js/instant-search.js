@@ -135,17 +135,27 @@
       h.setAttribute('role','presentation');
       panel.appendChild(h);
       arr.forEach(function(it){
-        var opt = document.createElement('div');
+        var opt = document.createElement('a');
         opt.className = 'dhis-item';
         opt.setAttribute('role','option');
         var oid = state.root.id+'-opt-'+(idx++);
         opt.id = oid;
+        opt.href = it.u;
         opt.dataset.url = it.u;
         opt.dataset.type = it.y;
         opt.textContent = it.t;
-        opt.addEventListener('mousedown', function(e){ // mousedown to avoid blur before click
-          e.preventDefault(); window.location.href = it.u;
-        });
+        // Immediate pressed feedback for touch/mouse before navigation
+        var addTap = function(){ opt.classList.add('is-tapping'); };
+        var removeTap = function(){ opt.classList.remove('is-tapping'); };
+        opt.addEventListener('pointerdown', addTap, {passive:true});
+        opt.addEventListener('pointerup', removeTap, {passive:true});
+        opt.addEventListener('pointercancel', removeTap, {passive:true});
+        opt.addEventListener('mouseleave', removeTap, {passive:true});
+        // Fallbacks for older browsers
+        opt.addEventListener('touchstart', addTap, {passive:true});
+        opt.addEventListener('touchend', removeTap, {passive:true});
+        opt.addEventListener('mousedown', addTap);
+        opt.addEventListener('mouseup', removeTap);
         panel.appendChild(opt);
       });
     });

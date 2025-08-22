@@ -65,8 +65,10 @@
 /* Only show border/shadow when expanded */
 .dh-instant-search[aria-expanded="true"] .dhis-results { border: 1px solid #ddd; border-top: none; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
 .dhis-heading { padding: 6px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #666; background: #f7f7f7; border-top: 1px solid #eee; }
-.dhis-item { padding: 10px; cursor: pointer; border-top: 1px solid #f0f0f0; line-height: 1.25; }
+.dhis-item { display: block; padding: 10px; cursor: pointer; border-top: 1px solid #f0f0f0; line-height: 1.25; text-decoration: none; color: inherit; touch-action: manipulation; transition: background-color .12s ease; }
 .dhis-item:hover, .dhis-item.is-active { background: #f0f6ff; }
+/* Pressed state feedback on tap */
+.dhis-item:active, .dhis-item.is-tapping { background: #e7f1ff; }
 
 @media (max-width: 640px) {
   .dh-instant-search { max-width: 100%; }
