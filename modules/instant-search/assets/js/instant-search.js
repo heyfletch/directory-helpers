@@ -67,6 +67,16 @@
           if(allContain){ score = 2; } else { score = 99; }
         }
       }
+      // modest ZIP boost: if query contains numeric tokens, slightly improve items whose it.z matches
+      if(score !== 99 && it && it.z){
+        var boost = 0; // subtract from score (cap at 0)
+        for(var i=0;i<queryTokens.length;i++){
+          var tok = queryTokens[i];
+          if(/^\d{5}$/.test(tok) && tok === it.z){ boost = Math.max(boost, 0.25); }
+          else if(/^\d{3,4}$/.test(tok) && it.z.indexOf(tok) === 0){ boost = Math.max(boost, 0.10); }
+        }
+        if(boost > 0){ score = Math.max(0, score - boost); }
+      }
       return {it: it, score: score};
     }).filter(function(r){ return r.score !== 99; })
       .sort(function(a,b){
@@ -192,7 +202,18 @@
       var tokens = q.split(' ').filter(Boolean);
       loadIndex().then(function(idx){
         var items = idx.items.filter(function(it){ return allowed.indexOf(it.y) !== -1; });
-        var ranked = rankItems(items, tokens);
+        // 5-digit ZIP fast path: if the normalized query is exactly 5 digits, prefer exact ZIP matches
+        var ranked;
+        if(/^\d{5}$/.test(q)){
+          var zipMatches = items.filter(function(it){ return it.z && it.z === q; });
+          if(zipMatches.length){
+            ranked = zipMatches.map(function(it){ return {it: it, score: 0}; });
+          } else {
+            ranked = rankItems(items, tokens);
+          }
+        } else {
+          ranked = rankItems(items, tokens);
+        }
         state.results = groupAndLimit(ranked, limit);
         renderResults(state);
       });

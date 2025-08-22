@@ -15,7 +15,7 @@ Per-instance parameters (all optional):
 - min_chars: Minimum characters before searching. Default: 2
 - debounce: Input debounce in milliseconds. Default: 120
 - limit: Max number of results to display. Default: 12
-- placeholder: Placeholder text for the input. Default comes from admin setting or filter.
+- placeholder: Placeholder text for the input. Default comes from admin setting or filter. Built-in default: “Search by City, State, Zip, or Name …”.
 - label_c: Label for City Listings group. Overrides defaults/admin.
 - label_p: Label for Profiles group. Overrides defaults/admin.
 - label_s: Label for States group. Overrides defaults/admin.
@@ -64,9 +64,17 @@ add_filter('dh_instant_search_default_placeholder', function($ph){
 });
 ```
 
+- `dh_instant_search_profile_zip_meta_key` (string meta_key): Customize the ACF/meta key used for ZIP on profile posts. Defaults to `zip`.
+
+```php
+add_filter('dh_instant_search_profile_zip_meta_key', function($meta_key, $post_id){
+  return 'zip';
+}, 10, 2);
+```
+
 ## Override precedence
 
-- Placeholder: shortcode `placeholder` > filter `dh_instant_search_default_placeholder` (receives admin value) > admin option > built-in "Search…".
+- Placeholder: shortcode `placeholder` > filter `dh_instant_search_default_placeholder` (receives admin value) > admin option > built-in “Search by City, State, Zip, or Name …”.
 - Labels: shortcode `label_c/label_p/label_s` > filter `dh_instant_search_labels` (receives admin values) > admin options > built-in defaults (City Listings, Profiles, States).
 
 ## Global post types (site-wide)
@@ -83,8 +91,9 @@ add_filter('dh_instant_search_post_types', function($types){
 
 - URL: /wp-json/dh/v1/instant-index
 - Optional filter by type letters: ?pt=c,p
-- Response: { version: "<n>", items: [{ i, t, u, y, n } ...] }
+- Response: { version: "<n>", items: [{ i, t, u, y, n, z? } ...] }
   - y is type letter: c (city-listing), p (profile), s (state-listing)
+  - z is optional ZIP (5-digit) for profiles when available
 
 ## Caching: how it works
 
@@ -123,6 +132,33 @@ localStorage.removeItem('dhIS_data');
   - Ensure the shortcode post_types maps to valid letters; the server mapping is in $type_map in instant-search.php.
 - Labels:
   - Adjust labels via admin settings or `dh_instant_search_labels` filter.
+
+- ZIP field not present:
+  - Confirm your profile posts have a `zip` meta value (ACF field) and that it’s 5 digits.
+  - Verify the REST data at /wp-json/dh/v1/instant-index: profile items should include a `z` when a valid ZIP exists.
+
+## ZIP search (Option A)
+
+- 5‑digit fast path:
+  - If the normalized query is exactly 5 digits, results prioritize profiles whose `z` equals the ZIP.
+- Modest ranking boost:
+  - For general queries, the base ranking uses the normalized title (`n`). If the query contains numeric tokens that match a profile ZIP (`z`), a small fractional boost is applied so matching profiles surface slightly higher without outranking strong title matches.
+- Data shape:
+  - Profile items may include `z` (5-digit string). The ZIP meta key is filterable via `dh_instant_search_profile_zip_meta_key`.
+- Placeholder:
+  - Default placeholder updated to “Search by City, State, Zip, or Name …”. You can still override via shortcode or `dh_instant_search_default_placeholder`.
+
+### Optional enhancements
+
+- In-memory ZIP map:
+  - Build a `zip -> [profile items]` map after loading the index to make ZIP queries O(1). Not required for typical datasets; consider at very large scales.
+
+### Future phases
+
+- Separate ZIP group:
+  - Introduce a dedicated result group and label for ZIP results if the UX calls for explicit separation.
+- Server-assisted ZIP/geo endpoint:
+  - For very large datasets or geospatial logic (radius/nearest), add a server endpoint and route ZIP queries to it while keeping the current client-side flow as a fallback.
 
 ## Files of interest
 

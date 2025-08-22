@@ -113,7 +113,7 @@ if (!class_exists('DH_Instant_Search')) {
                 $opts = get_option('directory_helpers_options', []);
                 $default_ph = isset($opts['instant_search_placeholder']) && $opts['instant_search_placeholder'] !== ''
                     ? $opts['instant_search_placeholder']
-                    : __('Search…', 'directory-helpers');
+                    : __('Search by City, State, Zip, or Name …', 'directory-helpers');
                 $placeholder = apply_filters('dh_instant_search_default_placeholder', $default_ph);
             }
 
@@ -249,6 +249,10 @@ if (!class_exists('DH_Instant_Search')) {
             foreach ($ids as $pair) {
                 list($id, $pt) = $pair;
                 $title = get_the_title($id);
+                // Decode HTML entities so the client displays proper characters and normalization uses clean text.
+                if ($title !== '' && $title !== null) {
+                    $title = html_entity_decode($title, ENT_QUOTES | ENT_HTML5, get_bloginfo('charset'));
+                }
                 if ($title === '' || $title === null) {
                     continue;
                 }
@@ -257,13 +261,29 @@ if (!class_exists('DH_Instant_Search')) {
                     continue;
                 }
                 $n = $this->normalize($title);
-                $items[] = array(
+                // Base item
+                $item = array(
                     'i' => (int) $id,            // id
                     't' => $title,                // title
                     'u' => $url,                  // url
                     'y' => isset($this->type_map[$pt]) ? $this->type_map[$pt] : substr($pt, 0, 1), // type letter
                     'n' => $n,                    // normalized title
                 );
+
+                // Attach ZIP (as 'z') for profiles when available. The meta key is filterable.
+                if ($pt === 'profile') {
+                    $zip_meta_key = apply_filters('dh_instant_search_profile_zip_meta_key', 'zip', $id);
+                    $zip_raw = (string) get_post_meta($id, $zip_meta_key, true);
+                    if ($zip_raw !== '') {
+                        // Keep only digits and use 5-digit ZIPs.
+                        $zip = preg_replace('/\D+/', '', $zip_raw);
+                        if (is_string($zip) && strlen($zip) === 5) {
+                            $item['z'] = $zip;
+                        }
+                    }
+                }
+
+                $items[] = $item;
             }
 
             return $items;
