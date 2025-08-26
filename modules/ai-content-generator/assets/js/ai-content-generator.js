@@ -150,7 +150,7 @@ jQuery(document).ready(function ($) {
                 })
                 .catch(error => {
                     console.error('Fetch Error:', error);
-                    statusDiv.textContent = 'Error: Failed to fetch. This may be a CORS issue or network problem. Check the browser console for more details.';
+                    statusDiv.textContent = 'Error: Failed to fetch. Please make sure the Zerowork webhook is activated.';
                     statusDiv.style.color = 'red';
                 });
         });
