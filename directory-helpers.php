@@ -212,6 +212,7 @@ class Directory_Helpers {
         if (isset($_POST['directory_helpers_options']) && is_array($_POST['directory_helpers_options'])) {
             $submitted_options = $_POST['directory_helpers_options'];
             $options['n8n_webhook_url'] = isset($submitted_options['n8n_webhook_url']) ? esc_url_raw($submitted_options['n8n_webhook_url']) : '';
+            $options['notebook_webhook_url'] = isset($submitted_options['notebook_webhook_url']) ? esc_url_raw($submitted_options['notebook_webhook_url']) : '';
             $options['shared_secret_key'] = isset($submitted_options['shared_secret_key']) ? sanitize_text_field($submitted_options['shared_secret_key']) : '';
 
             // Handle Instant Search defaults (placeholder and labels)

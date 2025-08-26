@@ -4,8 +4,9 @@ jQuery(document).ready(function ($) {
     const statusDiv = document.getElementById('dh-ai-status');
     const postId = document.getElementById('post_ID').value;
     const photosBtn = document.getElementById('dh-unsplash-photos-btn');
+    const createNotebookBtn = document.getElementById('dh-create-notebook');
 
-    if (!generateBtn && !photosBtn) {
+    if (!generateBtn && !photosBtn && !createNotebookBtn) {
         return;
     }
 
@@ -51,14 +52,16 @@ jQuery(document).ready(function ($) {
         statusDiv.textContent = 'Sending request...';
         statusDiv.style.color = 'inherit';
 
-        fetch(webhookUrl, {
+        fetch(aiContentGenerator.triggerEndpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-WP-Nonce': aiContentGenerator.nonce,
             },
             body: JSON.stringify({ 
                 postId: postId,
-                keyword: sanitizedKeyword 
+                keyword: sanitizedKeyword,
+                target: 'ai'
             }),
         })
         .then(response => {
@@ -86,6 +89,71 @@ jQuery(document).ready(function ($) {
             statusDiv.style.color = 'red';
         });
     });
+    }
+
+    // Create Notebook button: trigger configured webhook with confirmation
+    if (createNotebookBtn) {
+        createNotebookBtn.addEventListener('click', function () {
+            const originalKeyword = keywordInput ? keywordInput.value : '';
+
+            const sanitizedKeyword = (originalKeyword || '')
+                .replace(/-/g, ' ')
+                .replace(/[^\p{L}\p{N} ]+/gu, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (keywordInput) keywordInput.value = sanitizedKeyword;
+
+            const notebookWebhookUrl = aiContentGenerator && aiContentGenerator.notebookWebhookUrl;
+
+            if (!notebookWebhookUrl) {
+                statusDiv.textContent = 'Notebook webhook URL is not configured in Directory Helpers settings.';
+                statusDiv.style.color = 'red';
+                return;
+            }
+
+            if (!window.confirm('Create Notebook?')) {
+                statusDiv.textContent = 'Cancelled.';
+                statusDiv.style.color = 'inherit';
+                return;
+            }
+
+            statusDiv.textContent = 'Sending request...';
+            statusDiv.style.color = 'inherit';
+
+            fetch(aiContentGenerator.triggerEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': aiContentGenerator.nonce,
+                },
+                body: JSON.stringify({
+                    postId: postId,
+                    keyword: sanitizedKeyword,
+                    target: 'notebook'
+                }),
+            })
+                .then(response => {
+                    if (response.ok) {
+                        statusDiv.innerHTML = '✅ Notebook creation triggered! Check your automations to monitor progress.';
+                        statusDiv.style.color = 'green';
+                        createNotebookBtn.disabled = true;
+                    } else {
+                        response.json().then(err => {
+                            const errorMessage = err.message || 'An unknown error occurred.';
+                            statusDiv.textContent = `Error: ${errorMessage}`;
+                            statusDiv.style.color = 'red';
+                        }).catch(() => {
+                            statusDiv.textContent = `Error: Request failed with status ${response.status} (${response.statusText}).`;
+                            statusDiv.style.color = 'red';
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch Error:', error);
+                    statusDiv.textContent = 'Error: Failed to fetch. This may be a CORS issue or network problem. Check the browser console for more details.';
+                    statusDiv.style.color = 'red';
+                });
+        });
     }
 
     // Unsplash Photos button: open Unsplash search for the area slug (without " - ST")

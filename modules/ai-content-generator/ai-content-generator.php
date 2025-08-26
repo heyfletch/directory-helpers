@@ -20,6 +20,7 @@ class DH_AI_Content_Generator {
         add_action('add_meta_boxes', array($this, 'add_meta_box'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('rest_api_init', array($this, 'register_rest_route'));
+        add_action('rest_api_init', array($this, 'register_trigger_route'));
     }
 
     /**
@@ -80,6 +81,11 @@ class DH_AI_Content_Generator {
             <button type="button" id="dh-generate-ai-content" class="button button-primary" style="width: 100%;">
                 <?php esc_html_e('Generate AI Content', 'directory-helpers'); ?>
             </button>
+            <p style="margin: 8px 0 0 0;">
+                <button type="button" id="dh-create-notebook" class="button" style="width: 100%;">
+                    <?php esc_html_e('Create Notebook', 'directory-helpers'); ?>
+                </button>
+            </p>
             <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"></div>
         </div>
         <?php
@@ -148,8 +154,11 @@ class DH_AI_Content_Generator {
 
         wp_localize_script('dh-ai-content-generator-js', 'aiContentGenerator', array(
             'webhookUrl'   => $options['n8n_webhook_url'] ?? '',
+            'notebookWebhookUrl' => $options['notebook_webhook_url'] ?? '',
             'postTitle'    => isset($post->post_title) ? wp_strip_all_tags(get_the_title($post)) : '',
             'unsplashSlug' => $unsplash_slug,
+            'triggerEndpoint' => rest_url('directory-helpers/v1/trigger-webhook'),
+            'nonce' => wp_create_nonce('wp_rest'),
         ));
     }
 
@@ -164,6 +173,89 @@ class DH_AI_Content_Generator {
                 'permission_callback' => '__return_true' // We will handle security via shared secret
             )
         );
+    }
+
+    /**
+     * Register internal trigger route to proxy external webhooks (avoids CORS from browser).
+     */
+    public function register_trigger_route() {
+        register_rest_route('directory-helpers/v1', '/trigger-webhook', array(
+            'methods'  => 'POST',
+            'callback' => array($this, 'handle_trigger_webhook'),
+            'permission_callback' => function () {
+                return current_user_can('edit_posts');
+            }
+        ));
+    }
+
+    /**
+     * Handle trigger webhook by server-side posting to configured URLs.
+     */
+    public function handle_trigger_webhook( WP_REST_Request $request ) {
+        // Verify nonce
+        $nonce = $request->get_header('x-wp-nonce');
+        if (!wp_verify_nonce($nonce, 'wp_rest')) {
+            return new WP_Error('rest_forbidden', 'Invalid nonce.', array('status' => 403));
+        }
+
+        $params = $request->get_json_params();
+        $post_id = isset($params['postId']) ? absint($params['postId']) : 0;
+        $keyword = isset($params['keyword']) ? sanitize_text_field($params['keyword']) : '';
+        $target  = isset($params['target']) ? sanitize_key($params['target']) : '';
+
+        if (!$post_id || !$target) {
+            return new WP_Error('missing_parameters', 'Missing postId or target.', array('status' => 400));
+        }
+
+        // Check capability for specific post
+        if (!current_user_can('edit_post', $post_id)) {
+            return new WP_Error('rest_forbidden', 'Insufficient permissions.', array('status' => 403));
+        }
+
+        $options = get_option('directory_helpers_options');
+        $url = '';
+        if ($target === 'notebook') {
+            $url = $options['notebook_webhook_url'] ?? '';
+        } elseif ($target === 'ai') {
+            $url = $options['n8n_webhook_url'] ?? '';
+        }
+        if (empty($url)) {
+            return new WP_Error('missing_configuration', 'Webhook URL not configured.', array('status' => 400));
+        }
+
+        if ($target === 'notebook') {
+            // ZeroWork expects a raw JSON body; send only postUrl
+            $post_url = get_permalink($post_id);
+            $body = wp_json_encode(array(
+                'postUrl' => $post_url,
+            ));
+        } else {
+            // Preserve original payload for AI content generation (n8n)
+            $body = wp_json_encode(array(
+                'postId'  => $post_id,
+                'keyword' => $keyword,
+            ));
+        }
+
+        $response = wp_remote_post($url, array(
+            'headers' => array('Content-Type' => 'application/json'),
+            'body'    => $body,
+            'timeout' => 20,
+        ));
+
+        if (is_wp_error($response)) {
+            return new WP_Error('request_failed', $response->get_error_message(), array('status' => 500));
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $message = wp_remote_retrieve_response_message($response);
+        $resp_body = wp_remote_retrieve_body($response);
+
+        return new WP_REST_Response(array(
+            'code'    => $code,
+            'message' => $message,
+            'body'    => $resp_body,
+        ), ($code >= 200 && $code < 300) ? 200 : $code);
     }
 
     /**

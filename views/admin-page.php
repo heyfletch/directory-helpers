@@ -57,10 +57,19 @@
                         </tr>
                         <tr>
                             <th scope="row">
-                                <label for="shared_secret_key"><?php esc_html_e('Shared Secret Key', 'directory-helpers'); ?></label>
+                                <label for="shared_secret_key"><?php esc_html_e('Shared Secret Key (n8n)', 'directory-helpers'); ?></label>
                             </th>
                             <td>
                                 <input type="password" id="shared_secret_key" name="directory_helpers_options[shared_secret_key]" value="<?php echo esc_attr($options['shared_secret_key'] ?? ''); ?>" class="regular-text">
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="notebook_webhook_url"><?php esc_html_e('Notebook Webhook URL', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="url" id="notebook_webhook_url" name="directory_helpers_options[notebook_webhook_url]" value="<?php echo esc_attr($options['notebook_webhook_url'] ?? ''); ?>" class="regular-text" placeholder="https://webhook.zerowork.io/trigger?s=...">
+                                <p class="description"><?php esc_html_e('Used by the Create Notebook button in the editor.', 'directory-helpers'); ?></p>
                             </td>
                         </tr>
                     </tbody>
