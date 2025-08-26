@@ -223,19 +223,13 @@ class DH_AI_Content_Generator {
             return new WP_Error('missing_configuration', 'Webhook URL not configured.', array('status' => 400));
         }
 
-        if ($target === 'notebook') {
-            // ZeroWork expects a raw JSON body; send only postUrl
-            $post_url = get_permalink($post_id);
-            $body = wp_json_encode(array(
-                'postUrl' => $post_url,
-            ));
-        } else {
-            // Preserve original payload for AI content generation (n8n)
-            $body = wp_json_encode(array(
-                'postId'  => $post_id,
-                'keyword' => $keyword,
-            ));
-        }
+        // Unified payload for simplicity across services
+        $post_url = get_permalink($post_id);
+        $body = wp_json_encode(array(
+            'postId'  => $post_id,
+            'postUrl' => $post_url,
+            'keyword' => $keyword,
+        ));
 
         $response = wp_remote_post($url, array(
             'headers' => array('Content-Type' => 'application/json'),
