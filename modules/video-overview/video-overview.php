@@ -22,6 +22,8 @@ if (!class_exists('DH_Video_Overview')) {
             add_action('add_meta_boxes', array($this, 'register_metabox'));
             add_action('admin_post_dh_refresh_video_overview', array($this, 'handle_refresh_request'));
             add_action('admin_notices', array($this, 'maybe_admin_notice'));
+            add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+            add_action('wp_ajax_dh_refresh_video_overview', array($this, 'ajax_refresh_request'));
         }
 
         /**
@@ -237,17 +239,10 @@ if (!class_exists('DH_Video_Overview')) {
             echo '</p>';
 
             if ($url) {
-                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
-                echo '<input type="hidden" name="action" value="dh_refresh_video_overview" />';
-                echo '<input type="hidden" name="post_id" value="' . esc_attr($post->ID) . '" />';
-                wp_nonce_field('dh_refresh_video_overview_' . $post->ID, '_dh_vr_nonce');
-                submit_button(
-                    $needs_refresh ? __('Refresh Video Metadata (URL changed)', 'directory-helpers') : __('Refresh Video Metadata', 'directory-helpers'),
-                    'secondary',
-                    'submit',
-                    false
-                );
-                echo '</form>';
+                $btn_label = $needs_refresh ? __('Refresh Video Metadata (URL changed)', 'directory-helpers') : __('Refresh Video Metadata', 'directory-helpers');
+                $nonce = wp_create_nonce('dh_refresh_video_overview_' . $post->ID);
+                echo '<button type="button" class="button dh-refresh-video-overview" data-post-id="' . esc_attr($post->ID) . '" data-nonce="' . esc_attr($nonce) . '">' . esc_html($btn_label) . '</button>';
+                echo ' <span class="dh-vr-status" style="display:none; margin-left:6px;"></span>';
             } else {
                 echo '<p>' . esc_html__('Set the ACF field "video_overview" to enable refresh.', 'directory-helpers') . '</p>';
             }
@@ -281,6 +276,68 @@ if (!class_exists('DH_Video_Overview')) {
             }
             wp_safe_redirect($redirect);
             exit;
+        }
+
+        /**
+         * AJAX handler: refresh without leaving the edit screen.
+         */
+        public function ajax_refresh_request() {
+            if (!isset($_POST['post_id'])) {
+                wp_send_json_error(array('message' => __('Missing post_id', 'directory-helpers')));
+            }
+            $post_id = (int) $_POST['post_id'];
+            if (!$post_id || !current_user_can('edit_post', $post_id)) {
+                wp_send_json_error(array('message' => __('Unauthorized', 'directory-helpers')));
+            }
+            $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+            if (!$nonce || !wp_verify_nonce($nonce, 'dh_refresh_video_overview_' . $post_id)) {
+                wp_send_json_error(array('message' => __('Security check failed', 'directory-helpers')));
+            }
+
+            $url = $this->get_video_url($post_id);
+            if (empty($url) || !$this->is_youtube_url($url)) {
+                wp_send_json_error(array('message' => __('Missing or invalid YouTube URL.', 'directory-helpers')));
+            }
+            $result = $this->rebuild_cache($post_id, $url);
+            if (!$result['ok']) {
+                $msg = isset($result['msg']) ? $result['msg'] : __('Unknown error', 'directory-helpers');
+                wp_send_json_error(array('message' => $msg));
+            }
+            wp_send_json_success(array('message' => __('Video metadata refreshed.', 'directory-helpers')));
+        }
+
+        /**
+         * Enqueue small admin JS to handle AJAX refresh button.
+         */
+        public function enqueue_admin_assets($hook) {
+            // Only enqueue on post edit screens.
+            if ($hook !== 'post.php' && $hook !== 'post-new.php') {
+                return;
+            }
+            $handle = 'dh-video-overview-admin';
+            wp_register_script($handle, false, array('jquery'), DIRECTORY_HELPERS_VERSION, true);
+            $script = <<<'JS'
+jQuery(document).on('click', '.dh-refresh-video-overview', function(e){
+  e.preventDefault();
+  var $btn = jQuery(this);
+  var postId = $btn.data('post-id');
+  var nonce = $btn.data('nonce');
+  var $status = $btn.siblings('.dh-vr-status');
+  $status.text('Refreshing...').css('color','#555').show();
+  jQuery.post(ajaxurl, { action: 'dh_refresh_video_overview', post_id: postId, nonce: nonce }, function(resp){
+    if(resp && resp.success){
+      $status.text(resp.data && resp.data.message ? resp.data.message : 'Done').css('color','#2271b1');
+    } else {
+      var msg = resp && resp.data && resp.data.message ? resp.data.message : 'Error';
+      $status.text(msg).css('color','#d63638');
+    }
+  }).fail(function(){
+    $status.text('Request failed').css('color','#d63638');
+  });
+});
+JS;
+            wp_add_inline_script($handle, $script);
+            wp_enqueue_script($handle);
         }
 
         /**
