@@ -125,13 +125,7 @@ if (!class_exists('DH_Video_Overview')) {
             }
 
             $embed_url = 'https://www.youtube.com/embed/' . $video_id;
-            $thumbs = array(
-                'https://i.ytimg.com/vi/' . $video_id . '/maxresdefault.jpg',
-                'https://i.ytimg.com/vi/' . $video_id . '/hqdefault.jpg',
-            );
-            if ($thumb_from_oembed) {
-                $thumbs[] = $thumb_from_oembed;
-            }
+            $thumbnail = 'https://i.ytimg.com/vi/' . $video_id . '/maxresdefault.jpg';
 
             $upload_date = current_time('c');
             $desc_default = sprintf(
@@ -145,7 +139,7 @@ if (!class_exists('DH_Video_Overview')) {
                 '@type' => 'VideoObject',
                 'name' => $title,
                 'description' => $description,
-                'thumbnailUrl' => $thumbs,
+                'thumbnailUrl' => $thumbnail,
                 'uploadDate' => $upload_date,
                 'embedUrl' => $embed_url,
             );
