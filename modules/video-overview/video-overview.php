@@ -42,7 +42,7 @@ if (!class_exists('DH_Video_Overview')) {
             // Try WordPress oEmbed first for maximum compatibility with themes and providers.
             $embed = wp_oembed_get($url);
             if ($embed) {
-                return $embed;
+                return "<!-- Video Overview Added by Shortcode -->\n" . $embed;
             }
 
             // Fallback: build a sanitized iframe embed if we can extract a video ID.
@@ -57,7 +57,7 @@ if (!class_exists('DH_Video_Overview')) {
                 $src
             );
 
-            return $iframe;
+            return "<!-- Video Overview Added by Shortcode -->\n" . $iframe;
         }
 
         /**
