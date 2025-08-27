@@ -266,6 +266,12 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/breadcrumbs/breadcrumbs.php',
                 'class' => 'DH_Breadcrumbs'
             ),
+            'video-overview' => array(
+                'name' => __('Video Overview', 'directory-helpers'),
+                'description' => __('Shortcode to embed a YouTube video from the ACF field "video_overview" on the current post. Use [dh_video_overview].', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/video-overview/video-overview.php',
+                'class' => 'DH_Video_Overview'
+            ),
             'profile-rankings' => array(
                 'name' => __('Profile Rankings', 'directory-helpers'),
                 'description' => __('Rankings for profiles based on ratings and review counts within respective cities and states. Use shortcodes [dh_city_rank] and [dh_state_rank]. [dh_state_rank show_ranking_data="true"] to show rating and review count used. [dh_state_rank show_prefix="false"] to remove "Ranked " prefix. ', 'directory-helpers'),
