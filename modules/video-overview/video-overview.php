@@ -24,6 +24,9 @@ if (!class_exists('DH_Video_Overview')) {
             add_action('admin_notices', array($this, 'maybe_admin_notice'));
             add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
             add_action('wp_ajax_dh_refresh_video_overview', array($this, 'ajax_refresh_request'));
+
+            // Frontend: inject schema in head when a valid ACF URL exists.
+            add_action('wp_head', array($this, 'maybe_output_schema_in_head'));
         }
 
         /**
@@ -46,17 +49,10 @@ if (!class_exists('DH_Video_Overview')) {
                 return '<!-- no YouTube video available here -->';
             }
 
-            // Ensure schema cache exists or is refreshed if URL changed.
-            $schema_json = $this->maybe_ensure_cached_schema($post->ID, $url);
-            $schema_html = '';
-            if (!empty($schema_json)) {
-                $schema_html = '<script type="application/ld+json">' . $schema_json . '</script>' . "\n";
-            }
-
             // Try WordPress oEmbed first for maximum compatibility with themes and providers.
             $embed = wp_oembed_get($url);
             if ($embed) {
-                return "<!-- Video Overview Added by Shortcode -->\n" . $schema_html . $embed;
+                return "<!-- Video Overview Added by Shortcode -->\n" . $embed;
             }
 
             // Fallback: build a sanitized iframe embed if we can extract a video ID.
@@ -71,7 +67,26 @@ if (!class_exists('DH_Video_Overview')) {
                 $src
             );
 
-            return "<!-- Video Overview Added by Shortcode -->\n" . $schema_html . $iframe;
+            return "<!-- Video Overview Added by Shortcode -->\n" . $iframe;
+        }
+
+        /**
+         * If on a singular post with a valid YouTube URL in ACF, ensure cached schema
+         * and print it into the document head.
+         */
+        public function maybe_output_schema_in_head() {
+            if (!is_singular()) { return; }
+            global $post;
+            if (!$post || empty($post->ID)) { return; }
+
+            $url = $this->get_video_url($post->ID);
+            if (empty($url) || !$this->is_youtube_url($url)) { return; }
+
+            // Ensure schema cache exists or is refreshed if URL changed.
+            $schema_json = $this->maybe_ensure_cached_schema($post->ID, $url);
+            if (empty($schema_json)) { return; }
+
+            echo '<script type="application/ld+json">' . $schema_json . '</script>' . "\n";
         }
 
         /**
