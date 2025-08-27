@@ -165,10 +165,18 @@ if (!class_exists('DH_Video_Overview')) {
 
             // Canonical page URL and publisher for disambiguation/branding.
             $page_url = get_permalink($post_id);
+            $logo = array(
+                '@type'  => 'ImageObject',
+                '@id'    => home_url('#logo'),
+                'url'    => 'https://goodydoggy.com/wp-content/uploads/cropped-goody-doggy-favicon.png',
+                'width'  => 512,
+                'height' => 512,
+            );
             $publisher = array(
                 '@type' => 'Organization',
                 '@id'   => home_url('#organization'),
                 'name'  => get_bloginfo('name'),
+                'logo'  => $logo,
             );
 
             $schema = array(
@@ -181,6 +189,10 @@ if (!class_exists('DH_Video_Overview')) {
                 'embedUrl' => $embed_url,
                 'url' => $page_url,
                 'publisher' => $publisher,
+                'potentialAction' => array(
+                    '@type' => 'WatchAction',
+                    'target' => $embed_url,
+                ),
             );
 
             $schema_json = wp_json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
