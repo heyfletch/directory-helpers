@@ -156,7 +156,15 @@ if (!class_exists('DH_Video_Overview')) {
             $embed_url = 'https://www.youtube.com/embed/' . $video_id;
             $thumbnail = 'https://i.ytimg.com/vi/' . $video_id . '/maxresdefault.jpg';
 
-            $upload_date = current_time('c');
+            // Preserve the original uploadDate unless the video URL changes.
+            $new_hash = md5($url);
+            $old_hash = (string) get_post_meta($post_id, '_video_overview_url_hash', true);
+            $existing_upload_date = (string) get_post_meta($post_id, '_video_overview_upload_date', true);
+            if ($new_hash === $old_hash && !empty($existing_upload_date)) {
+                $upload_date = $existing_upload_date;
+            } else {
+                $upload_date = current_time('c');
+            }
             $desc_default = sprintf(
                 'Find the perfect dog trainer in %s. This short guide covers how to evaluate professionals on key factors like their training methods, certifications, and costs.',
                 get_the_title($post_id)
@@ -165,13 +173,7 @@ if (!class_exists('DH_Video_Overview')) {
 
             // Canonical page URL and publisher for disambiguation/branding.
             $page_url = get_permalink($post_id);
-            $logo = array(
-                '@type'  => 'ImageObject',
-                '@id'    => home_url('#logo'),
-                'url'    => 'https://goodydoggy.com/wp-content/uploads/cropped-goody-doggy-favicon.png',
-                'width'  => 512,
-                'height' => 512,
-            );
+            $logo = $this->get_publisher_logo();
             $publisher = array(
                 '@type' => 'Organization',
                 '@id'   => home_url('#organization'),
@@ -480,6 +482,136 @@ JS;
                 return $m[1];
             }
             return false;
+        }
+
+        /**
+         * Attempt to retrieve the Knowledge Graph logo configured in Rank Math.
+         * Falls back to the site favicon provided by the user.
+         *
+         * @return array ImageObject with url, width, height, @type, @id
+         */
+        private function get_publisher_logo() {
+            $default = array(
+                '@type'  => 'ImageObject',
+                '@id'    => home_url('#logo'),
+                'url'    => 'https://goodydoggy.com/wp-content/uploads/cropped-goody-doggy-favicon.png',
+                'width'  => 512,
+                'height' => 512,
+            );
+
+            // Try to read Rank Math general options for knowledge graph logo.
+            $candidates = array();
+            $opts = get_option('rank-math-options-general');
+            if (is_array($opts)) {
+                // Common keys observed in Rank Math options structures.
+                if (isset($opts['knowledgegraph_logo'])) {
+                    $candidates[] = $opts['knowledgegraph_logo'];
+                }
+                if (isset($opts['logo'])) {
+                    $candidates[] = $opts['logo'];
+                }
+                if (isset($opts['knowledgegraph']) && is_array($opts['knowledgegraph'])) {
+                    if (isset($opts['knowledgegraph']['logo'])) {
+                        $candidates[] = $opts['knowledgegraph']['logo'];
+                    }
+                }
+            }
+
+            foreach ($candidates as $val) {
+                $img = $this->normalize_image_value($val);
+                if ($img) {
+                    // Ensure ImageObject typing and ID.
+                    $img['@type'] = 'ImageObject';
+                    if (!isset($img['@id'])) {
+                        $img['@id'] = home_url('#logo');
+                    }
+                    return $img;
+                }
+            }
+
+            // Allow external override (e.g., if Rank Math changes option schema).
+            $filtered = apply_filters('dh_video_overview_publisher_logo', $default);
+            if (is_array($filtered) && !empty($filtered['url'])) {
+                // Basic sanitation of the filtered result.
+                $filtered['@type'] = 'ImageObject';
+                if (!isset($filtered['@id'])) {
+                    $filtered['@id'] = home_url('#logo');
+                }
+                return $filtered;
+            }
+
+            return $default;
+        }
+
+        /**
+         * Normalize a variety of WP/RM image option formats into an array with url/width/height.
+         * Accepts: attachment ID (int), array with ['id'] or ['url'], or direct URL (string).
+         *
+         * @param mixed $val
+         * @return array|null { url, width?, height? }
+         */
+        private function normalize_image_value($val) {
+            // Attachment ID.
+            if (is_numeric($val)) {
+                $id = (int) $val;
+                if ($id > 0) {
+                    $src = wp_get_attachment_image_src($id, 'full');
+                    if (is_array($src)) {
+                        return array('url' => esc_url_raw($src[0]), 'width' => (int) $src[1], 'height' => (int) $src[2]);
+                    }
+                    $url = wp_get_attachment_url($id);
+                    if ($url) {
+                        return array('url' => esc_url_raw($url));
+                    }
+                }
+                return null;
+            }
+
+            // Array shape.
+            if (is_array($val)) {
+                // Prefer nested attachment ID when present.
+                if (isset($val['id']) && is_numeric($val['id'])) {
+                    return $this->normalize_image_value($val['id']);
+                }
+                if (isset($val['url']) && is_string($val['url'])) {
+                    $url = esc_url_raw($val['url']);
+                    $w = isset($val['width']) ? (int) $val['width'] : 0;
+                    $h = isset($val['height']) ? (int) $val['height'] : 0;
+                    if ($w === 0 || $h === 0) {
+                        // Try to resolve from attachment if possible.
+                        $att_id = attachment_url_to_postid($url);
+                        if ($att_id) {
+                            $src = wp_get_attachment_image_src($att_id, 'full');
+                            if (is_array($src)) {
+                                $w = (int) $src[1];
+                                $h = (int) $src[2];
+                            }
+                        }
+                    }
+                    $out = array('url' => $url);
+                    if ($w > 0 && $h > 0) {
+                        $out['width'] = $w;
+                        $out['height'] = $h;
+                    }
+                    return $out;
+                }
+                return null;
+            }
+
+            // Direct URL string.
+            if (is_string($val) && $val !== '') {
+                $url = esc_url_raw($val);
+                $att_id = attachment_url_to_postid($url);
+                if ($att_id) {
+                    $src = wp_get_attachment_image_src($att_id, 'full');
+                    if (is_array($src)) {
+                        return array('url' => esc_url_raw($src[0]), 'width' => (int) $src[1], 'height' => (int) $src[2]);
+                    }
+                }
+                return array('url' => $url);
+            }
+
+            return null;
         }
     }
 
