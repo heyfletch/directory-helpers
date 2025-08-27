@@ -15,6 +15,8 @@ if (!defined('ABSPATH')) {
 
 if (!class_exists('DH_Video_Overview')) {
     class DH_Video_Overview {
+        /** @var bool ensure we only output schema once per request */
+        private $did_output_schema = false;
         public function __construct() {
             add_shortcode('dh_video_overview', array($this, 'render_shortcode'));
 
@@ -75,9 +77,13 @@ if (!class_exists('DH_Video_Overview')) {
          * and print it into the document head.
          */
         public function maybe_output_schema_in_head() {
+            static $printed_once = false; // extra safety across multiple instances
             if (!is_singular()) { return; }
             global $post;
             if (!$post || empty($post->ID)) { return; }
+            $pt = get_post_type($post);
+            if ($pt !== 'city-listing' && $pt !== 'state-listing') { return; }
+            if ($this->did_output_schema || $printed_once) { return; }
 
             $url = $this->get_video_url($post->ID);
             if (empty($url) || !$this->is_youtube_url($url)) { return; }
@@ -86,7 +92,13 @@ if (!class_exists('DH_Video_Overview')) {
             $schema_json = $this->maybe_ensure_cached_schema($post->ID, $url);
             if (empty($schema_json)) { return; }
 
+            // Allow other plugins/themes to opt-out to avoid duplicates.
+            $should_output = apply_filters('dh_video_overview_output_schema', true, $post->ID, $url, $schema_json);
+            if (!$should_output) { return; }
+
             echo '<script type="application/ld+json">' . $schema_json . '</script>' . "\n";
+            $this->did_output_schema = true;
+            $printed_once = true;
         }
 
         /**
@@ -151,6 +163,14 @@ if (!class_exists('DH_Video_Overview')) {
             );
             $description = apply_filters('dh_video_overview_description', $desc_default, $post_id, $oembed);
 
+            // Canonical page URL and publisher for disambiguation/branding.
+            $page_url = get_permalink($post_id);
+            $publisher = array(
+                '@type' => 'Organization',
+                '@id'   => home_url('#organization'),
+                'name'  => get_bloginfo('name'),
+            );
+
             $schema = array(
                 '@context' => 'https://schema.org',
                 '@type' => 'VideoObject',
@@ -159,6 +179,8 @@ if (!class_exists('DH_Video_Overview')) {
                 'thumbnailUrl' => $thumbnail,
                 'uploadDate' => $upload_date,
                 'embedUrl' => $embed_url,
+                'url' => $page_url,
+                'publisher' => $publisher,
             );
 
             $schema_json = wp_json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
