@@ -47,6 +47,15 @@
                     '</p>' +
                 '</div>';
             $('#dh-prompts-rows').append(rowHtml);
+
+            // If post-type template exists, inject it before the Remove row
+            var tpl = $('#dh-prompt-pt-template').html();
+            if (tpl) {
+                var $row = $('#dh-prompts-rows .dh-prompt-row').last();
+                var ptHtml = tpl.replace(/__INDEX__/g, nextIndex);
+                var $lastP = $row.find('p').last(); // the Remove button row
+                $lastP.before(ptHtml);
+            }
             $btn.attr('data-next-index', nextIndex + 1);
         });
 

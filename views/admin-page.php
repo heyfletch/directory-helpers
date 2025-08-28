@@ -143,8 +143,24 @@
                             <td>
                                 <?php
                                 $saved_prompts = isset($options['prompts']) && is_array($options['prompts']) ? $options['prompts'] : [];
+                                $prompt_targets = isset($options['prompt_targets']) && is_array($options['prompt_targets']) ? $options['prompt_targets'] : [];
                                 $index = 0;
+
+                                // Build list of selectable post types (include ACF CPTs with show_ui)
+                                $pts = get_post_types(['show_ui' => true], 'objects');
+                                $exclude = ['attachment','revision','nav_menu_item','custom_css','customize_changeset','oembed_cache','user_request','wp_block','wp_navigation','wp_template','wp_template_part'];
+                                foreach ($exclude as $ex) { unset($pts[$ex]); }
                                 ?>
+                                <script type="text/template" id="dh-prompt-pt-template">
+                                    <div class="dh-prompt-pt-select" style="margin:6px 0;">
+                                        <small><?php echo esc_html__('Show on post types:', 'directory-helpers'); ?></small><br />
+                                        <?php foreach ($pts as $pt_name => $pt_obj): ?>
+                                            <label style="display:block;">
+                                                <input type="checkbox" name="directory_helpers_prompt_targets[__INDEX__][]" value="<?php echo esc_attr($pt_name); ?>" /> <?php echo esc_html($pt_obj->labels->singular_name); ?>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </script>
                                 <div id="dh-prompts-rows">
                                     <?php if (!empty($saved_prompts)) : ?>
                                         <?php foreach ($saved_prompts as $k => $v) : ?>
@@ -161,6 +177,18 @@
                                                         <textarea name="directory_helpers_prompts[<?php echo (int)$index; ?>][value]" rows="6" class="large-text code" placeholder="Paste your prompt here..."><?php echo esc_textarea($v); ?></textarea>
                                                     </label>
                                                 </p>
+                                                <?php
+                                                $san_key = sanitize_key($k);
+                                                $selected_pts = isset($prompt_targets[$san_key]) && is_array($prompt_targets[$san_key]) ? $prompt_targets[$san_key] : [];
+                                                ?>
+                                                <div class="dh-prompt-pt-select" style="margin:6px 0;">
+                                                    <small><?php esc_html_e('Show on post types:', 'directory-helpers'); ?></small><br />
+                                                    <?php foreach ($pts as $pt_name => $pt_obj): ?>
+                                                        <label style="display:block;">
+                                                            <input type="checkbox" name="directory_helpers_prompt_targets[<?php echo (int)$index; ?>][]" value="<?php echo esc_attr($pt_name); ?>" <?php checked(in_array($pt_name, $selected_pts, true)); ?> /> <?php echo esc_html($pt_obj->labels->singular_name); ?>
+                                                        </label>
+                                                    <?php endforeach; ?>
+                                                </div>
                                                 <p>
                                                     <button type="button" class="button-link-delete dh-remove-prompt"><?php esc_html_e('Remove', 'directory-helpers'); ?></button>
                                                 </p>
@@ -181,6 +209,14 @@
                                                     <textarea name="directory_helpers_prompts[0][value]" rows="6" class="large-text code" placeholder="Paste your prompt here..."></textarea>
                                                 </label>
                                             </p>
+                                            <div class="dh-prompt-pt-select" style="margin:6px 0;">
+                                                <small><?php esc_html_e('Show on post types:', 'directory-helpers'); ?></small><br />
+                                                <?php foreach ($pts as $pt_name => $pt_obj): ?>
+                                                    <label style="display:block;">
+                                                        <input type="checkbox" name="directory_helpers_prompt_targets[0][]" value="<?php echo esc_attr($pt_name); ?>" /> <?php echo esc_html($pt_obj->labels->singular_name); ?>
+                                                    </label>
+                                                <?php endforeach; ?>
+                                            </div>
                                             <p>
                                                 <button type="button" class="button-link-delete dh-remove-prompt"><?php esc_html_e('Remove', 'directory-helpers'); ?></button>
                                             </p>

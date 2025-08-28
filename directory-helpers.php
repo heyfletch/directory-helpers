@@ -82,6 +82,9 @@ class Directory_Helpers {
         // Add Classic Editor content show/hide toggle on post edit screens
         add_action('admin_head-post.php', array($this, 'output_classic_editor_toggle'));
         add_action('admin_head-post-new.php', array($this, 'output_classic_editor_toggle'));
+
+        // Register Prompts display meta box on edit screens (targets configured on admin page)
+        add_action('add_meta_boxes', array($this, 'register_prompts_display_meta_box'));
     }
 
     /**
@@ -307,20 +310,45 @@ class Directory_Helpers {
             }
         }
 
-        // Handle AI Prompts (key => prompt text)
+        // Handle AI Prompts and their post type targets
+        // Build prompts array and keep an index => key mapping to join with targets checkboxes
         $prompts = array();
+        $idx_to_key = array();
         if (isset($_POST['directory_helpers_prompts']) && is_array($_POST['directory_helpers_prompts'])) {
-            foreach ($_POST['directory_helpers_prompts'] as $row) {
+            foreach ($_POST['directory_helpers_prompts'] as $i => $row) {
                 $key = isset($row['key']) ? sanitize_key($row['key']) : '';
                 $value_raw = isset($row['value']) ? (string) $row['value'] : '';
-                // Preserve multi-line plain text
-                $value = sanitize_textarea_field($value_raw);
+                $value = sanitize_textarea_field($value_raw); // preserves multi-line text
                 if ($key !== '' && $value !== '') {
                     $prompts[$key] = $value;
+                    $idx_to_key[(string)$i] = $key;
                 }
             }
         }
         $options['prompts'] = $prompts;
+
+        // Map posted targets (by row index) to sanitized prompt keys
+        $prompt_targets = array();
+        if (!empty($idx_to_key) && isset($_POST['directory_helpers_prompt_targets']) && is_array($_POST['directory_helpers_prompt_targets'])) {
+            $allowed_pts = get_post_types(array('show_ui' => true), 'names');
+            $exclude = array('attachment','revision','nav_menu_item','custom_css','customize_changeset','oembed_cache','user_request','wp_block','wp_navigation','wp_template','wp_template_part');
+            $allowed_pts = array_values(array_diff($allowed_pts, $exclude));
+            foreach ($_POST['directory_helpers_prompt_targets'] as $i => $pts) {
+                $i = (string) $i;
+                if (!isset($idx_to_key[$i])) { continue; }
+                $k = $idx_to_key[$i];
+                if (!is_array($pts)) { continue; }
+                $clean = array();
+                foreach ($pts as $pt) {
+                    $pt = sanitize_key($pt);
+                    if (in_array($pt, $allowed_pts, true)) {
+                        $clean[] = $pt;
+                    }
+                }
+                $prompt_targets[$k] = array_values(array_unique($clean));
+            }
+        }
+        $options['prompt_targets'] = $prompt_targets;
 
         // Handle active modules
         // This part is not currently used for activation/deactivation from the UI, but we keep it for future use.
@@ -345,6 +373,70 @@ class Directory_Helpers {
             __('Settings saved.', 'directory-helpers'),
             'updated'
         );
+    }
+
+    /**
+     * Helper: get prompt targets mapping from options
+     *
+     * @return array [prompt_key => string[] post_types]
+     */
+    private function get_prompt_targets() {
+        $options = get_option('directory_helpers_options', array());
+        $targets = isset($options['prompt_targets']) && is_array($options['prompt_targets']) ? $options['prompt_targets'] : array();
+        foreach ($targets as $k => $arr) {
+            if (!is_array($arr)) { $targets[$k] = array(); continue; }
+            $targets[$k] = array_values(array_filter(array_map('sanitize_key', $arr)));
+        }
+        return $targets;
+    }
+
+    /**
+     * Register Prompts display meta box across post types; it only displays prompts targeted to the current post type.
+     */
+    public function register_prompts_display_meta_box() {
+        if (!current_user_can('edit_posts')) { return; }
+        $post_types = get_post_types(array('show_ui' => true), 'names');
+        $exclude = array('attachment','revision','nav_menu_item','custom_css','customize_changeset','oembed_cache','user_request','wp_block','wp_navigation','wp_template','wp_template_part');
+        foreach ($post_types as $pt) {
+            if (in_array($pt, $exclude, true)) { continue; }
+            add_meta_box(
+                'dh-prompts',
+                __('Prompts', 'directory-helpers'),
+                array($this, 'render_prompts_display_meta_box'),
+                $pt,
+                'side',
+                'default'
+            );
+        }
+    }
+
+    /**
+     * Render the display-only Prompts meta box on edit screens.
+     */
+    public function render_prompts_display_meta_box($post) {
+        $prompts = self::get_prompts();
+        if (empty($prompts)) {
+            echo '<p>' . esc_html__('No prompts configured.', 'directory-helpers') . '</p>';
+            return;
+        }
+        $targets = $this->get_prompt_targets();
+        $current_pt = get_post_type($post);
+
+        $shown = 0;
+        foreach ($prompts as $key => $text) {
+            $san_key = sanitize_key($key);
+            $selected_pts = isset($targets[$san_key]) ? (array)$targets[$san_key] : array();
+            if (!in_array($current_pt, $selected_pts, true)) { continue; }
+            $shown++;
+            echo '<div class="dh-prompt-wrap" style="margin-bottom:12px;">';
+            echo '<strong>' . esc_html($key) . '</strong>';
+            // Important: give the text an element id equal to the prompt key for easy targeting via #key
+            echo '<textarea readonly id="' . esc_attr($san_key) . '" class="widefat code dh-prompt-text" rows="5" data-prompt-key="' . esc_attr($san_key) . '" style="min-height:100px;">' . esc_textarea($text) . '</textarea>';
+            echo '</div>';
+        }
+        if ($shown === 0) {
+            echo '<p style="color:#666;">' . esc_html__('No prompts targeted to this post type.', 'directory-helpers') . '</p>';
+        }
     }
 
     /**
