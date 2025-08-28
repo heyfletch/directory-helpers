@@ -428,9 +428,36 @@ class Directory_Helpers {
             $selected_pts = isset($targets[$san_key]) ? (array)$targets[$san_key] : array();
             if (!in_array($current_pt, $selected_pts, true)) { continue; }
             $shown++;
-            // Replace token(s) with post-specific values
+            // Build replacement map for tokens
             $post_title = get_the_title($post);
-            $display_text = str_replace('{city-state}', $post_title, $text);
+            $replacements = array(
+                '{title}' => (string) $post_title,
+            );
+            // Back-compat for older token name
+            $replacements['{city-state}'] = (string) $post_title;
+
+            // Shortlink replacement (if Shortlinks module created one)
+            $slug_meta_key = class_exists('DH_Shortlinks') ? DH_Shortlinks::META_SLUG : '_dh_shortlink_slug';
+            $short_slug = (string) get_post_meta($post->ID, $slug_meta_key, true);
+            $shortlink = $short_slug ? home_url('/' . ltrim($short_slug, '/')) : '';
+            $replacements['{shortlink}'] = $shortlink;
+
+            // Taxonomy tokens: replace {taxonomy} with the assigned term names (comma-separated)
+            $tax_objs = get_object_taxonomies($current_pt, 'objects');
+            if (is_array($tax_objs)) {
+                foreach ($tax_objs as $tax_name => $tax_obj) {
+                    $terms = get_the_terms($post->ID, $tax_name);
+                    $val = '';
+                    if (is_array($terms) && !empty($terms)) {
+                        $names = wp_list_pluck($terms, 'name');
+                        $val = implode(', ', array_map('wp_strip_all_tags', array_map('strval', $names)));
+                    }
+                    $replacements['{' . $tax_name . '}'] = $val;
+                }
+            }
+
+            // Apply replacements
+            $display_text = strtr($text, $replacements);
             echo '<div class="dh-prompt-wrap" style="margin-bottom:12px;">';
             echo '<div class="dh-prompt-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
             echo '<strong>' . esc_html($key) . '</strong>';
