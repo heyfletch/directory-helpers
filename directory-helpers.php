@@ -263,6 +263,20 @@ class Directory_Helpers {
                     apply();
                 });
                 apply(true); // force visible on first paint
+                if (isHidden()) {
+                    var doHide = function(){ apply(); };
+                    // Hide after TinyMCE is fully initialized to prevent broken toolbar icons
+                    if (window.jQuery && jQuery(document).one) {
+                        jQuery(document).one('tinymce-editor-init', function(e, ed){
+                            // Default editor id is 'content'; if ed is missing, still proceed
+                            if (!ed || ed.id === 'content') {
+                                setTimeout(doHide, 0);
+                            }
+                        });
+                    }
+                    // Fallback: hide after a short delay in case the init event didn't fire
+                    setTimeout(doHide, 2000);
+                }
                 wrap.appendChild(btn);
                 if(titleDiv && titleDiv.parentNode){
                     titleDiv.parentNode.insertBefore(wrap, titleDiv.nextSibling);
