@@ -78,6 +78,10 @@ class Directory_Helpers {
         // Make prompts available on post edit screens (Classic and Block editor)
         add_action('admin_head-post.php', array($this, 'output_prompts_js'));
         add_action('admin_head-post-new.php', array($this, 'output_prompts_js'));
+
+        // Add Classic Editor content show/hide toggle on post edit screens
+        add_action('admin_head-post.php', array($this, 'output_classic_editor_toggle'));
+        add_action('admin_head-post-new.php', array($this, 'output_classic_editor_toggle'));
     }
 
     /**
@@ -212,6 +216,58 @@ class Directory_Helpers {
             $prompts = array();
         }
         echo '<script type="text/javascript">window.DH_PROMPTS = ' . wp_json_encode($prompts) . ';</script>';
+    }
+
+    /**
+     * Output a toggle to show/hide the main post content section for Classic Editor.
+     */
+    public function output_classic_editor_toggle() {
+        if (!current_user_can('edit_posts')) {
+            return;
+        }
+        ?>
+        <style>
+            .dh-toggle-content-wrap { margin: 8px 0 12px; }
+            .dh-toggle-content-wrap .button { vertical-align: middle; }
+        </style>
+        <script type="text/javascript">
+        (function(){
+            function ready(fn){ if(document.readyState!='loading'){ fn(); } else { document.addEventListener('DOMContentLoaded', fn); } }
+            ready(function(){
+                var editorDiv = document.getElementById('postdivrich') || document.getElementById('postdiv');
+                if(!editorDiv){ return; }
+                var titleDiv = document.getElementById('titlediv');
+                var wrap = document.createElement('div');
+                wrap.className = 'dh-toggle-content-wrap';
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'button button-secondary';
+                var postTypeInput = document.getElementById('post_type');
+                var postType = postTypeInput && postTypeInput.value ? postTypeInput.value : 'post';
+                var storageKey = 'dh_hide_content_' + postType;
+                function isHidden(){ return window.localStorage.getItem(storageKey) === '1'; }
+                function apply(){
+                    var hidden = isHidden();
+                    editorDiv.style.display = hidden ? 'none' : 'block';
+                    btn.textContent = hidden ? 'Show Content Editor' : 'Hide Content Editor';
+                }
+                btn.addEventListener('click', function(){
+                    var hidden = isHidden();
+                    window.localStorage.setItem(storageKey, hidden ? '0' : '1');
+                    apply();
+                });
+                apply();
+                wrap.appendChild(btn);
+                if(titleDiv && titleDiv.parentNode){
+                    titleDiv.parentNode.insertBefore(wrap, titleDiv.nextSibling);
+                } else {
+                    var postBodyContent = document.getElementById('post-body-content');
+                    if(postBodyContent){ postBodyContent.insertBefore(wrap, postBodyContent.firstChild); }
+                }
+            });
+        })();
+        </script>
+        <?php
     }
 
     /**
