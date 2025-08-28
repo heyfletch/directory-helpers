@@ -432,7 +432,10 @@ class Directory_Helpers {
             $post_title = get_the_title($post);
             $display_text = str_replace('{city-state}', $post_title, $text);
             echo '<div class="dh-prompt-wrap" style="margin-bottom:12px;">';
+            echo '<div class="dh-prompt-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
             echo '<strong>' . esc_html($key) . '</strong>';
+            echo '<button type="button" class="button button-secondary dh-copy-prompt" data-target="' . esc_attr($san_key) . '" style="padding:0 8px;height:24px;line-height:22px;">' . esc_html__('Copy', 'directory-helpers') . '</button>';
+            echo '</div>';
             // Important: give the text an element id equal to the prompt key for easy targeting via #key
             echo '<textarea readonly id="' . esc_attr($san_key) . '" class="widefat code dh-prompt-text" rows="5" data-prompt-key="' . esc_attr($san_key) . '" style="min-height:100px;">' . esc_textarea($display_text) . '</textarea>';
             echo '</div>';
@@ -440,6 +443,46 @@ class Directory_Helpers {
         if ($shown === 0) {
             echo '<p style="color:#666;">' . esc_html__('No prompts targeted to this post type.', 'directory-helpers') . '</p>';
         }
+        // Inline copy-to-clipboard handler (loaded once per page)
+        ?>
+        <script type="text/javascript">
+        (function(){
+            if (window.__dhCopyPromptInit) { return; }
+            window.__dhCopyPromptInit = true;
+            document.addEventListener('click', function(e){
+                var btn = e.target && e.target.closest && e.target.closest('.dh-copy-prompt');
+                if (!btn) { return; }
+                e.preventDefault();
+                var id = btn.getAttribute('data-target');
+                var ta = id ? document.getElementById(id) : null;
+                if (!ta) { return; }
+                var text = ta.value;
+                function done(){
+                    var orig = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    btn.disabled = true;
+                    setTimeout(function(){ btn.textContent = orig; btn.disabled = false; }, 1200);
+                }
+                function fallback(){
+                    try {
+                        ta.focus();
+                        ta.select();
+                        ta.setSelectionRange(0, ta.value.length);
+                        document.execCommand('copy');
+                    } catch (err) { /* ignore */ }
+                    try { window.getSelection().removeAllRanges(); } catch (e) { /* ignore */ }
+                    ta.blur();
+                    done();
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(done, fallback);
+                } else {
+                    fallback();
+                }
+            }, false);
+        })();
+        </script>
+        <?php
     }
 
     /**
