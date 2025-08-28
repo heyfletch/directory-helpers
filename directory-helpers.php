@@ -428,10 +428,13 @@ class Directory_Helpers {
             $selected_pts = isset($targets[$san_key]) ? (array)$targets[$san_key] : array();
             if (!in_array($current_pt, $selected_pts, true)) { continue; }
             $shown++;
+            // Replace token(s) with post-specific values
+            $post_title = get_the_title($post);
+            $display_text = str_replace('{city-state}', $post_title, $text);
             echo '<div class="dh-prompt-wrap" style="margin-bottom:12px;">';
             echo '<strong>' . esc_html($key) . '</strong>';
             // Important: give the text an element id equal to the prompt key for easy targeting via #key
-            echo '<textarea readonly id="' . esc_attr($san_key) . '" class="widefat code dh-prompt-text" rows="5" data-prompt-key="' . esc_attr($san_key) . '" style="min-height:100px;">' . esc_textarea($text) . '</textarea>';
+            echo '<textarea readonly id="' . esc_attr($san_key) . '" class="widefat code dh-prompt-text" rows="5" data-prompt-key="' . esc_attr($san_key) . '" style="min-height:100px;">' . esc_textarea($display_text) . '</textarea>';
             echo '</div>';
         }
         if ($shown === 0) {
