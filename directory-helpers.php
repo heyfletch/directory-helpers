@@ -331,8 +331,12 @@ class Directory_Helpers {
         if (isset($_POST['directory_helpers_prompts']) && is_array($_POST['directory_helpers_prompts'])) {
             foreach ($_POST['directory_helpers_prompts'] as $i => $row) {
                 $key = isset($row['key']) ? sanitize_key($row['key']) : '';
-                $value_raw = isset($row['value']) ? (string) $row['value'] : '';
+                $value_raw = isset($row['value']) ? wp_unslash((string) $row['value']) : '';
                 $value = sanitize_textarea_field($value_raw); // preserves multi-line text
+                if ($value !== '') {
+                    // Normalize apostrophes to curly to prevent escaping issues
+                    $value = str_replace("'", "’", $value);
+                }
                 if ($key !== '' && $value !== '') {
                     $prompts[$key] = $value;
                     $idx_to_key[(string)$i] = $key;
@@ -520,8 +524,9 @@ class Directory_Helpers {
                 }
             }
 
-            // Apply replacements
+            // Apply replacements and normalize apostrophes for clean display/copy
             $display_text = strtr($text, $replacements);
+            $display_text = str_replace("'", "’", $display_text);
             echo '<div class="dh-prompt-wrap" style="margin-bottom:12px;">';
             echo '<div class="dh-prompt-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
             echo '<strong>' . esc_html($key) . '</strong>';
@@ -680,7 +685,17 @@ class Directory_Helpers {
      */
     public static function get_prompts() {
         $options = get_option('directory_helpers_options', array());
-        return (isset($options['prompts']) && is_array($options['prompts'])) ? $options['prompts'] : array();
+        $prompts = (isset($options['prompts']) && is_array($options['prompts'])) ? $options['prompts'] : array();
+        if (empty($prompts)) { return array(); }
+        $clean = array();
+        foreach ($prompts as $k => $v) {
+            $t = is_string($v) ? wp_unslash($v) : '';
+            if ($t !== '') {
+                $t = str_replace("'", "’", $t);
+            }
+            $clean[$k] = $t;
+        }
+        return $clean;
     }
 
     /**
