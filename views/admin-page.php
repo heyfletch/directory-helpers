@@ -225,13 +225,68 @@
                                     <?php endif; ?>
                                 </div>
                                 <p>
-                                    <button type="button" class="button" id="dh-add-prompt" data-next-index="<?php echo (int)$index; ?>"><?php esc_html_e('Add Prompt', 'directory-helpers'); ?></button>
+                                    <button type="button" class="button" id="dh-add-prompt" data-next-index="<?php echo (int)$index; ?>" onclick="if(window.dhAddPrompt){return window.dhAddPrompt(event);} return false;">&nbsp;<?php esc_html_e('Add Prompt', 'directory-helpers'); ?></button>
                                 </p>
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+            <script type="text/javascript">
+            (function(){
+                if (window.dhAddPrompt) { return; }
+                window.dhAddPrompt = function(e){
+                    if (e) { e.preventDefault(); e.stopPropagation(); }
+                    var btn = document.getElementById('dh-add-prompt');
+                    if (!btn) { return false; }
+                    var nextIndex = parseInt(btn.getAttribute('data-next-index') || '0', 10) || 0;
+                    var wrap = document.getElementById('dh-prompts-rows');
+                    if (!wrap) { return false; }
+                    var html = ''+
+                    '<div class="dh-prompt-row" style="margin-bottom:12px; border:1px solid #ccd0d4; padding:12px; background:#fff;">'+
+                        '<p>'+
+                            '<label>'+
+                                '<strong>Key</strong><br>'+
+                                '<input type="text" name="directory_helpers_prompts['+ nextIndex +'][key]" value="" class="regular-text" placeholder="e.g. city_page_intro">'+
+                            '</label>'+
+                        '</p>'+
+                        '<p>'+
+                            '<label>'+
+                                '<strong>Prompt</strong><br>'+
+                                '<textarea name="directory_helpers_prompts['+ nextIndex +'][value]" rows="6" class="large-text code" placeholder="Paste your prompt here..."></textarea>'+
+                            '</label>'+
+                        '</p>'+
+                        '<p>'+
+                            '<button type="button" class="button-link-delete dh-remove-prompt">Remove</button>'+
+                        '</p>'+
+                    '</div>';
+                    var tmp = document.createElement('div');
+                    tmp.innerHTML = html;
+                    var row = tmp.firstChild;
+                    wrap.appendChild(row);
+                    var tplEl = document.getElementById('dh-prompt-pt-template');
+                    if (tplEl && tplEl.innerHTML) {
+                        var ptHtml = tplEl.innerHTML.replace(/__INDEX__/g, String(nextIndex));
+                        var lastP = row.querySelector('p:last-of-type');
+                        if (lastP) {
+                            var holder = document.createElement('div');
+                            holder.innerHTML = ptHtml;
+                            lastP.parentNode.insertBefore(holder.firstChild, lastP);
+                        }
+                    }
+                    btn.setAttribute('data-next-index', String(nextIndex + 1));
+                    return false;
+                };
+                // Also support remove buttons for dynamically-added rows
+                document.addEventListener('click', function(ev){
+                    var t = ev.target && ev.target.closest ? ev.target.closest('.dh-remove-prompt') : null;
+                    if (!t) { return; }
+                    ev.preventDefault();
+                    var row = t.closest('.dh-prompt-row');
+                    if (row && row.parentNode) { row.parentNode.removeChild(row); }
+                });
+            })();
+            </script>
         </div>
         <?php submit_button(__('Save Settings', 'directory-helpers')); ?>
     </form>
