@@ -74,6 +74,10 @@ class Directory_Helpers {
         // Setup admin hooks separately
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+
+        // Make prompts available on post edit screens (Classic and Block editor)
+        add_action('admin_head-post.php', array($this, 'output_prompts_js'));
+        add_action('admin_head-post-new.php', array($this, 'output_prompts_js'));
     }
 
     /**
@@ -82,7 +86,8 @@ class Directory_Helpers {
     public function activate() {
         // Set default options
         $default_options = array(
-            'active_modules' => array()
+            'active_modules' => array(),
+            'prompts' => array()
         );
         
         if (!get_option('directory_helpers_options')) {
@@ -196,6 +201,20 @@ class Directory_Helpers {
     }
 
     /**
+     * Output prompts as a JS global on post edit screens
+     */
+    public function output_prompts_js() {
+        if (!current_user_can('edit_posts')) {
+            return;
+        }
+        $prompts = self::get_prompts();
+        if (!is_array($prompts)) {
+            $prompts = array();
+        }
+        echo '<script type="text/javascript">window.DH_PROMPTS = ' . wp_json_encode($prompts) . ';</script>';
+    }
+
+    /**
      * Save plugin settings
      */
     public function save_settings() {
@@ -228,6 +247,21 @@ class Directory_Helpers {
                 $options['instant_search_zip_min_digits'] = $min;
             }
         }
+
+        // Handle AI Prompts (key => prompt text)
+        $prompts = array();
+        if (isset($_POST['directory_helpers_prompts']) && is_array($_POST['directory_helpers_prompts'])) {
+            foreach ($_POST['directory_helpers_prompts'] as $row) {
+                $key = isset($row['key']) ? sanitize_key($row['key']) : '';
+                $value_raw = isset($row['value']) ? (string) $row['value'] : '';
+                // Preserve multi-line plain text
+                $value = sanitize_textarea_field($value_raw);
+                if ($key !== '' && $value !== '') {
+                    $prompts[$key] = $value;
+                }
+            }
+        }
+        $options['prompts'] = $prompts;
 
         // Handle active modules
         // This part is not currently used for activation/deactivation from the UI, but we keep it for future use.
@@ -349,6 +383,57 @@ class Directory_Helpers {
      */
     public function get_active_modules() {
         return $this->active_modules;
+    }
+
+    /**
+     * Get all saved prompts from options.
+     *
+     * @return array key => prompt text
+     */
+    public static function get_prompts() {
+        $options = get_option('directory_helpers_options', array());
+        return (isset($options['prompts']) && is_array($options['prompts'])) ? $options['prompts'] : array();
+    }
+
+    /**
+     * Get a single prompt by key.
+     *
+     * @param string $key
+     * @param string $default
+     * @return string
+     */
+    public static function get_prompt($key, $default = '') {
+        $prompts = self::get_prompts();
+        return isset($prompts[$key]) ? $prompts[$key] : $default;
+    }
+}
+
+/**
+ * Get all configured prompts.
+ *
+ * @return array key => prompt text
+ */
+function dh_get_prompts() {
+    return Directory_Helpers::get_prompts();
+}
+
+/**
+ * Get a single prompt by key.
+ *
+ * @param string $key
+ * @param string $default
+ * @return string
+ */
+function dh_get_prompt($key, $default = '') {
+    return Directory_Helpers::get_prompt($key, $default);
+}
+
+// Static getters implemented on Directory_Helpers class for prompt access
+if (class_exists('Directory_Helpers')) {
+    if (!method_exists('Directory_Helpers', 'get_prompts')) {
+        // Add static methods via runkit-like approach isn't available; instead, we provide
+        // wrapper functions above and ensure core code uses them. For direct static access,
+        // define the methods within the class in future refactors.
     }
 }
 

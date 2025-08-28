@@ -132,6 +132,70 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="directory-helpers-settings" style="margin-top: 20px;">
+                <h2><?php esc_html_e('AI Prompts', 'directory-helpers'); ?></h2>
+                <p class="description"><?php esc_html_e('Save named prompts. They will be available on post edit screens via window.DH_PROMPTS and helper functions dh_get_prompt()/dh_get_prompts().', 'directory-helpers'); ?></p>
+                <table class="form-table">
+                    <tbody>
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Prompts', 'directory-helpers'); ?></th>
+                            <td>
+                                <?php
+                                $saved_prompts = isset($options['prompts']) && is_array($options['prompts']) ? $options['prompts'] : [];
+                                $index = 0;
+                                ?>
+                                <div id="dh-prompts-rows">
+                                    <?php if (!empty($saved_prompts)) : ?>
+                                        <?php foreach ($saved_prompts as $k => $v) : ?>
+                                            <div class="dh-prompt-row" style="margin-bottom:12px; border:1px solid #ccd0d4; padding:12px; background:#fff;">
+                                                <p>
+                                                    <label>
+                                                        <strong><?php esc_html_e('Key', 'directory-helpers'); ?></strong><br>
+                                                        <input type="text" name="directory_helpers_prompts[<?php echo (int)$index; ?>][key]" value="<?php echo esc_attr($k); ?>" class="regular-text" placeholder="e.g. city_page_intro">
+                                                    </label>
+                                                </p>
+                                                <p>
+                                                    <label>
+                                                        <strong><?php esc_html_e('Prompt', 'directory-helpers'); ?></strong><br>
+                                                        <textarea name="directory_helpers_prompts[<?php echo (int)$index; ?>][value]" rows="6" class="large-text code" placeholder="Paste your prompt here..."><?php echo esc_textarea($v); ?></textarea>
+                                                    </label>
+                                                </p>
+                                                <p>
+                                                    <button type="button" class="button-link-delete dh-remove-prompt"><?php esc_html_e('Remove', 'directory-helpers'); ?></button>
+                                                </p>
+                                            </div>
+                                            <?php $index++; ?>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <div class="dh-prompt-row" style="margin-bottom:12px; border:1px solid #ccd0d4; padding:12px; background:#fff;">
+                                            <p>
+                                                <label>
+                                                    <strong><?php esc_html_e('Key', 'directory-helpers'); ?></strong><br>
+                                                    <input type="text" name="directory_helpers_prompts[0][key]" value="" class="regular-text" placeholder="e.g. city_page_intro">
+                                                </label>
+                                            </p>
+                                            <p>
+                                                <label>
+                                                    <strong><?php esc_html_e('Prompt', 'directory-helpers'); ?></strong><br>
+                                                    <textarea name="directory_helpers_prompts[0][value]" rows="6" class="large-text code" placeholder="Paste your prompt here..."></textarea>
+                                                </label>
+                                            </p>
+                                            <p>
+                                                <button type="button" class="button-link-delete dh-remove-prompt"><?php esc_html_e('Remove', 'directory-helpers'); ?></button>
+                                            </p>
+                                        </div>
+                                        <?php $index = 1; ?>
+                                    <?php endif; ?>
+                                </div>
+                                <p>
+                                    <button type="button" class="button" id="dh-add-prompt" data-next-index="<?php echo (int)$index; ?>"><?php esc_html_e('Add Prompt', 'directory-helpers'); ?></button>
+                                </p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
         <?php submit_button(__('Save Settings', 'directory-helpers')); ?>
     </form>
