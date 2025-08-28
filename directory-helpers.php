@@ -246,8 +246,11 @@ class Directory_Helpers {
                 var postType = postTypeInput && postTypeInput.value ? postTypeInput.value : 'post';
                 var storageKey = 'dh_hide_content_' + postType;
                 function isHidden(){ return window.localStorage.getItem(storageKey) === '1'; }
-                function apply(){
+                function apply(initial){
                     var hidden = isHidden();
+                    if (initial === true) {
+                        hidden = false; // always show on initial load to allow TinyMCE to layout correctly
+                    }
                     editorDiv.style.display = hidden ? 'none' : 'block';
                     btn.textContent = hidden ? 'Show Content Editor' : 'Hide Content Editor';
                 }
@@ -256,7 +259,7 @@ class Directory_Helpers {
                     window.localStorage.setItem(storageKey, hidden ? '0' : '1');
                     apply();
                 });
-                apply();
+                apply(true); // force visible on first paint
                 wrap.appendChild(btn);
                 if(titleDiv && titleDiv.parentNode){
                     titleDiv.parentNode.insertBefore(wrap, titleDiv.nextSibling);
