@@ -391,6 +391,33 @@ class Directory_Helpers {
     }
 
     /**
+     * Derive US state full name for a city-listing post by parsing slug or title for a 2-letter code.
+     * Returns empty string if not determinable.
+     *
+     * @param WP_Post|int $post
+     * @return string
+     */
+    private function derive_state_name_for_city_post($post) {
+        $post = is_object($post) ? $post : get_post($post);
+        if (!$post || $post->post_type !== 'city-listing') { return ''; }
+        $code = '';
+        $slug = isset($post->post_name) ? (string) $post->post_name : '';
+        if ($slug && preg_match('/-([a-z]{2})(?:-|$)/i', $slug, $m)) {
+            $code = strtoupper($m[1]);
+        } else {
+            $title = (string) $post->post_title;
+            if ($title && preg_match('/,\s*([A-Za-z]{2})(\b|$)/', $title, $mm)) {
+                $code = strtoupper($mm[1]);
+            }
+        }
+        if (!$code) { return ''; }
+        $us = array(
+            'AL'=>'Alabama','AK'=>'Alaska','AZ'=>'Arizona','AR'=>'Arkansas','CA'=>'California','CO'=>'Colorado','CT'=>'Connecticut','DE'=>'Delaware','FL'=>'Florida','GA'=>'Georgia','HI'=>'Hawaii','ID'=>'Idaho','IL'=>'Illinois','IN'=>'Indiana','IA'=>'Iowa','KS'=>'Kansas','KY'=>'Kentucky','LA'=>'Louisiana','ME'=>'Maine','MD'=>'Maryland','MA'=>'Massachusetts','MI'=>'Michigan','MN'=>'Minnesota','MS'=>'Mississippi','MO'=>'Missouri','MT'=>'Montana','NE'=>'Nebraska','NV'=>'Nevada','NH'=>'New Hampshire','NJ'=>'New Jersey','NM'=>'New Mexico','NY'=>'New York','NC'=>'North Carolina','ND'=>'North Dakota','OH'=>'Ohio','OK'=>'Oklahoma','OR'=>'Oregon','PA'=>'Pennsylvania','RI'=>'Rhode Island','SC'=>'South Carolina','SD'=>'South Dakota','TN'=>'Tennessee','TX'=>'Texas','UT'=>'Utah','VT'=>'Vermont','VA'=>'Virginia','WA'=>'Washington','WV'=>'West Virginia','WI'=>'Wisconsin','WY'=>'Wyoming'
+        );
+        return isset($us[$code]) ? $us[$code] : '';
+    }
+
+    /**
      * Register Prompts display meta box across post types; it only displays prompts targeted to the current post type.
      */
     public function register_prompts_display_meta_box() {
@@ -453,6 +480,29 @@ class Directory_Helpers {
                         $val = implode(', ', array_map('wp_strip_all_tags', array_map('strval', $names)));
                     }
                     $replacements['{' . $tax_name . '}'] = $val;
+                }
+            }
+
+            // Special fallback for {state} on city-listing posts when taxonomy missing/empty
+            if (strpos($text, '{state}') !== false) {
+                $current_state_val = isset($replacements['{state}']) ? (string) $replacements['{state}'] : '';
+                if ($current_state_val === '') {
+                    $derived = $this->derive_state_name_for_city_post($post);
+                    if ($derived !== '') {
+                        $replacements['{state}'] = $derived;
+                    } else {
+                        // Ensure we explicitly blank it if undeterminable
+                        $replacements['{state}'] = '';
+                    }
+                }
+            }
+
+            // Ensure all tokens present in the text are defined in the replacements map; default to blank
+            if (preg_match_all('/\{[a-z0-9_-]+\}/i', (string) $text, $m)) {
+                foreach (array_unique($m[0]) as $tok) {
+                    if (!array_key_exists($tok, $replacements)) {
+                        $replacements[$tok] = '';
+                    }
                 }
             }
 
