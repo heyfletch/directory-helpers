@@ -113,8 +113,10 @@ if (!class_exists('DH_Video_Overview')) {
             $new_hash = md5($url);
             $old_hash = (string) get_post_meta($post_id, '_video_overview_url_hash', true);
             $schema_json = (string) get_post_meta($post_id, '_video_overview_schema_json', true);
+            // Lightweight migration: if cached schema still contains contentUrl from older builds, force rebuild.
+            $needs_migration = (!empty($schema_json) && strpos($schema_json, '"contentUrl"') !== false);
 
-            if ($new_hash !== $old_hash || empty($schema_json)) {
+            if ($new_hash !== $old_hash || empty($schema_json) || $needs_migration) {
                 $result = $this->rebuild_cache($post_id, $url);
                 if (!$result['ok']) {
                     return '';
@@ -205,12 +207,11 @@ if (!class_exists('DH_Video_Overview')) {
                 'thumbnailUrl' => !empty($thumbnails) ? $thumbnails : $thumbnail,
                 'uploadDate' => $upload_date,
                 'embedUrl' => $embed_url,
-                'contentUrl' => $watch_url,
                 'url' => $page_url,
                 'publisher' => $publisher,
                 'potentialAction' => array(
                     '@type' => 'WatchAction',
-                    'target' => $watch_url,
+                    'target' => $page_url,
                 ),
             );
 
