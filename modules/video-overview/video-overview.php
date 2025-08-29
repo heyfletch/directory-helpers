@@ -154,6 +154,7 @@ if (!class_exists('DH_Video_Overview')) {
             }
 
             $embed_url = 'https://www.youtube.com/embed/' . $video_id;
+            $watch_url = 'https://www.youtube.com/watch?v=' . $video_id;
             $thumbnail = 'https://i.ytimg.com/vi/' . $video_id . '/maxresdefault.jpg';
 
             // Build thumbnail candidates: prefer self-hosted featured image, then YouTube maxres, then oEmbed thumbnail.
@@ -204,11 +205,12 @@ if (!class_exists('DH_Video_Overview')) {
                 'thumbnailUrl' => !empty($thumbnails) ? $thumbnails : $thumbnail,
                 'uploadDate' => $upload_date,
                 'embedUrl' => $embed_url,
+                'contentUrl' => $watch_url,
                 'url' => $page_url,
                 'publisher' => $publisher,
                 'potentialAction' => array(
                     '@type' => 'WatchAction',
-                    'target' => $embed_url,
+                    'target' => $watch_url,
                 ),
             );
 
