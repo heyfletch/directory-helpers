@@ -296,7 +296,8 @@ if (!class_exists('DH_Video_Overview')) {
             $hash = (string) get_post_meta($post->ID, '_video_overview_url_hash', true);
             $cached = !empty(get_post_meta($post->ID, '_video_overview_schema_json', true));
             $url_hash = $url ? md5($url) : '';
-            $needs_refresh = $url && ($hash !== $url_hash || !$cached);
+            // Consider URL "changed" only if there is an existing hash and it differs.
+            $url_changed = $url && !empty($hash) && ($hash !== $url_hash);
 
             echo '<p><strong>' . esc_html__('YouTube URL (ACF video_overview):', 'directory-helpers') . '</strong><br>';
             if ($url) {
@@ -307,7 +308,7 @@ if (!class_exists('DH_Video_Overview')) {
             echo '</p>';
 
             if ($url) {
-                $btn_label = $needs_refresh ? __('Refresh Video Metadata (URL changed)', 'directory-helpers') : __('Refresh Video Metadata', 'directory-helpers');
+                $btn_label = $url_changed ? __('Refresh Video Metadata (URL changed)', 'directory-helpers') : __('Refresh Video Metadata', 'directory-helpers');
                 $nonce = wp_create_nonce('dh_refresh_video_overview_' . $post->ID);
                 echo '<button type="button" class="button dh-refresh-video-overview" data-post-id="' . esc_attr($post->ID) . '" data-nonce="' . esc_attr($nonce) . '">' . esc_html($btn_label) . '</button>';
                 echo ' <span class="dh-vr-status" style="display:none; margin-left:6px;"></span>';
