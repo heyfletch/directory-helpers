@@ -156,6 +156,21 @@ if (!class_exists('DH_Video_Overview')) {
             $embed_url = 'https://www.youtube.com/embed/' . $video_id;
             $thumbnail = 'https://i.ytimg.com/vi/' . $video_id . '/maxresdefault.jpg';
 
+            // Build thumbnail candidates: prefer self-hosted featured image, then YouTube maxres, then oEmbed thumbnail.
+            $thumbnails = array();
+            $feat_id = get_post_thumbnail_id($post_id);
+            if ($feat_id) {
+                $feat_src = wp_get_attachment_image_src($feat_id, 'full');
+                if (is_array($feat_src) && !empty($feat_src[0])) {
+                    $thumbnails[] = esc_url_raw($feat_src[0]);
+                }
+            }
+            if (!empty($thumbnail)) { $thumbnails[] = esc_url_raw($thumbnail); }
+            if (!empty($thumb_from_oembed)) { $thumbnails[] = esc_url_raw($thumb_from_oembed); }
+            // De-duplicate and allow customization.
+            $thumbnails = array_values(array_unique(array_filter($thumbnails)));
+            $thumbnails = apply_filters('dh_video_overview_thumbnails', $thumbnails, $post_id, $video_id);
+
             // Preserve the original uploadDate unless the video URL changes.
             $new_hash = md5($url);
             $old_hash = (string) get_post_meta($post_id, '_video_overview_url_hash', true);
@@ -186,7 +201,7 @@ if (!class_exists('DH_Video_Overview')) {
                 '@type' => 'VideoObject',
                 'name' => $title,
                 'description' => $description,
-                'thumbnailUrl' => $thumbnail,
+                'thumbnailUrl' => !empty($thumbnails) ? $thumbnails : $thumbnail,
                 'uploadDate' => $upload_date,
                 'embedUrl' => $embed_url,
                 'url' => $page_url,

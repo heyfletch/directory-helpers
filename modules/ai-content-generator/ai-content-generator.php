@@ -98,9 +98,6 @@ class DH_AI_Content_Generator {
         ?>
         <div class="dh-process-shortcuts-wrapper">
             <p style="margin: 0;">
-                <a class="button" style="width: 100%; text-align:center;" target="_blank" rel="noopener" href="<?php echo esc_url( 'https://notebooklm.google.com/' ); ?>"><?php esc_html_e('Create Notebook', 'directory-helpers'); ?></a>
-            </p>
-            <p style="margin: 8px 0 0 0;">
                 <button type="button" id="dh-unsplash-photos-btn" class="button" style="width: 100%;">
                     <?php esc_html_e( 'Unsplash Photos', 'directory-helpers' ); ?>
                 </button>
