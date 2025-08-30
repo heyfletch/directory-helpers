@@ -21,6 +21,8 @@ class DH_AI_Content_Generator {
         add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('rest_api_init', array($this, 'register_rest_route'));
         add_action('rest_api_init', array($this, 'register_trigger_route'));
+        // Inject body images at view time so images remain editable via ACF/meta
+        add_filter('the_content', array($this, 'inject_images_into_content'), 20);
     }
 
     /**
@@ -258,6 +260,9 @@ class DH_AI_Content_Generator {
         $content = isset($params['content']) ? wp_kses_post($params['content']) : '';
         // Optional: featured image attachment ID from media library
         $featured_media_id = isset($params['featured_media']) ? absint($params['featured_media']) : 0;
+        // Optional: two body images to be injected at render time
+        $image_1_id = isset($params['image_1_id']) ? absint($params['image_1_id']) : 0;
+        $image_2_id = isset($params['image_2_id']) ? absint($params['image_2_id']) : 0;
 
         if (empty($post_id) || empty($content)) {
             return new WP_Error('missing_parameters', 'Missing postId or content.', array('status' => 400));
@@ -293,6 +298,23 @@ class DH_AI_Content_Generator {
             }
         }
 
+        // Store body images in ACF fields if available, else in post meta
+        if ($image_1_id) {
+            if (function_exists('update_field')) {
+                // ACF field key/name 'body_image_1'
+                update_field('body_image_1', $image_1_id, $post_id);
+            } else {
+                update_post_meta($post_id, 'body_image_1', $image_1_id);
+            }
+        }
+        if ($image_2_id) {
+            if (function_exists('update_field')) {
+                update_field('body_image_2', $image_2_id, $post_id);
+            } else {
+                update_post_meta($post_id, 'body_image_2', $image_2_id);
+            }
+        }
+
         $response = array('message' => 'Content updated successfully.');
         if (!is_null($featured_set)) {
             $response['featured_media_set'] = $featured_set;
@@ -300,7 +322,145 @@ class DH_AI_Content_Generator {
                 $response['warning'] = $featured_error;
             }
         }
+        if ($image_1_id) {
+            $response['image_1_saved'] = (bool) $image_1_id;
+        }
+        if ($image_2_id) {
+            $response['image_2_saved'] = (bool) $image_2_id;
+        }
 
         return new WP_REST_Response($response, 200);
+    }
+
+    /**
+     * Inject body images into post content at render time based on heading rules.
+     * - Image 1: after the 3rd <h2>-<h4> (fallback: after last h2-h4, or at start if none)
+     * - Image 2: right before the last FAQ-like heading (h2-h6 containing: FAQ, FAQs, Frequently Asked, Commonly Asked, Common Questions).
+     * Skips insertion if the corresponding image is already present in content.
+     *
+     * @param string $content
+     * @return string
+     */
+    public function inject_images_into_content($content) {
+        if (is_admin()) {
+            return $content;
+        }
+
+        if (!is_singular()) {
+            return $content;
+        }
+
+        $post = get_post();
+        if (!$post || !in_array($post->post_type, array('city-listing', 'state-listing'), true)) {
+            return $content;
+        }
+
+        // Retrieve image IDs from ACF or post meta
+        $img1_id = function_exists('get_field') ? get_field('body_image_1', $post->ID) : get_post_meta($post->ID, 'body_image_1', true);
+        $img2_id = function_exists('get_field') ? get_field('body_image_2', $post->ID) : get_post_meta($post->ID, 'body_image_2', true);
+
+        // If ACF returns an array, pull the ID
+        if (is_array($img1_id) && isset($img1_id['ID'])) {
+            $img1_id = $img1_id['ID'];
+        }
+        if (is_array($img2_id) && isset($img2_id['ID'])) {
+            $img2_id = $img2_id['ID'];
+        }
+
+        $img1_id = absint($img1_id);
+        $img2_id = absint($img2_id);
+
+        if (!$img1_id && !$img2_id) {
+            return $content;
+        }
+
+        // Avoid duplicates if image markup already present
+        if ($img1_id && strpos($content, 'wp-image-' . $img1_id) !== false) {
+            $img1_id = 0;
+        }
+        if ($img2_id && strpos($content, 'wp-image-' . $img2_id) !== false) {
+            $img2_id = 0;
+        }
+        if (!$img1_id && !$img2_id) {
+            return $content;
+        }
+
+        $html = $content;
+
+        $ops = array();
+
+        // Compute insertion for Image 1: after the 3rd H2–H4 (fallbacks applied)
+        if ($img1_id) {
+            $pattern = '/<h([2-4])\b[^>]*>.*?<\/h\1>/is';
+            if (preg_match_all($pattern, $html, $m, PREG_OFFSET_CAPTURE)) {
+                if (count($m[0]) >= 3) {
+                    $third = $m[0][2];
+                    $pos = $third[1] + strlen($third[0]);
+                } elseif (count($m[0]) >= 1) {
+                    $last = $m[0][count($m[0]) - 1];
+                    $pos = $last[1] + strlen($last[0]);
+                } else {
+                    $pos = 0; // no headings
+                }
+            } else {
+                $pos = 0; // no headings
+            }
+            $ops[] = array('pos' => $pos, 'snippet' => "\n\n" . $this->build_image_html($img1_id) . "\n\n");
+        }
+
+        // Compute insertion for Image 2: before the last FAQ-like heading, else at end
+        if ($img2_id) {
+            $patternFaq = '/<h([2-6])\b[^>]*>(.*?)<\/h\1>/is';
+            $faqPos = -1;
+            if (preg_match_all($patternFaq, $html, $m2, PREG_OFFSET_CAPTURE)) {
+                $total = count($m2[0]);
+                for ($i = 0; $i < $total; $i++) {
+                    $inner = $m2[2][$i][0];
+                    $text = trim(wp_strip_all_tags($inner));
+                    if (preg_match('/\bfaq\b|\bfaqs\b|frequently\s+asked|commonly\s+asked|common\s+questions/i', $text)) {
+                        // keep the last matching heading position
+                        $faqPos = $m2[0][$i][1];
+                    }
+                }
+            }
+            $pos2 = ($faqPos >= 0) ? $faqPos : strlen($html);
+            $ops[] = array('pos' => $pos2, 'snippet' => "\n\n" . $this->build_image_html($img2_id) . "\n\n");
+        }
+
+        // Apply insertions in ascending order of position
+        usort($ops, function ($a, $b) {
+            if ($a['pos'] === $b['pos']) { return 0; }
+            return ($a['pos'] < $b['pos']) ? 1 : -1; // insert later positions first to avoid offset adjustments
+        });
+
+        foreach ($ops as $op) {
+            $html = substr($html, 0, $op['pos']) . $op['snippet'] . substr($html, $op['pos']);
+        }
+
+        return $html;
+    }
+
+    /**
+     * Build HTML for an attachment image, optionally wrapped in a figure with caption.
+     *
+     * @param int $attachment_id
+     * @return string
+     */
+    private function build_image_html($attachment_id) {
+        $attachment_id = absint($attachment_id);
+        if (!$attachment_id) {
+            return '';
+        }
+        $img = wp_get_attachment_image($attachment_id, 'full', false, array(
+            'class' => 'alignnone size-full wp-image-' . $attachment_id,
+        ));
+        if (!$img) {
+            return '';
+        }
+        $caption = wp_get_attachment_caption($attachment_id);
+        if ($caption) {
+            return '<figure class="wp-caption alignnone">' . $img . '<figcaption class="wp-caption-text">' . esc_html($caption) . '</figcaption></figure>';
+        }
+        return $img;
     }
 }
