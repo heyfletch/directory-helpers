@@ -215,10 +215,12 @@ class DH_AI_Content_Generator {
 
         // Unified payload for simplicity across services
         $post_url = get_permalink($post_id);
+        $post_title = wp_strip_all_tags(get_the_title($post_id));
         $body = wp_json_encode(array(
-            'postId'  => $post_id,
-            'postUrl' => $post_url,
-            'keyword' => $keyword,
+            'postId'     => $post_id,
+            'postUrl'    => $post_url,
+            'postTitle'  => $post_title,
+            'keyword'    => $keyword,
         ));
 
         $response = wp_remote_post($url, array(
