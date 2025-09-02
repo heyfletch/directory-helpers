@@ -345,6 +345,119 @@ class DH_Prep_Profiles_By_State {
         exit;
     }
 
+    /**
+     * Check if a city-listing already exists for a given area and niche, with status draft or publish.
+     *
+     * @param int $area_term_id
+     * @param int $niche_term_id 0 to ignore niche filter
+     * @return int Post ID if exists, 0 otherwise
+     */
+    private function city_listing_exists($area_term_id, $niche_term_id = 0) {
+        $tax_query = array(
+            'relation' => 'AND',
+            array(
+                'taxonomy' => 'area',
+                'field'    => 'term_id',
+                'terms'    => array((int)$area_term_id),
+            ),
+        );
+        if ($niche_term_id) {
+            $tax_query[] = array(
+                'taxonomy' => 'niche',
+                'field'    => 'term_id',
+                'terms'    => array((int)$niche_term_id),
+            );
+        }
+        $q = new WP_Query(array(
+            'post_type'      => 'city-listing',
+            'post_status'    => array('draft', 'publish'),
+            'posts_per_page' => 1,
+            'tax_query'      => $tax_query,
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+        ));
+        if (!is_wp_error($q) && !empty($q->posts)) {
+            return (int)$q->posts[0];
+        }
+        return 0;
+    }
+
+    /**
+     * Programmatically create a city-listing post using same logic as handle_create_city_listing (no redirect).
+     *
+     * @param WP_Term $area_term
+     * @param string  $state_slug
+     * @param WP_Term|null $niche_term
+     * @return int Created post ID or 0 on failure
+     */
+    private function create_city_listing_programmatic($area_term, $state_slug, $niche_term = null) {
+        if (!$area_term || is_wp_error($area_term)) {
+            return 0;
+        }
+
+        // City Name: strip trailing " - ST"
+        $city_name = $area_term->name;
+        $city_name = preg_replace('/\s+-\s+[A-Za-z]{2}$/', '', $city_name);
+        $city_name = trim($city_name);
+
+        // Determine state code (prefer 2-letter slug, else term description, else parse from area name)
+        $state_term = get_term_by('slug', $state_slug, 'state');
+        $state_code = '';
+        if ($state_term && !is_wp_error($state_term)) {
+            if (strlen($state_term->slug) === 2) {
+                $state_code = strtoupper($state_term->slug);
+            } elseif (!empty($state_term->description) && preg_match('/^[A-Za-z]{2}$/', $state_term->description)) {
+                $state_code = strtoupper($state_term->description);
+            }
+        }
+        if (!$state_code && preg_match('/\s-\s([A-Za-z]{2})$/', $area_term->name, $m)) {
+            $state_code = strtoupper($m[1]);
+        }
+        if (!$state_code && strlen($state_slug) >= 2) {
+            $state_code = strtoupper(substr($state_slug, 0, 2));
+        }
+
+        // Title: "City, ST"
+        $title = $city_name . ( $state_code ? ', ' . $state_code : '' );
+
+        // Niche pluralization (simple rules)
+        $niche_name = ($niche_term && !is_wp_error($niche_term)) ? $niche_term->name : '';
+        if (empty($niche_name) && !empty($niche_term) && !is_wp_error($niche_term)) {
+            $niche_name = $niche_term->name;
+        }
+        $plural_niche = $niche_name;
+        if ($plural_niche) {
+            if (preg_match('/[^aeiou]y$/i', $plural_niche)) {
+                $plural_niche = preg_replace('/y$/i', 'ies', $plural_niche);
+            } elseif (!preg_match('/s$/i', $plural_niche)) {
+                $plural_niche .= 's';
+            }
+        }
+
+        // Slug base: "Title + plural niche"
+        $slug_base = $title . ( $plural_niche ? ' ' . $plural_niche : '' );
+        $desired_slug = sanitize_title($slug_base);
+
+        $post_id = wp_insert_post(array(
+            'post_type'   => 'city-listing',
+            'post_status' => 'draft',
+            'post_title'  => $title,
+            'post_name'   => $desired_slug,
+        ), true);
+
+        if (is_wp_error($post_id) || !$post_id) {
+            return 0;
+        }
+
+        // Assign taxonomy terms
+        wp_set_object_terms($post_id, (int) $area_term->term_id, 'area', false);
+        if ($niche_term && !is_wp_error($niche_term)) {
+            wp_set_object_terms($post_id, (int) $niche_term->term_id, 'niche', false);
+        }
+
+        return (int)$post_id;
+    }
+
     public function maybe_show_city_created_notice() {
         if (!is_admin()) {
             return;
@@ -416,6 +529,83 @@ class DH_Prep_Profiles_By_State {
                 $ids = wp_list_pluck($published, 'ID');
                 $this->rerank_posts($ids, $state_slug);
                 $action_message = __('Re-ranked profiles for selected cities and state.', 'directory-helpers');
+            } elseif ($action === 'one_click_flow' && !empty($state_slug)) {
+                // Step 1: Determine cities from current filters
+                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug);
+                $unique_cities = array(); // slug => name
+                foreach ($posts as $p) {
+                    if (!empty($p->area_slug) && !empty($p->area_name)) {
+                        $unique_cities[$p->area_slug] = $p->area_name;
+                    }
+                }
+
+                $created_city_ids = array();
+                $niche_term = get_term_by('slug', $niche_slug, 'niche');
+                // Step 2: Create city pages if not already Draft/Published
+                foreach ($unique_cities as $area_slug_k => $area_name_v) {
+                    $area_term = get_term_by('slug', $area_slug_k, 'area');
+                    if (!$area_term || is_wp_error($area_term)) { continue; }
+                    $exists = $this->city_listing_exists((int)$area_term->term_id, ($niche_term && !is_wp_error($niche_term)) ? (int)$niche_term->term_id : 0);
+                    if ($exists) { continue; }
+                    $new_id = $this->create_city_listing_programmatic($area_term, $state_slug, $niche_term);
+                    if ($new_id) {
+                        $created_city_ids[] = $new_id;
+                    }
+                }
+
+                // Step 3: Publish all filtered profiles (current status filter), then clean area terms, set status to publish
+                $ids = wp_list_pluck($posts, 'ID');
+                $published_now_ids = $this->publish_posts($ids);
+                if (!empty($published_now_ids)) {
+                    $this->cleanup_area_terms_for_posts($published_now_ids);
+                }
+                $post_status = 'publish';
+
+                // Step 4: Rerank (use published only)
+                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug);
+                $pub_ids = wp_list_pluck($published, 'ID');
+                $this->rerank_posts($pub_ids, $state_slug);
+
+                // Step 5: Trigger AI content for newly created city pages with empty content
+                $ai_triggered = 0;
+                if (!empty($created_city_ids)) {
+                    $options = get_option('directory_helpers_options');
+                    $url = isset($options['n8n_webhook_url']) ? $options['n8n_webhook_url'] : '';
+                    foreach ($created_city_ids as $cid) {
+                        $content = get_post_field('post_content', $cid);
+                        if (!empty($url) && (empty($content) || trim(wp_strip_all_tags($content)) === '')) {
+                            $raw_title = wp_strip_all_tags(get_the_title($cid));
+                            $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
+                            $clean_title = preg_replace('/\s+/', ' ', $clean_title);
+                            $keyword = 'dog training in ' . $clean_title;
+                            $body = wp_json_encode(array(
+                                'postId'    => $cid,
+                                'postUrl'   => get_permalink($cid),
+                                'postTitle' => wp_strip_all_tags(get_the_title($cid)),
+                                'keyword'   => $keyword,
+                            ));
+                            $resp = wp_remote_post($url, array(
+                                'headers' => array('Content-Type' => 'application/json'),
+                                'body'    => $body,
+                                'timeout' => 20,
+                            ));
+                            if (!is_wp_error($resp)) {
+                                $ai_triggered++;
+                            }
+                            // Avoid overloading the AI API
+                            sleep(1);
+                        }
+                    }
+                }
+
+                // Build action message
+                $action_message = sprintf(
+                    /* translators: 1: cities created, 2: profiles published, 3: AI triggers */
+                    esc_html__('Created %1$d city page(s). Published %2$d profile(s). Re-ranked profiles. Triggered AI for %3$d new city page(s).', 'directory-helpers'),
+                    count($created_city_ids),
+                    isset($published_now_ids) ? count($published_now_ids) : 0,
+                    $ai_triggered
+                );
             }
         }
 
@@ -533,6 +723,18 @@ class DH_Prep_Profiles_By_State {
             submit_button(__('Rerank These Profiles', 'directory-helpers'), 'secondary', 'submit', false);
             echo '</form>';
         }
+
+        // One-click flow button (always available for current filters)
+        echo '<form method="post" style="display:inline-block; margin-left:8px;" onsubmit="return confirm(\'Run one-click flow? This will create city pages (if missing), publish profiles, re-rank, and trigger AI generation.\')">';
+        wp_nonce_field('dh_prepprofiles');
+        echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
+        echo '<input type="hidden" name="post_status" value="' . esc_attr($post_status) . '" />';
+        echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
+        echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
+        echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
+        echo '<input type="hidden" name="dh_action" value="one_click_flow" />';
+        submit_button(__('One-Click: Create Cities + Publish + Rerank + Generate AI', 'directory-helpers'), 'primary', 'submit', false);
+        echo '</form>';
 
         // Unique cities list
         echo '<h2 style="margin-top:24px;">' . esc_html__('Cities in Results', 'directory-helpers') . '</h2>';
