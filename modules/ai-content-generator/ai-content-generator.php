@@ -54,26 +54,12 @@ class DH_AI_Content_Generator {
      */
     public function render_meta_box($post) {
         $default_keyword = '';
-
-        if ($post->post_type === 'state-listing') {
-            // For state listings, use the 'state' taxonomy; prefer description for display if available
-            $terms = get_the_terms($post->ID, 'state');
-            if ($terms && !is_wp_error($terms)) {
-                $state_display = !empty($terms[0]->description) ? $terms[0]->description : $terms[0]->name;
-                $default_keyword = 'dog training in ' . $state_display;
-            } else {
-                $default_keyword = $post->post_title;
-            }
-        } else {
-            // For city listings, use the 'area' taxonomy
-            $terms = get_the_terms($post->ID, 'area');
-            if ($terms && !is_wp_error($terms)) {
-                $area_name = $terms[0]->name;
-                $default_keyword = 'dog training in ' . $area_name;
-            } else {
-                $default_keyword = $post->post_title;
-            }
-        }
+        // Build default keyword from sanitized post title (remove punctuation like commas or dashes)
+        $raw_title = isset($post->post_title) ? wp_strip_all_tags(get_the_title($post)) : '';
+        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
+        // Collapse multiple spaces to a single space
+        $clean_title = preg_replace('/\s+/', ' ', $clean_title);
+        $default_keyword = 'dog training in ' . $clean_title;
         ?>
         <div class="dh-ai-content-generator-wrapper">
             <p>
