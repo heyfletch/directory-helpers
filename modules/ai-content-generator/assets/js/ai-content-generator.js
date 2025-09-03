@@ -66,8 +66,10 @@ jQuery(document).ready(function ($) {
         })
         .then(response => {
             if (response.ok) {
-                statusDiv.innerHTML = '✅ Request sent! The AI is generating content. Refresh this page in a few minutes to see the updated content.';
-                statusDiv.style.color = 'green';
+                const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--wp-admin-theme-color--warning').trim();
+                const warningColor = cssVar || '#ffcb09';
+                statusDiv.textContent = '🟡 Request sent! The AI is generating content. Refresh this page in a few minutes to see the updated content.';
+                statusDiv.style.color = warningColor;
                 generateBtn.disabled = true;
             } else {
                 // Try to parse the error response from n8n
