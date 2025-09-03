@@ -617,6 +617,12 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/ai-content-generator/ai-content-generator.php',
                 'class' => 'DH_AI_Content_Generator'
             ),
+            'external-link-management' => array(
+                'name' => __('External Link Management', 'directory-helpers'),
+                'description' => __('Scans AI-generated content for external links, converts to shortcodes, stores metadata, and checks link status.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/external-link-management/external-link-management.php',
+                'class' => 'DH_External_Link_Management'
+            ),
             'prep-profiles-by-state' => array(
                 'name' => __('Prep Profiles by State', 'directory-helpers'),
                 'description' => __('Admin tools to prepare and publish profiles by state, list duplicate-city profiles, and trigger re-ranking.', 'directory-helpers'),

@@ -23,6 +23,8 @@ class DH_AI_Content_Generator {
         add_action('rest_api_init', array($this, 'register_trigger_route'));
         // Inject body images at view time so images remain editable via ACF/meta
         add_filter('the_content', array($this, 'inject_images_into_content'), 20);
+        // Heartbeat server receiver for live notifications
+        add_filter('heartbeat_received', array($this, 'heartbeat_received'), 10, 2);
     }
 
     /**
@@ -106,6 +108,9 @@ class DH_AI_Content_Generator {
             return;
         }
 
+        // Ensure Heartbeat API is available for live notifications
+        wp_enqueue_script('heartbeat');
+
         wp_enqueue_script(
             'dh-ai-content-generator-js',
             plugin_dir_url(__FILE__) . 'assets/js/ai-content-generator.js',
@@ -135,6 +140,7 @@ class DH_AI_Content_Generator {
             'unsplashSlug' => $unsplash_slug,
             'triggerEndpoint' => rest_url('directory-helpers/v1/trigger-webhook'),
             'nonce' => wp_create_nonce('wp_rest'),
+            'postId' => isset($post->ID) ? (int) $post->ID : 0,
         ));
     }
 
@@ -317,6 +323,14 @@ class DH_AI_Content_Generator {
             $response['image_2_saved'] = (bool) $image_2_id;
         }
 
+        // Mark last update time for this post (used by Heartbeat to notify editors)
+        if ($post_id) {
+            update_option('dh_ai_last_update_' . $post_id, time());
+        }
+
+        // Fire an action so other modules (e.g., External Link Management) can react to new AI content
+        do_action('directory_helpers/ai_content_updated', $post_id, $content);
+
         return new WP_REST_Response($response, 200);
     }
 
@@ -450,5 +464,32 @@ class DH_AI_Content_Generator {
             return '<figure class="wp-caption alignnone">' . $img . '<figcaption class="wp-caption-text">' . esc_html($caption) . '</figcaption></figure>';
         }
         return $img;
+    }
+
+    /**
+     * Heartbeat receiver to notify the post editor when AI content has landed.
+     *
+     * @param array $response
+     * @param array $data
+     * @return array
+     */
+    public function heartbeat_received($response, $data) {
+        if (!is_array($data) || empty($data['dh_ai_check'])) {
+            return $response;
+        }
+        $payload = $data['dh_ai_check'];
+        $post_id = isset($payload['postId']) ? absint($payload['postId']) : 0;
+        $last_seen = isset($payload['lastSeen']) ? (int) $payload['lastSeen'] : 0;
+        if (!$post_id) {
+            return $response;
+        }
+        $last = (int) get_option('dh_ai_last_update_' . $post_id, 0);
+        if ($last > $last_seen) {
+            $response['dh_ai'] = array(
+                'updated' => true,
+                'timestamp' => $last,
+            );
+        }
+        return $response;
     }
 }

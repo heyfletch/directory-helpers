@@ -188,4 +188,37 @@ jQuery(document).ready(function ($) {
             window.open(url, '_blank', 'noopener');
         });
     }
+
+    // Heartbeat: notify when AI content lands (no page refresh required)
+    (function initHeartbeatNotify(){
+        if (typeof wp === 'undefined' || !wp || !wp.heartbeat || !postId) { return; }
+        var lastSeen = 0;
+        var notified = false;
+        // Send a small payload on each heartbeat
+        $(document).on('heartbeat-send', function (e, data) {
+            data.dh_ai_check = { postId: parseInt(postId, 10) || 0, lastSeen: lastSeen };
+        });
+        // Receive server response
+        $(document).on('heartbeat-tick', function (e, data) {
+            if (!data || !data.dh_ai) { return; }
+            if (data.dh_ai.updated) {
+                lastSeen = data.dh_ai.timestamp || Date.now();
+                if (!notified && statusDiv) {
+                    notified = true;
+                    // Render an inline reload button
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'button button-primary';
+                    btn.textContent = 'Reload to view AI content';
+                    btn.addEventListener('click', function(){ window.location.reload(); });
+                    statusDiv.innerHTML = '✅ AI content received.';
+                    statusDiv.style.color = 'green';
+                    statusDiv.appendChild(document.createTextNode(' '));
+                    statusDiv.appendChild(btn);
+                    // Re-enable the Generate button to allow another run if desired
+                    if (generateBtn) { generateBtn.disabled = false; }
+                }
+            }
+        });
+    })();
 });
