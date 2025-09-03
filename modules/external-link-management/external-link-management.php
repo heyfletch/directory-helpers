@@ -8,7 +8,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class DH_External_Link_Management {
-    const DB_VERSION = '1';
+    const DB_VERSION = '2';
 
     public function __construct() {
         // Ensure DB exists (immediately and on next init)
@@ -36,6 +36,8 @@ class DH_External_Link_Management {
         // AJAX: update and delete link rows
         add_action('wp_ajax_dh_elm_update_link', array($this, 'ajax_update_link'));
         add_action('wp_ajax_dh_elm_delete_link', array($this, 'ajax_delete_link'));
+        // AJAX: set/clear override (treat as OK for a period)
+        add_action('wp_ajax_dh_elm_set_override', array($this, 'ajax_set_override'));
     }
 
     private function table_name() {
@@ -61,6 +63,8 @@ class DH_External_Link_Management {
             status_code INT,
             status_text VARCHAR(255),
             last_checked DATETIME,
+            status_override_code INT,
+            status_override_expires DATETIME,
             ai_suggestion_url TEXT,
             ai_suggestion_sentence TEXT,
             is_duplicate TINYINT(1) NOT NULL DEFAULT 0,
@@ -91,7 +95,7 @@ class DH_External_Link_Management {
     public function render_meta_box($post) {
         global $wpdb;
         $table = $this->table_name();
-        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, anchor_text, current_url, status_code, status_text, last_checked, is_duplicate FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post->ID));
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, anchor_text, current_url, status_code, status_text, last_checked, is_duplicate, status_override_code, status_override_expires FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post->ID));
         if (!$rows) {
             echo '<p>' . esc_html__('No external links captured yet. Use the AI generator or click Scan to populate.', 'directory-helpers') . '</p>';
         }
@@ -115,8 +119,17 @@ class DH_External_Link_Management {
         echo '<th style="width:120px;">' . esc_html__('Re-check', 'directory-helpers') . '</th>';
         echo '</tr></thead><tbody>';
         foreach ($rows as $r) {
-            $status = is_null($r->status_code) ? '—' : (int)$r->status_code;
-            $status_title = $r->status_text ? ' title="' . esc_attr($r->status_text) . '"' : '';
+            $now_ts = time();
+            $ovr_code = isset($r->status_override_code) ? (int)$r->status_override_code : null;
+            $ovr_exp = isset($r->status_override_expires) && $r->status_override_expires ? strtotime((string)$r->status_override_expires) : 0;
+            $ovr_active = ($ovr_code && $ovr_exp && $ovr_exp > $now_ts);
+            $status_val = is_null($r->status_code) ? null : (int)$r->status_code;
+            $status_disp = $ovr_active ? $ovr_code : ($status_val === null ? '—' : $status_val);
+            $status_title_text = $r->status_text ?: '';
+            if ($ovr_active) {
+                $status_title_text = trim(($status_title_text ? ($status_title_text . ' | ') : '') . 'Override until ' . date_i18n('Y-m-d', $ovr_exp));
+            }
+            $status_title = $status_title_text ? ' title="' . esc_attr($status_title_text) . '"' : '';
             $last_checked = $r->last_checked ? esc_html(date_i18n('Y-m-d g:ia', strtotime($r->last_checked))) : '—';
             $anchor_disp = esc_html(mb_strimwidth((string)$r->anchor_text, 0, 80, '…'));
             $anchor_q = rawurlencode((string)$r->anchor_text);
@@ -127,15 +140,21 @@ class DH_External_Link_Management {
             $data_url = esc_attr(strtolower((string)$r->current_url));
             $data_status = is_null($r->status_code) ? 999999 : (int)$r->status_code;
             $data_checked = $r->last_checked ? (int) strtotime($r->last_checked) : 0;
-            echo '<tr data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '">';
+            $data_ovr = $ovr_active ? 1 : 0;
+            $data_ovrexp = $ovr_active ? $ovr_exp : 0;
+            echo '<tr data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '" data-override="' . (int)$data_ovr . '" data-override-expires="' . (int)$data_ovrexp . '">';
             echo '<td>' . (int)$r->id . '</td>';
             echo '<td class="dh-elm-manage">'
                 . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button> '
-                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button>'
+                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button> '
+                . ($ovr_active
+                    ? '<button type="button" class="button button-small dh-elm-override-clear" data-nonce="' . esc_attr($manage_nonce) . '">Clear override</button>'
+                    : '<button type="button" class="button button-small dh-elm-override-ok" data-nonce="' . esc_attr($manage_nonce) . '">Mark OK (30d)</button>'
+                  )
                 . '</td>';
             echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
             echo '<td class="dh-cell-url">' . $url_link . '</td>';
-            echo '<td class="dh-elm-status"' . $status_title . '>' . esc_html($status) . '</td>';
+            echo '<td class="dh-elm-status"' . $status_title . '>' . esc_html($status_disp) . '</td>';
             echo '<td class="dh-elm-last-checked">' . $last_checked . '</td>';
             echo '<td>' . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button>' . '</td>';
             echo '</tr>';
@@ -162,6 +181,85 @@ class DH_External_Link_Management {
                             if(href){ window.open(href, '_blank'); }
                         }
                     });
+                    return;
+                }
+
+                // Override buttons
+                var ovrSetBtn = e.target && e.target.closest && e.target.closest('.dh-elm-override-ok');
+                if(ovrSetBtn){
+                    e.preventDefault();
+                    var tr = ovrSetBtn.closest('tr'); if(!tr){ return; }
+                    var id = tr.getAttribute('data-link-id'); if(!id){ return; }
+                    ovrSetBtn.disabled = true; ovrSetBtn.textContent = 'Marking…';
+                    var fd = new FormData();
+                    fd.append('action','dh_elm_set_override');
+                    fd.append('mode','set');
+                    fd.append('code','200');
+                    fd.append('days','30');
+                    fd.append('id', id);
+                    fd.append('post_id', <?php echo (int) $post->ID; ?>);
+                    fd.append('_ajax_nonce', ovrSetBtn.getAttribute('data-nonce'));
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                    xhr.onload = function(){
+                        ovrSetBtn.disabled = false; ovrSetBtn.textContent = 'Mark OK (30d)';
+                        try {
+                            var res = JSON.parse(xhr.responseText);
+                            if(res && res.success && res.data){
+                                var cell = tr.querySelector('.dh-elm-status');
+                                if(cell){
+                                    cell.textContent = String(res.data.status_code);
+                                    if(res.data.status_title){ cell.setAttribute('title', res.data.status_title); }
+                                }
+                                var lc = tr.querySelector('.dh-elm-last-checked'); if(lc){ lc.textContent = res.data.last_checked_display || '—'; }
+                                tr.setAttribute('data-status', String(parseInt(res.data.status_code,10)||0));
+                                tr.setAttribute('data-override','1');
+                                tr.setAttribute('data-override-expires', String(res.data.override_expires_ts||0));
+                                // Swap buttons
+                                var manage = tr.querySelector('.dh-elm-manage');
+                                if(manage){ manage.innerHTML = manage.innerHTML.replace('dh-elm-override-ok','dh-elm-override-clear').replace('Mark OK (30d)','Clear override'); }
+                            } else { alert('Override failed'); }
+                        } catch(err){ alert('Override failed'); }
+                    };
+                    xhr.onerror = function(){ ovrSetBtn.disabled = false; ovrSetBtn.textContent = 'Mark OK (30d)'; alert('Network error'); };
+                    xhr.send(fd);
+                    return;
+                }
+
+                var ovrClrBtn = e.target && e.target.closest && e.target.closest('.dh-elm-override-clear');
+                if(ovrClrBtn){
+                    e.preventDefault();
+                    var tr = ovrClrBtn.closest('tr'); if(!tr){ return; }
+                    var id = tr.getAttribute('data-link-id'); if(!id){ return; }
+                    ovrClrBtn.disabled = true; ovrClrBtn.textContent = 'Clearing…';
+                    var fd = new FormData();
+                    fd.append('action','dh_elm_set_override');
+                    fd.append('mode','clear');
+                    fd.append('id', id);
+                    fd.append('post_id', <?php echo (int) $post->ID; ?>);
+                    fd.append('_ajax_nonce', ovrClrBtn.getAttribute('data-nonce'));
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                    xhr.onload = function(){
+                        ovrClrBtn.disabled = false; ovrClrBtn.textContent = 'Clear override';
+                        try {
+                            var res = JSON.parse(xhr.responseText);
+                            if(res && res.success && res.data){
+                                var cell = tr.querySelector('.dh-elm-status');
+                                if(cell){
+                                    cell.textContent = String(res.data.status_code_disp);
+                                    if(res.data.status_title){ if(res.data.status_title){ cell.setAttribute('title', res.data.status_title); } else { cell.removeAttribute('title'); } }
+                                }
+                                tr.setAttribute('data-override','0');
+                                tr.setAttribute('data-override-expires', '0');
+                                // Swap buttons
+                                var manage = tr.querySelector('.dh-elm-manage');
+                                if(manage){ manage.innerHTML = manage.innerHTML.replace('dh-elm-override-clear','dh-elm-override-ok').replace('Clear override','Mark OK (30d)'); }
+                            } else { alert('Clear override failed'); }
+                        } catch(err){ alert('Clear override failed'); }
+                    };
+                    xhr.onerror = function(){ ovrClrBtn.disabled = false; ovrClrBtn.textContent = 'Clear override'; alert('Network error'); };
+                    xhr.send(fd);
                     return;
                 }
 
@@ -612,9 +710,12 @@ class DH_External_Link_Management {
     private function http_check_url($url, $timeout = 10) {
         // Common headers and args
         $headers = array(
-            'user-agent' => 'Mozilla/5.0 (compatible; DirectoryHelpersBot/1.0; +' . home_url('/') . ')',
-            'referer' => home_url('/'),
-            'accept' => '*/*',
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+            'referer'    => home_url('/'),
+            'accept'     => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'accept-language' => 'en-US,en;q=0.9',
+            'cache-control' => 'no-cache',
+            'pragma' => 'no-cache',
         );
         $base_args = array('timeout' => $timeout, 'redirection' => 5, 'headers' => $headers);
 
@@ -644,6 +745,17 @@ class DH_External_Link_Management {
                 $code = (int) wp_remote_retrieve_response_code($resp);
                 $text = (string) wp_remote_retrieve_response_message($resp);
                 if ($code === 206) { $code = 200; $text = 'OK'; }
+                // If still 403, try alternate headers (no referer)
+                if ($code === 403) {
+                    $alt_args = $base_args;
+                    unset($alt_args['headers']['referer']);
+                    $alt_args['headers']['accept-language'] = 'en-US,en;q=0.9';
+                    $resp = wp_remote_get($url, $alt_args);
+                    if (!is_wp_error($resp)) {
+                        $code = (int) wp_remote_retrieve_response_code($resp);
+                        $text = (string) wp_remote_retrieve_response_message($resp);
+                    }
+                }
             }
             return array($code, $text);
         }
@@ -658,18 +770,45 @@ class DH_External_Link_Management {
         if (is_wp_error($resp)) {
             return array(0, $resp->get_error_message());
         }
-        return array((int) wp_remote_retrieve_response_code($resp), (string) wp_remote_retrieve_response_message($resp));
+        $code = (int) wp_remote_retrieve_response_code($resp);
+        $text = (string) wp_remote_retrieve_response_message($resp);
+        if ($code === 403) {
+            // Try alternate headers typical of browsers and no referer
+            $alt_args = $base_args;
+            unset($alt_args['headers']['referer']);
+            $alt_args['headers']['accept-language'] = 'en-US,en;q=0.9';
+            $resp2 = wp_remote_get($url, $alt_args);
+            if (!is_wp_error($resp2)) {
+                $code = (int) wp_remote_retrieve_response_code($resp2);
+                $text = (string) wp_remote_retrieve_response_message($resp2);
+            }
+            // If still 403, try referer=self
+            if ($code === 403) {
+                $alt2 = $base_args;
+                $alt2['headers']['referer'] = $url;
+                $resp3 = wp_remote_get($url, $alt2);
+                if (!is_wp_error($resp3)) {
+                    $code = (int) wp_remote_retrieve_response_code($resp3);
+                    $text = (string) wp_remote_retrieve_response_message($resp3);
+                }
+            }
+        }
+        return array($code, $text);
     }
 
     private function check_links_for_post($post_id) {
         global $wpdb;
         $table = $this->table_name();
-        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, current_url FROM {$table} WHERE post_id=%d", $post_id));
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, current_url, status_override_code, status_override_expires FROM {$table} WHERE post_id=%d", $post_id));
         if (!$rows) { return; }
         $timeout = 10; // per request
         foreach ($rows as $r) {
             $url = (string)$r->current_url;
             if (!$url) { continue; }
+            // Skip automated checks if override is active
+            $ovr_exp = isset($r->status_override_expires) && $r->status_override_expires ? strtotime((string)$r->status_override_expires) : 0;
+            $ovr_code = isset($r->status_override_code) ? (int)$r->status_override_code : 0;
+            if ($ovr_code && $ovr_exp && $ovr_exp > time()) { continue; }
             list($code, $text) = $this->http_check_url($url, $timeout);
             $wpdb->update(
                 $table,
@@ -714,6 +853,52 @@ class DH_External_Link_Management {
             'status_code' => (int)$code,
             'status_text' => (string)$text,
             'last_checked_display' => $last_display,
+        ));
+    }
+
+    public function ajax_set_override() {
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        if (!$id || !$post_id) { wp_send_json_error(array('message' => 'missing params')); }
+        check_ajax_referer('dh_elm_manage_' . $post_id);
+        if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
+        $mode = isset($_POST['mode']) ? sanitize_key((string)$_POST['mode']) : 'set';
+        global $wpdb; $table = $this->table_name();
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, status_code, status_text FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
+        if (!$row) { wp_send_json_error(array('message' => 'not found')); }
+        if ($mode === 'clear') {
+            $wpdb->update($table, array(
+                'status_override_code' => null,
+                'status_override_expires' => null,
+                'updated_at' => current_time('mysql'),
+            ), array('id' => $id), array('%s','%s','%s'), array('%d'));
+            $status_title = $row->status_text ? (string)$row->status_text : '';
+            wp_send_json_success(array(
+                'status_code_disp' => is_null($row->status_code) ? '—' : (int)$row->status_code,
+                'status_title' => $status_title,
+            ));
+        }
+        $code = isset($_POST['code']) ? intval($_POST['code']) : 200;
+        if ($code < 100 || $code > 999) { $code = 200; }
+        $days = isset($_POST['days']) ? intval($_POST['days']) : 30;
+        if ($days < 1) { $days = 30; }
+        $expires_ts = time() + ($days * DAY_IN_SECONDS);
+        $expires = date_i18n('Y-m-d H:i:s', $expires_ts);
+        $now = current_time('mysql');
+        $wpdb->update($table, array(
+            'status_override_code' => $code,
+            'status_override_expires' => $expires,
+            'status_code' => $code,
+            'status_text' => 'OK (override)',
+            'last_checked' => $now,
+            'updated_at' => $now,
+        ), array('id' => $id), array('%d','%s','%d','%s','%s','%s'), array('%d'));
+        $status_title = 'Override until ' . date_i18n('Y-m-d', $expires_ts);
+        wp_send_json_success(array(
+            'status_code' => $code,
+            'status_title' => $status_title,
+            'last_checked_display' => date_i18n('Y-m-d g:ia', strtotime($now)),
+            'override_expires_ts' => $expires_ts,
         ));
     }
 
