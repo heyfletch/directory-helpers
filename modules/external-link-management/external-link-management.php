@@ -172,6 +172,9 @@ class DH_External_Link_Management {
                                     if(res.data.status_text){ cell.setAttribute('title', res.data.status_text); } else { cell.removeAttribute('title'); }
                                 }
                                 tr.querySelector('.dh-elm-last-checked').textContent = res.data.last_checked_display || '—';
+                                // update sort attributes
+                                tr.setAttribute('data-status', String(parseInt(res.data.status_code,10)||0));
+                                tr.setAttribute('data-checked', String(Math.floor(Date.now()/1000)));
                             } else {
                                 alert('Check failed');
                             }
@@ -305,9 +308,18 @@ class DH_External_Link_Management {
                                 }
                                 urlCell.innerHTML = '';
                                 if(updatedUrl){ var u = document.createElement('a'); u.href = updatedUrl; u.target = '_blank'; u.rel = 'noopener'; u.style.wordBreak = 'break-all'; u.textContent = updatedUrl; urlCell.appendChild(u); }
-                                // Update row data attributes
+                                // Update Status and Last checked cells
+                                var statusCell = tr.querySelector('.dh-elm-status');
+                                if(statusCell){ statusCell.textContent = String((res.data.status_code != null ? res.data.status_code : '—')); statusCell.removeAttribute('title'); }
+                                var lcCell = tr.querySelector('.dh-elm-last-checked');
+                                if(lcCell){ lcCell.textContent = res.data.last_checked_display || '—'; }
+                                // Update row data attributes for sorting
                                 tr.setAttribute('data-anchor', String(updatedAnchor).toLowerCase());
                                 tr.setAttribute('data-url', String(updatedUrl).toLowerCase());
+                                if(typeof res.data.status_code !== 'undefined'){
+                                    tr.setAttribute('data-status', String(parseInt(res.data.status_code,10)||0));
+                                }
+                                tr.setAttribute('data-checked', String(Math.floor(Date.now()/1000)));
                                 // Restore actions
                                 tr.classList.remove('editing');
                                 actionsCell.innerHTML = actionsCell.getAttribute('data-orig') || '';
@@ -578,15 +590,50 @@ class DH_External_Link_Management {
     }
 
     private function http_check_url($url, $timeout = 10) {
+        // Common headers and args
         $headers = array(
             'user-agent' => 'Mozilla/5.0 (compatible; DirectoryHelpersBot/1.0; +' . home_url('/') . ')',
             'referer' => home_url('/'),
+            'accept' => '*/*',
         );
-        $args = array('timeout' => $timeout, 'redirection' => 3, 'headers' => $headers);
-        $resp = wp_remote_head($url, $args);
-        $code = is_wp_error($resp) ? 0 : (int) wp_remote_retrieve_response_code($resp);
-        if (is_wp_error($resp) || $code === 405) {
+        $base_args = array('timeout' => $timeout, 'redirection' => 5, 'headers' => $headers);
+
+        // Detect binary assets (PDF, images, archives, media)
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        $is_binary_ext = (bool) preg_match('/\.(pdf|zip|rar|7z|gz|tar|docx|xlsx|pptx|csv|jpg|jpeg|png|gif|webp|svg|bmp|tiff|mp4|mov|avi|wmv|m4v|mp3|wav)(?:$|[?#])/i', $path ?: '');
+
+        // For binary assets, many servers do not support HEAD or return misleading codes.
+        // Use a lightweight GET with Range to avoid large downloads.
+        if ($is_binary_ext) {
+            $args = $base_args;
+            $args['headers']['range'] = 'bytes=0-0';
             $resp = wp_remote_get($url, $args);
+            if (is_wp_error($resp)) {
+                return array(0, $resp->get_error_message());
+            }
+            $code = (int) wp_remote_retrieve_response_code($resp);
+            $text = (string) wp_remote_retrieve_response_message($resp);
+            // Map 206 Partial Content to 200 OK for binary assets (we successfully reached the resource)
+            if ($code === 206) { $code = 200; $text = 'OK'; }
+            // If server rejects Range or returns suspicious code, try a normal GET as fallback
+            if (in_array($code, array(0, 403, 404, 405, 416), true)) {
+                $resp = wp_remote_get($url, $base_args);
+                if (is_wp_error($resp)) {
+                    return array(0, $resp->get_error_message());
+                }
+                $code = (int) wp_remote_retrieve_response_code($resp);
+                $text = (string) wp_remote_retrieve_response_message($resp);
+                if ($code === 206) { $code = 200; $text = 'OK'; }
+            }
+            return array($code, $text);
+        }
+
+        // Default: try HEAD first for non-binaries
+        $resp = wp_remote_head($url, $base_args);
+        $code = is_wp_error($resp) ? 0 : (int) wp_remote_retrieve_response_code($resp);
+        // Fallback to GET when HEAD is not reliable or not allowed
+        if (is_wp_error($resp) || in_array($code, array(0, 405, 403, 404), true)) {
+            $resp = wp_remote_get($url, $base_args); // full GET, let WP handle redirects
         }
         if (is_wp_error($resp)) {
             return array(0, $resp->get_error_message());
@@ -705,19 +752,22 @@ class DH_External_Link_Management {
         $table = $this->table_name();
         $row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
         if (!$row) { wp_send_json_error(array('message' => 'not found')); }
+        $now = current_time('mysql');
         $wpdb->update(
             $table,
             array(
                 'anchor_text' => $anchor_text,
                 'current_url' => $current_url,
-                'updated_at' => current_time('mysql'),
+                'status_code' => 200,
+                'status_text' => 'OK',
+                'last_checked' => $now,
+                'updated_at' => $now,
             ),
             array('id' => $id),
-            array('%s','%s','%s'),
+            array('%s','%s','%d','%s','%s','%s'),
             array('%d')
         );
         // Make this edited row canonical for its URL; mark others as duplicates
-        $now = current_time('mysql');
         $wpdb->query($wpdb->prepare(
             "UPDATE {$table} SET is_duplicate=1, updated_at=%s WHERE post_id=%d AND id<>%d AND LOWER(current_url)=LOWER(%s)",
             $now, $post_id, $id, $current_url
@@ -725,7 +775,14 @@ class DH_External_Link_Management {
         $wpdb->update($table, array('is_duplicate' => 0, 'updated_at' => $now), array('id' => $id), array('%d','%s'), array('%d'));
         // Return updated row
         $dup = (int) $wpdb->get_var($wpdb->prepare("SELECT is_duplicate FROM {$table} WHERE id=%d", $id));
-        wp_send_json_success(array('anchor_text' => $anchor_text, 'current_url' => $current_url, 'is_duplicate' => $dup));
+        $last_checked_display = date_i18n('Y-m-d g:ia', strtotime($now));
+        wp_send_json_success(array(
+            'anchor_text' => $anchor_text,
+            'current_url' => $current_url,
+            'is_duplicate' => $dup,
+            'status_code' => 200,
+            'last_checked_display' => $last_checked_display,
+        ));
     }
 
     public function ajax_delete_link() {
