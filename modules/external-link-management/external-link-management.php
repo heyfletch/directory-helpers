@@ -15,8 +15,9 @@ class DH_External_Link_Management {
         $this->maybe_install_db();
         add_action('init', array($this, 'maybe_install_db'));
 
-        // Shortcode to render stored external links
+        // Shortcodes to render stored external links (new: link; legacy: ext_link)
         add_action('init', function(){
+            add_shortcode('link', array($this, 'render_shortcoded_link'));
             add_shortcode('ext_link', array($this, 'render_shortcoded_link'));
         });
 
@@ -28,6 +29,9 @@ class DH_External_Link_Management {
 
         // AJAX: re-check a single link from the meta box
         add_action('wp_ajax_dh_elm_recheck_link', array($this, 'ajax_recheck_link'));
+
+        // AJAX: scan current post content and convert external links to shortcodes
+        add_action('wp_ajax_dh_elm_scan_now', array($this, 'ajax_scan_now'));
     }
 
     private function table_name() {
@@ -85,10 +89,13 @@ class DH_External_Link_Management {
         $table = $this->table_name();
         $rows = $wpdb->get_results($wpdb->prepare("SELECT id, anchor_text, current_url, status_code, status_text, last_checked, is_duplicate FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post->ID));
         if (!$rows) {
-            echo '<p>' . esc_html__('No external links captured yet. Use the AI generator or run a scan to populate.', 'directory-helpers') . '</p>';
-            return;
+            echo '<p>' . esc_html__('No external links captured yet. Use the AI generator or click Scan to populate.', 'directory-helpers') . '</p>';
         }
         $nonce = wp_create_nonce('dh_elm_recheck_' . $post->ID);
+        // Scan Now button
+        $scan_nonce = wp_create_nonce('dh_elm_scan_' . $post->ID);
+        echo '<p><button type="button" class="button button-primary dh-elm-scan-now" data-nonce="' . esc_attr($scan_nonce) . '">Scan HTML and create shortcodes</button></p>';
+
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
         echo '<th style="width:70px;">' . esc_html__('ID', 'directory-helpers') . '</th>';
         echo '<th>' . esc_html__('Anchor', 'directory-helpers') . '</th>';
@@ -125,39 +132,75 @@ class DH_External_Link_Management {
         <script type="text/javascript">
         (function(){
             function onClick(e){
-                var btn = e.target && e.target.closest && e.target.closest('.dh-elm-recheck');
-                if(!btn){ return; }
-                e.preventDefault();
-                var tr = btn.closest('tr');
-                if(!tr){ return; }
-                var id = tr.getAttribute('data-link-id');
-                if(!id){ return; }
-                btn.disabled = true; btn.textContent = 'Checking…';
-                var fd = new FormData();
-                fd.append('action','dh_elm_recheck_link');
-                fd.append('id', id);
-                fd.append('post_id', <?php echo (int) $post->ID; ?>);
-                fd.append('_ajax_nonce', btn.getAttribute('data-nonce'));
-                var xhr = new XMLHttpRequest();
-                xhr.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
-                xhr.onload = function(){
-                    btn.disabled = false; btn.textContent = 'Re-check';
-                    try {
-                        var res = JSON.parse(xhr.responseText);
-                        if(res && res.success && res.data){
-                            var cell = tr.querySelector('.dh-elm-status');
-                            if(cell){
-                                cell.textContent = String(res.data.status_code);
-                                if(res.data.status_text){ cell.setAttribute('title', res.data.status_text); } else { cell.removeAttribute('title'); }
+                // Re-check button
+                var reBtn = e.target && e.target.closest && e.target.closest('.dh-elm-recheck');
+                if(reBtn){
+                    e.preventDefault();
+                    var tr = reBtn.closest('tr');
+                    if(!tr){ return; }
+                    var id = tr.getAttribute('data-link-id');
+                    if(!id){ return; }
+                    reBtn.disabled = true; reBtn.textContent = 'Checking…';
+                    var fd = new FormData();
+                    fd.append('action','dh_elm_recheck_link');
+                    fd.append('id', id);
+                    fd.append('post_id', <?php echo (int) $post->ID; ?>);
+                    fd.append('_ajax_nonce', reBtn.getAttribute('data-nonce'));
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                    xhr.onload = function(){
+                        reBtn.disabled = false; reBtn.textContent = 'Re-check';
+                        try {
+                            var res = JSON.parse(xhr.responseText);
+                            if(res && res.success && res.data){
+                                var cell = tr.querySelector('.dh-elm-status');
+                                if(cell){
+                                    cell.textContent = String(res.data.status_code);
+                                    if(res.data.status_text){ cell.setAttribute('title', res.data.status_text); } else { cell.removeAttribute('title'); }
+                                }
+                                tr.querySelector('.dh-elm-last-checked').textContent = res.data.last_checked_display || '—';
+                            } else {
+                                alert('Check failed');
                             }
-                            tr.querySelector('.dh-elm-last-checked').textContent = res.data.last_checked_display || '—';
+                        } catch(err){ alert('Check failed'); }
+                    };
+                    xhr.onerror = function(){ reBtn.disabled = false; reBtn.textContent = 'Re-check'; alert('Network error'); };
+                    xhr.send(fd);
+                    return;
+                }
+
+                // Scan Now button
+                var scanBtn = e.target && e.target.closest && e.target.closest('.dh-elm-scan-now');
+                if(scanBtn){
+                    e.preventDefault();
+                    scanBtn.disabled = true; scanBtn.textContent = 'Scanning…';
+                    var fd2 = new FormData();
+                    fd2.append('action','dh_elm_scan_now');
+                    fd2.append('post_id', <?php echo (int) $post->ID; ?>);
+                    fd2.append('_ajax_nonce', scanBtn.getAttribute('data-nonce'));
+                    var xhr2 = new XMLHttpRequest();
+                    xhr2.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                    xhr2.onload = function(){
+                        scanBtn.disabled = false; scanBtn.textContent = 'Scan HTML and create shortcodes';
+                        var txt = xhr2.responseText;
+                        if(txt === '-1') { alert('Security check failed (nonce). Please refresh the page and try again.'); return; }
+                        if(txt === '0') { alert('Permission denied or unexpected response.'); return; }
+                        var res = null;
+                        try { res = JSON.parse(txt); } catch(e){ }
+                        if(res && res.success === true){
+                            if(res.data && res.data.updated){
+                                location.reload();
+                            } else {
+                                alert('No changes found.');
+                            }
                         } else {
-                            alert('Check failed');
+                            var msg = (res && res.data && res.data.message) ? res.data.message : ('Scan failed: ' + (txt || 'unknown error'));
+                            alert(msg);
                         }
-                    } catch(err){ alert('Check failed'); }
-                };
-                xhr.onerror = function(){ btn.disabled = false; btn.textContent = 'Re-check'; alert('Network error'); };
-                xhr.send(fd);
+                    };
+                    xhr2.onerror = function(){ scanBtn.disabled = false; scanBtn.textContent = 'Scan HTML and create shortcodes'; alert('Network error'); };
+                    xhr2.send(fd2);
+                }
             }
             document.addEventListener('click', onClick, false);
         })();
@@ -165,15 +208,17 @@ class DH_External_Link_Management {
         <?php
     }
 
-    public function render_shortcoded_link($atts) {
-        $atts = shortcode_atts(array('id' => 0), $atts, 'ext_link');
+    public function render_shortcoded_link($atts, $content = null, $tag = 'link') {
+        $atts = shortcode_atts(array('id' => 0, 't' => ''), $atts, $tag ?: 'link');
         $id = absint($atts['id']);
         if (!$id) { return ''; }
         global $wpdb;
         $table = $this->table_name();
         $row = $wpdb->get_row($wpdb->prepare("SELECT current_url, anchor_text, is_duplicate, status_code FROM {$table} WHERE id=%d", $id));
         if (!$row) { return ''; }
-        $anchor = esc_html((string)$row->anchor_text);
+        $t_decoded = html_entity_decode((string)($atts['t'] ?? ''), ENT_QUOTES | ENT_HTML5);
+        $anchor_source = ($row->anchor_text !== null && $row->anchor_text !== '') ? $row->anchor_text : $t_decoded;
+        $anchor = esc_html((string)$anchor_source);
         // Render as plain text for duplicates or non-200 status codes
         if ($row->is_duplicate || (isset($row->status_code) && (int)$row->status_code !== 200)) {
             // Render as plain text for duplicates
@@ -234,8 +279,7 @@ class DH_External_Link_Management {
 
     private function scan_convert_and_save($post_id, $html) {
         if (!$post_id) { return false; }
-        // Quick exit if content already contains our shortcodes — assume already processed
-        if (strpos($html, '[ext_link') !== false) { return false; }
+        // Do not bail if content already contains shortcodes; we only transform remaining <a> tags.
 
         // Use DOMDocument to parse and replace
         $doc = new DOMDocument();
@@ -305,8 +349,9 @@ class DH_External_Link_Management {
             if ($ok === false) { continue; }
             $new_id = (int) $wpdb->insert_id;
 
-            // Replace <a> node with shortcode text node
-            $short = $doc->createTextNode('[ext_link id="' . $new_id . '"]');
+            // Replace <a> node with shortcode text node using new shortcode form [link id=".." t=".."]
+            $t_attr = esc_attr($anchor_text);
+            $short = $doc->createTextNode('[link id="' . $new_id . '" t="' . $t_attr . '"]');
             $a->parentNode->replaceChild($short, $a);
         }
 
@@ -394,5 +439,31 @@ class DH_External_Link_Management {
             'status_text' => (string)$text,
             'last_checked_display' => $last_display,
         ));
+    }
+
+    public function ajax_scan_now() {
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        if (!$post_id) { wp_send_json_error(array('message' => 'missing post')); }
+        check_ajax_referer('dh_elm_scan_' . $post_id);
+        if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
+        $post = get_post($post_id);
+        if (!$post) { wp_send_json_error(array('message' => 'not found')); }
+        if (!class_exists('DOMDocument')) {
+            wp_send_json_error(array('message' => 'PHP DOM extension is not available on this server. Unable to scan.'));
+        }
+        try {
+            $updated = $this->scan_convert_and_save($post_id, (string)$post->post_content);
+        } catch (Throwable $e) {
+            wp_send_json_error(array('message' => 'Scan exception: ' . $e->getMessage()));
+            return;
+        } catch (Exception $e) { // for older PHP versions
+            wp_send_json_error(array('message' => 'Scan exception: ' . $e->getMessage()));
+            return;
+        }
+        if ($updated !== false) {
+            wp_update_post(array('ID' => $post_id, 'post_content' => $updated));
+            wp_send_json_success(array('updated' => true));
+        }
+        wp_send_json_success(array('updated' => false));
     }
 }
