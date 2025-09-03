@@ -1,13 +1,13 @@
 /* Editor-only styles for highlighting shortcodes in TinyMCE */
 .mce-content-body span.dh-shortcode {
-  background: rgba(70, 180, 80, 0.12); /* subtle success tint */
-  border: 1px dashed rgba(70, 180, 80, 0.65);
+  background: rgba(70, 180, 80, 0.28);
+  border: 1px solid rgba(70, 180, 80, 0.8);
   border-radius: 3px;
   padding: 0 3px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  color: #0a4b1e; /* dark green for readability */
+  color: #0a4b1e;
 }
 
 .mce-content-body span.dh-shortcode:hover {
-  background: rgba(70, 180, 80, 0.18);
+  background: rgba(70, 180, 80, 0.36);
 }

@@ -90,7 +90,7 @@
               var span = editor.dom.create('span', {
                 'class': 'dh-shortcode',
                 'data-dh-sc': '1',
-                'style': 'background: rgba(70,180,80,0.12); border:1px dashed rgba(70,180,80,0.65); border-radius:3px; padding:0 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color:#0a4b1e;'
+                'style': 'background: rgba(70,180,80,0.28); border:1px solid rgba(70,180,80,0.8); border-radius:3px; padding:0 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color:#0a4b1e;'
               }, matchText);
               matchNode.parentNode.replaceChild(span, matchNode);
               textNode = rest;
@@ -105,8 +105,9 @@
     editor.on('init', function(){
       highlight();
       setTimeout(highlight, 0); // after first paint
+      setTimeout(highlight, 150); // safety after layout
     });
-    editor.on('keyup paste Undo Redo SetContent NodeChange', function(){ debounce(highlight, 200); });
+    editor.on('keyup paste Undo Redo SetContent LoadContent NodeChange', function(){ debounce(highlight, 200); });
 
     // Ensure we do not save decorations to DB (strip during serialization only)
     editor.on('PreProcess', function(e){
@@ -127,7 +128,17 @@
   function installExistingEditors(){
     try {
       if (window.tinymce && tinymce.editors && tinymce.editors.length) {
-        tinymce.editors.forEach(function(ed){ installForEditor(ed); });
+        tinymce.editors.forEach(function(ed){
+          installForEditor(ed);
+          // If editor is already initialized, run highlight immediately
+          try {
+            if (ed && ed.initialized) {
+              var body = ed.getBody && ed.getBody();
+              if (body) { ed.fire('SetContent'); }
+              setTimeout(function(){ try { ed.fire('SetContent'); } catch(_){} }, 100);
+            }
+          } catch(_){ }
+        });
       }
     } catch(e) { /* noop */ }
   }
