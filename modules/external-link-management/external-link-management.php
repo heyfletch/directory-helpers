@@ -100,7 +100,10 @@ class DH_External_Link_Management {
         $scan_nonce = wp_create_nonce('dh_elm_scan_' . $post->ID);
         // Manage nonce (edit/delete)
         $manage_nonce = wp_create_nonce('dh_elm_manage_' . $post->ID);
-        echo '<p><button type="button" class="button button-primary dh-elm-scan-now" data-nonce="' . esc_attr($scan_nonce) . '">Scan HTML and create shortcodes</button></p>';
+        echo '<p>'
+            . '<button type="button" class="button button-primary dh-elm-scan-now" data-nonce="' . esc_attr($scan_nonce) . '">Scan HTML and create shortcodes</button> '
+            . '<button type="button" class="button dh-elm-open-200">' . esc_html__('↗️ Open all links', 'directory-helpers') . '</button>'
+            . '</p>';
 
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
         echo '<th class="dh-sort" data-key="id" style="width:70px; cursor:pointer;">' . esc_html__('ID', 'directory-helpers') . '</th>';
@@ -145,6 +148,23 @@ class DH_External_Link_Management {
         <script type="text/javascript">
         (function(){
             function onClick(e){
+                // Open all 200 links button
+                var openBtn = e.target && e.target.closest && e.target.closest('.dh-elm-open-200');
+                if(openBtn){
+                    e.preventDefault();
+                    var rows = document.querySelectorAll('.dh-elm-table tbody tr');
+                    if(!rows || !rows.length){ return; }
+                    rows.forEach(function(tr){
+                        var status = parseInt(tr.getAttribute('data-status')||'0',10);
+                        if(status === 200){
+                            var a = tr.querySelector('.dh-cell-url a');
+                            var href = a ? (a.getAttribute('href')||'') : '';
+                            if(href){ window.open(href, '_blank'); }
+                        }
+                    });
+                    return;
+                }
+
                 // Re-check button
                 var reBtn = e.target && e.target.closest && e.target.closest('.dh-elm-recheck');
                 if(reBtn){
