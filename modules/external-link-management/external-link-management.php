@@ -32,6 +32,10 @@ class DH_External_Link_Management {
 
         // AJAX: scan current post content and convert external links to shortcodes
         add_action('wp_ajax_dh_elm_scan_now', array($this, 'ajax_scan_now'));
+
+        // AJAX: update and delete link rows
+        add_action('wp_ajax_dh_elm_update_link', array($this, 'ajax_update_link'));
+        add_action('wp_ajax_dh_elm_delete_link', array($this, 'ajax_delete_link'));
     }
 
     private function table_name() {
@@ -94,16 +98,18 @@ class DH_External_Link_Management {
         $nonce = wp_create_nonce('dh_elm_recheck_' . $post->ID);
         // Scan Now button
         $scan_nonce = wp_create_nonce('dh_elm_scan_' . $post->ID);
+        // Manage nonce (edit/delete)
+        $manage_nonce = wp_create_nonce('dh_elm_manage_' . $post->ID);
         echo '<p><button type="button" class="button button-primary dh-elm-scan-now" data-nonce="' . esc_attr($scan_nonce) . '">Scan HTML and create shortcodes</button></p>';
 
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
-        echo '<th style="width:70px;">' . esc_html__('ID', 'directory-helpers') . '</th>';
-        echo '<th>' . esc_html__('Anchor', 'directory-helpers') . '</th>';
-        echo '<th>' . esc_html__('URL', 'directory-helpers') . '</th>';
-        echo '<th style="width:110px;">' . esc_html__('Status', 'directory-helpers') . '</th>';
-        echo '<th style="width:140px;">' . esc_html__('Last checked', 'directory-helpers') . '</th>';
-        echo '<th style="width:100px;">' . esc_html__('Duplicate', 'directory-helpers') . '</th>';
-        echo '<th style="width:110px;">' . esc_html__('Actions', 'directory-helpers') . '</th>';
+        echo '<th class="dh-sort" data-key="id" style="width:70px; cursor:pointer;">' . esc_html__('ID', 'directory-helpers') . '</th>';
+        echo '<th class="dh-sort" data-key="anchor" style="cursor:pointer;">' . esc_html__('Anchor', 'directory-helpers') . '</th>';
+        echo '<th class="dh-sort" data-key="url" style="cursor:pointer;">' . esc_html__('URL', 'directory-helpers') . '</th>';
+        echo '<th class="dh-sort" data-key="status" style="width:110px; cursor:pointer;">' . esc_html__('Status', 'directory-helpers') . '</th>';
+        echo '<th class="dh-sort" data-key="checked" style="width:140px; cursor:pointer;">' . esc_html__('Last checked', 'directory-helpers') . '</th>';
+        echo '<th class="dh-sort" data-key="dup" style="width:100px; cursor:pointer;">' . esc_html__('Duplicate', 'directory-helpers') . '</th>';
+        echo '<th style="width:170px;">' . esc_html__('Actions', 'directory-helpers') . '</th>';
         echo '</tr></thead><tbody>';
         foreach ($rows as $r) {
             $status = is_null($r->status_code) ? '—' : (int)$r->status_code;
@@ -114,14 +120,23 @@ class DH_External_Link_Management {
             $anchor_link = '<a href="https://www.google.com/search?q=' . $anchor_q . '" target="_blank" rel="noopener">' . $anchor_disp . '</a>';
             $url_disp = esc_html((string)$r->current_url);
             $url_link = '<a href="' . esc_url((string)$r->current_url) . '" target="_blank" rel="noopener" style="word-break:break-all;">' . $url_disp . '</a>';
-            echo '<tr data-link-id="' . (int)$r->id . '">';
+            $data_anchor = esc_attr(strtolower((string)$r->anchor_text));
+            $data_url = esc_attr(strtolower((string)$r->current_url));
+            $data_status = is_null($r->status_code) ? 999999 : (int)$r->status_code;
+            $data_checked = $r->last_checked ? (int) strtotime($r->last_checked) : 0;
+            $data_dup = $r->is_duplicate ? 1 : 0;
+            echo '<tr data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '" data-dup="' . (int)$data_dup . '">';
             echo '<td>' . (int)$r->id . '</td>';
-            echo '<td>' . $anchor_link . '</td>';
-            echo '<td>' . $url_link . '</td>';
+            echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
+            echo '<td class="dh-cell-url">' . $url_link . '</td>';
             echo '<td class="dh-elm-status"' . $status_title . '>' . esc_html($status) . '</td>';
             echo '<td class="dh-elm-last-checked">' . $last_checked . '</td>';
             echo '<td>' . ($r->is_duplicate ? '<span class="dashicons dashicons-warning" title="Duplicate"></span>' : '') . '</td>';
-            echo '<td><button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button></td>';
+            echo '<td>'
+                . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button> '
+                . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button> '
+                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button>'
+                . '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
@@ -201,8 +216,182 @@ class DH_External_Link_Management {
                     xhr2.onerror = function(){ scanBtn.disabled = false; scanBtn.textContent = 'Scan HTML and create shortcodes'; alert('Network error'); };
                     xhr2.send(fd2);
                 }
+
+                // Edit button
+                var editBtn = e.target && e.target.closest && e.target.closest('.dh-elm-edit');
+                if(editBtn){
+                    e.preventDefault();
+                    var tr = editBtn.closest('tr');
+                    if(!tr){ return; }
+                    if(tr.classList.contains('editing')){ return; }
+                    tr.classList.add('editing');
+                    var anchorCell = tr.querySelector('.dh-cell-anchor');
+                    var urlCell = tr.querySelector('.dh-cell-url');
+                    var actionsCell = editBtn.parentNode;
+                    var currentAnchorText = anchorCell ? anchorCell.textContent.trim() : '';
+                    var currentUrl = '';
+                    var linkEl = urlCell ? urlCell.querySelector('a') : null;
+                    if(linkEl){ currentUrl = linkEl.getAttribute('href') || linkEl.textContent.trim(); }
+                    // Build inputs
+                    anchorCell.innerHTML = '';
+                    var aInput = document.createElement('input');
+                    aInput.type = 'text'; aInput.style.width = '100%'; aInput.value = currentAnchorText;
+                    anchorCell.appendChild(aInput);
+
+                    urlCell.innerHTML = '';
+                    var uInput = document.createElement('input');
+                    uInput.type = 'url'; uInput.style.width = '100%'; uInput.value = currentUrl;
+                    urlCell.appendChild(uInput);
+
+                    // Replace actions with Save/Cancel
+                    var nonce = editBtn.getAttribute('data-nonce');
+                    var reBtnHtml = actionsCell.innerHTML; // stash to restore on cancel/save
+                    actionsCell.setAttribute('data-orig', reBtnHtml);
+                    actionsCell.innerHTML = '';
+
+                    var saveBtn = document.createElement('button');
+                    saveBtn.type = 'button'; saveBtn.className = 'button button-small'; saveBtn.textContent = 'Save';
+                    var cancelBtn = document.createElement('button');
+                    cancelBtn.type = 'button'; cancelBtn.className = 'button button-small'; cancelBtn.textContent = 'Cancel';
+                    actionsCell.appendChild(saveBtn);
+                    actionsCell.appendChild(document.createTextNode(' '));
+                    actionsCell.appendChild(cancelBtn);
+
+                    cancelBtn.addEventListener('click', function(){
+                        tr.classList.remove('editing');
+                        // Restore view
+                        anchorCell.textContent = currentAnchorText;
+                        if(currentAnchorText){
+                            var a = document.createElement('a');
+                            a.href = 'https://www.google.com/search?q=' + encodeURIComponent(currentAnchorText);
+                            a.target = '_blank'; a.rel = 'noopener'; a.textContent = currentAnchorText;
+                            anchorCell.innerHTML = ''; anchorCell.appendChild(a);
+                        }
+                        urlCell.textContent = currentUrl;
+                        if(currentUrl){
+                            var u = document.createElement('a');
+                            u.href = currentUrl; u.target = '_blank'; u.rel = 'noopener'; u.style.wordBreak = 'break-all'; u.textContent = currentUrl;
+                            urlCell.innerHTML = ''; urlCell.appendChild(u);
+                        }
+                        actionsCell.innerHTML = actionsCell.getAttribute('data-orig') || '';
+                    });
+
+                    saveBtn.addEventListener('click', function(){
+                        var newAnchor = (aInput.value || '').trim();
+                        var newUrl = (uInput.value || '').trim();
+                        if(!newUrl || !/^https?:\/\//i.test(newUrl)){
+                            alert('Please enter a valid http(s) URL.'); return;
+                        }
+                        saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+                        var fd3 = new FormData();
+                        fd3.append('action','dh_elm_update_link');
+                        fd3.append('id', tr.getAttribute('data-link-id'));
+                        fd3.append('post_id', <?php echo (int) $post->ID; ?>);
+                        fd3.append('anchor_text', newAnchor);
+                        fd3.append('current_url', newUrl);
+                        fd3.append('_ajax_nonce', nonce);
+                        var xhr3 = new XMLHttpRequest();
+                        xhr3.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                        xhr3.onload = function(){
+                            saveBtn.disabled = false; saveBtn.textContent = 'Save';
+                            var txt = xhr3.responseText || '';
+                            if(txt === '-1'){ alert('Security check failed (nonce).'); return; }
+                            var res = null; try { res = JSON.parse(txt); } catch(e){}
+                            if(res && res.success && res.data){
+                                var updatedAnchor = res.data.anchor_text || '';
+                                var updatedUrl = res.data.current_url || newUrl;
+                                // Update display
+                                anchorCell.innerHTML = '';
+                                if(updatedAnchor){
+                                    var a = document.createElement('a'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent(updatedAnchor); a.target = '_blank'; a.rel = 'noopener'; a.textContent = updatedAnchor; anchorCell.appendChild(a);
+                                }
+                                urlCell.innerHTML = '';
+                                if(updatedUrl){ var u = document.createElement('a'); u.href = updatedUrl; u.target = '_blank'; u.rel = 'noopener'; u.style.wordBreak = 'break-all'; u.textContent = updatedUrl; urlCell.appendChild(u); }
+                                // Update row data attributes
+                                tr.setAttribute('data-anchor', String(updatedAnchor).toLowerCase());
+                                tr.setAttribute('data-url', String(updatedUrl).toLowerCase());
+                                // Duplicate icon may have changed; refresh cell if provided
+                                if(typeof res.data.is_duplicate !== 'undefined'){
+                                    var dupCell = tr.children[5];
+                                    dupCell.innerHTML = res.data.is_duplicate ? '<span class="dashicons dashicons-warning" title="Duplicate"></span>' : '';
+                                    tr.setAttribute('data-dup', res.data.is_duplicate ? '1' : '0');
+                                }
+                                // Restore actions
+                                tr.classList.remove('editing');
+                                actionsCell.innerHTML = actionsCell.getAttribute('data-orig') || '';
+                            } else {
+                                var msg = (res && res.data && res.data.message) ? res.data.message : 'Save failed.';
+                                alert(msg);
+                            }
+                        };
+                        xhr3.onerror = function(){ saveBtn.disabled = false; saveBtn.textContent = 'Save'; alert('Network error'); };
+                        xhr3.send(fd3);
+                    });
+                }
+
+                // Delete button
+                var delBtn = e.target && e.target.closest && e.target.closest('.dh-elm-delete');
+                if(delBtn){
+                    e.preventDefault();
+                    var tr = delBtn.closest('tr');
+                    if(!tr){ return; }
+                    if(!window.confirm('Delete this link record? This cannot be undone.')){ return; }
+                    delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+                    var fd4 = new FormData();
+                    fd4.append('action','dh_elm_delete_link');
+                    fd4.append('id', tr.getAttribute('data-link-id'));
+                    fd4.append('post_id', <?php echo (int) $post->ID; ?>);
+                    fd4.append('_ajax_nonce', delBtn.getAttribute('data-nonce'));
+                    var xhr4 = new XMLHttpRequest();
+                    xhr4.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                    xhr4.onload = function(){
+                        delBtn.disabled = false; delBtn.textContent = 'Delete';
+                        var txt = xhr4.responseText || '';
+                        if(txt === '-1'){ alert('Security check failed (nonce).'); return; }
+                        var res = null; try { res = JSON.parse(txt); } catch(e){}
+                        if(res && res.success){ tr.parentNode.removeChild(tr); }
+                        else { var msg = (res && res.data && res.data.message) ? res.data.message : 'Delete failed.'; alert(msg); }
+                    };
+                    xhr4.onerror = function(){ delBtn.disabled = false; delBtn.textContent = 'Delete'; alert('Network error'); };
+                    xhr4.send(fd4);
+                }
             }
             document.addEventListener('click', onClick, false);
+
+            // Sorting
+            var currentSortKey = 'id';
+            var currentSortDir = 'asc';
+            function sortRows(key){
+                var tbody = document.querySelector('.dh-elm-table tbody');
+                if(!tbody){ return; }
+                var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+                var mul = (currentSortDir === 'asc') ? 1 : -1;
+                rows.sort(function(a, b){
+                    var av, bv;
+                    if(key === 'id'){ av = parseInt(a.getAttribute('data-link-id')||'0',10); bv = parseInt(b.getAttribute('data-link-id')||'0',10); }
+                    else if(key === 'anchor'){ av = a.getAttribute('data-anchor')||''; bv = b.getAttribute('data-anchor')||''; }
+                    else if(key === 'url'){ av = a.getAttribute('data-url')||''; bv = b.getAttribute('data-url')||''; }
+                    else if(key === 'status'){ av = parseInt(a.getAttribute('data-status')||'0',10); bv = parseInt(b.getAttribute('data-status')||'0',10); }
+                    else if(key === 'checked'){ av = parseInt(a.getAttribute('data-checked')||'0',10); bv = parseInt(b.getAttribute('data-checked')||'0',10); }
+                    else if(key === 'dup'){ av = parseInt(a.getAttribute('data-dup')||'0',10); bv = parseInt(b.getAttribute('data-dup')||'0',10); }
+                    else { av = 0; bv = 0; }
+                    if(av < bv) return -1*mul;
+                    if(av > bv) return 1*mul;
+                    return 0;
+                });
+                // Re-append sorted
+                rows.forEach(function(r){ tbody.appendChild(r); });
+            }
+            document.querySelectorAll('.dh-elm-table thead .dh-sort').forEach(function(th){
+                th.addEventListener('click', function(){
+                    var key = th.getAttribute('data-key') || 'id';
+                    if(currentSortKey === key){ currentSortDir = (currentSortDir === 'asc') ? 'desc' : 'asc'; }
+                    else { currentSortKey = key; currentSortDir = 'asc'; }
+                    sortRows(currentSortKey);
+                });
+            });
+            // Initial sort by ID asc (already default), but ensure dataset present
+            sortRows(currentSortKey);
         })();
         </script>
         <?php
@@ -465,5 +654,68 @@ class DH_External_Link_Management {
             wp_send_json_success(array('updated' => true));
         }
         wp_send_json_success(array('updated' => false));
+    }
+
+    private function recalc_duplicates_for_post($post_id) {
+        global $wpdb;
+        $table = $this->table_name();
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, current_url FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post_id));
+        if (!$rows) { return; }
+        $seen = array();
+        foreach ($rows as $row) {
+            $norm = strtolower((string)$row->current_url);
+            $is_dup = isset($seen[$norm]) ? 1 : 0;
+            if (!isset($seen[$norm])) { $seen[$norm] = true; }
+            $wpdb->update($table, array('is_duplicate' => $is_dup, 'updated_at' => current_time('mysql')), array('id' => $row->id), array('%d','%s'), array('%d'));
+        }
+    }
+
+    public function ajax_update_link() {
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        $anchor_text = isset($_POST['anchor_text']) ? wp_unslash((string)$_POST['anchor_text']) : '';
+        $current_url = isset($_POST['current_url']) ? esc_url_raw((string)$_POST['current_url']) : '';
+        if (!$id || !$post_id) { wp_send_json_error(array('message' => 'missing params')); }
+        check_ajax_referer('dh_elm_manage_' . $post_id);
+        if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
+        if (!$current_url || !preg_match('#^https?://#i', $current_url)) {
+            wp_send_json_error(array('message' => 'Invalid URL'));
+        }
+        global $wpdb;
+        $table = $this->table_name();
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
+        if (!$row) { wp_send_json_error(array('message' => 'not found')); }
+        $wpdb->update(
+            $table,
+            array(
+                'anchor_text' => $anchor_text,
+                'current_url' => $current_url,
+                'updated_at' => current_time('mysql'),
+            ),
+            array('id' => $id),
+            array('%s','%s','%s'),
+            array('%d')
+        );
+        // Recalculate duplicates for this post
+        $this->recalc_duplicates_for_post($post_id);
+        // Return updated row
+        $dup = (int) $wpdb->get_var($wpdb->prepare("SELECT is_duplicate FROM {$table} WHERE id=%d", $id));
+        wp_send_json_success(array('anchor_text' => $anchor_text, 'current_url' => $current_url, 'is_duplicate' => $dup));
+    }
+
+    public function ajax_delete_link() {
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        if (!$id || !$post_id) { wp_send_json_error(array('message' => 'missing params')); }
+        check_ajax_referer('dh_elm_manage_' . $post_id);
+        if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
+        global $wpdb;
+        $table = $this->table_name();
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
+        if (!$row) { wp_send_json_error(array('message' => 'not found')); }
+        $wpdb->delete($table, array('id' => $id), array('%d'));
+        // Recalculate duplicates after removal
+        $this->recalc_duplicates_for_post($post_id);
+        wp_send_json_success();
     }
 }
