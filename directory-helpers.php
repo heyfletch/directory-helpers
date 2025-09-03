@@ -83,6 +83,9 @@ class Directory_Helpers {
         add_action('admin_head-post.php', array($this, 'output_classic_editor_toggle'));
         add_action('admin_head-post-new.php', array($this, 'output_classic_editor_toggle'));
 
+        // Enqueue TinyMCE shortcode highlighter (Classic editor) on post edit screens
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_editor_shortcodes_assets'));
+
         // Register Prompts display meta box on edit screens (targets configured on admin page)
         add_action('add_meta_boxes', array($this, 'register_prompts_display_meta_box'));
     }
@@ -288,6 +291,39 @@ class Directory_Helpers {
         })();
         </script>
         <?php
+    }
+
+    /**
+     * Enqueue TinyMCE shortcode highlighter script and inject editor CSS for post edit screens.
+     */
+    public function enqueue_editor_shortcodes_assets($hook) {
+        // Only run on post edit screens (Classic editor)
+        if ($hook !== 'post.php' && $hook !== 'post-new.php') { return; }
+        if (!current_user_can('edit_posts')) { return; }
+
+        // Enqueue the highlighter script (listens for tinymce-editor-init)
+        $sc_js_rel = 'assets/js/editor-shortcode-highlighter.js';
+        $sc_js_path = DIRECTORY_HELPERS_PATH . $sc_js_rel;
+        $sc_js_ver = file_exists($sc_js_path) ? (string) @filemtime($sc_js_path) : DIRECTORY_HELPERS_VERSION;
+        wp_enqueue_script(
+            'dh-editor-shortcode-highlighter',
+            DIRECTORY_HELPERS_URL . $sc_js_rel,
+            array('jquery'),
+            $sc_js_ver,
+            true
+        );
+
+        // Ensure our editor CSS is loaded inside TinyMCE iframe
+        add_filter('mce_css', function($mce_css) {
+            $css_rel = 'assets/css/editor-shortcodes.css';
+            $css_path = DIRECTORY_HELPERS_PATH . $css_rel;
+            $ver = file_exists($css_path) ? (string) @filemtime($css_path) : DIRECTORY_HELPERS_VERSION;
+            $css_url = DIRECTORY_HELPERS_URL . $css_rel . '?ver=' . rawurlencode($ver);
+            if (strpos((string)$mce_css, $css_url) === false) {
+                $mce_css = $mce_css ? ($mce_css . ',' . $css_url) : $css_url;
+            }
+            return $mce_css;
+        });
     }
 
     /**

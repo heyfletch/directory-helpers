@@ -210,7 +210,7 @@ jQuery(document).ready(function ($) {
                     // Render styled success notice with icon and reload button
                     var btn = document.createElement('button');
                     btn.type = 'button';
-                    btn.className = 'button button-primary';
+                    btn.className = 'button';
                     btn.textContent = 'Reload to view AI content';
                     btn.addEventListener('click', function(){ window.location.reload(); });
 
@@ -239,6 +239,13 @@ jQuery(document).ready(function ($) {
 
                     statusDiv.appendChild(icon);
                     statusDiv.appendChild(text);
+                    // Style the button with white background and success green text/border
+                    btn.style.backgroundColor = '#ffffff';
+                    btn.style.color = successColor;
+                    btn.style.borderColor = successColor;
+                    btn.style.boxShadow = 'none';
+                    btn.style.fontWeight = '600';
+                    btn.style.marginLeft = '8px';
                     statusDiv.appendChild(btn);
 
                     // Re-enable the Generate button to allow another run if desired
