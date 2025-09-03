@@ -25,6 +25,9 @@ class DH_External_Link_Management {
 
         // Per-post meta box
         add_action('add_meta_boxes', array($this, 'register_meta_box'));
+
+        // AJAX: re-check a single link from the meta box
+        add_action('wp_ajax_dh_elm_recheck_link', array($this, 'ajax_recheck_link'));
     }
 
     private function table_name() {
@@ -80,28 +83,80 @@ class DH_External_Link_Management {
     public function render_meta_box($post) {
         global $wpdb;
         $table = $this->table_name();
-        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, anchor_text, current_url, status_code, is_duplicate FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post->ID));
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, anchor_text, current_url, status_code, status_text, last_checked, is_duplicate FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post->ID));
         if (!$rows) {
             echo '<p>' . esc_html__('No external links captured yet. Use the AI generator or run a scan to populate.', 'directory-helpers') . '</p>';
             return;
         }
-        echo '<table class="widefat striped"><thead><tr>';
+        $nonce = wp_create_nonce('dh_elm_recheck_' . $post->ID);
+        echo '<table class="widefat striped dh-elm-table"><thead><tr>';
         echo '<th>' . esc_html__('Anchor', 'directory-helpers') . '</th>';
         echo '<th>' . esc_html__('URL', 'directory-helpers') . '</th>';
-        echo '<th style="width:90px;">' . esc_html__('Status', 'directory-helpers') . '</th>';
-        echo '<th style="width:90px;">' . esc_html__('Duplicate', 'directory-helpers') . '</th>';
+        echo '<th style="width:110px;">' . esc_html__('Status', 'directory-helpers') . '</th>';
+        echo '<th style="width:140px;">' . esc_html__('Last checked', 'directory-helpers') . '</th>';
+        echo '<th style="width:100px;">' . esc_html__('Duplicate', 'directory-helpers') . '</th>';
+        echo '<th style="width:110px;">' . esc_html__('Actions', 'directory-helpers') . '</th>';
         echo '</tr></thead><tbody>';
         foreach ($rows as $r) {
             $status = is_null($r->status_code) ? '—' : (int)$r->status_code;
-            echo '<tr>';
-            echo '<td>' . esc_html(mb_strimwidth((string)$r->anchor_text, 0, 80, '…')) . '</td>';
-            echo '<td><code style="word-break:break-all;">' . esc_html((string)$r->current_url) . '</code></td>';
-            echo '<td>' . esc_html($status) . '</td>';
+            $status_title = $r->status_text ? ' title="' . esc_attr($r->status_text) . '"' : '';
+            $last_checked = $r->last_checked ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($r->last_checked))) : '—';
+            $anchor_disp = esc_html(mb_strimwidth((string)$r->anchor_text, 0, 80, '…'));
+            $anchor_q = rawurlencode((string)$r->anchor_text);
+            $anchor_link = '<a href="https://www.google.com/search?q=' . $anchor_q . '" target="_blank" rel="noopener">' . $anchor_disp . '</a>';
+            $url_disp = esc_html((string)$r->current_url);
+            $url_link = '<a href="' . esc_url((string)$r->current_url) . '" target="_blank" rel="noopener" style="word-break:break-all;">' . $url_disp . '</a>';
+            echo '<tr data-link-id="' . (int)$r->id . '">';
+            echo '<td>' . $anchor_link . '</td>';
+            echo '<td>' . $url_link . '</td>';
+            echo '<td class="dh-elm-status"' . $status_title . '>' . esc_html($status) . ( $r->status_text ? '<div style="color:#666;font-size:11px;line-height:1.3;">' . esc_html(mb_strimwidth($r->status_text, 0, 70, '…')) . '</div>' : '' ) . '</td>';
+            echo '<td class="dh-elm-last-checked">' . $last_checked . '</td>';
             echo '<td>' . ($r->is_duplicate ? '<span class="dashicons dashicons-warning" title="Duplicate"></span>' : '') . '</td>';
+            echo '<td><button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button></td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
         echo '<p style="margin-top:8px;color:#666;">' . esc_html__('First occurrence of a URL remains linked. Subsequent occurrences are captured and flagged as duplicates (rendered as plain text).', 'directory-helpers') . '</p>';
+
+        // Inline JS for per-link recheck
+        ?>
+        <script type="text/javascript">
+        (function(){
+            function onClick(e){
+                var btn = e.target && e.target.closest && e.target.closest('.dh-elm-recheck');
+                if(!btn){ return; }
+                e.preventDefault();
+                var tr = btn.closest('tr');
+                if(!tr){ return; }
+                var id = tr.getAttribute('data-link-id');
+                if(!id){ return; }
+                btn.disabled = true; btn.textContent = 'Checking…';
+                var fd = new FormData();
+                fd.append('action','dh_elm_recheck_link');
+                fd.append('id', id);
+                fd.append('post_id', <?php echo (int) $post->ID; ?>);
+                fd.append('_ajax_nonce', btn.getAttribute('data-nonce'));
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                xhr.onload = function(){
+                    btn.disabled = false; btn.textContent = 'Re-check';
+                    try {
+                        var res = JSON.parse(xhr.responseText);
+                        if(res && res.success && res.data){
+                            tr.querySelector('.dh-elm-status').innerHTML = String(res.data.status_code) + (res.data.status_text ? '<div style="color:#666;font-size:11px;line-height:1.3;">' + res.data.status_text.substring(0,70) + (res.data.status_text.length>70?'…':'') + '</div>' : '');
+                            tr.querySelector('.dh-elm-last-checked').textContent = res.data.last_checked_display || '—';
+                        } else {
+                            alert('Check failed');
+                        }
+                    } catch(err){ alert('Check failed'); }
+                };
+                xhr.onerror = function(){ btn.disabled = false; btn.textContent = 'Re-check'; alert('Network error'); };
+                xhr.send(fd);
+            }
+            document.addEventListener('click', onClick, false);
+        })();
+        </script>
+        <?php
     }
 
     public function render_shortcoded_link($atts) {
@@ -110,10 +165,11 @@ class DH_External_Link_Management {
         if (!$id) { return ''; }
         global $wpdb;
         $table = $this->table_name();
-        $row = $wpdb->get_row($wpdb->prepare("SELECT current_url, anchor_text, is_duplicate FROM {$table} WHERE id=%d", $id));
+        $row = $wpdb->get_row($wpdb->prepare("SELECT current_url, anchor_text, is_duplicate, status_code FROM {$table} WHERE id=%d", $id));
         if (!$row) { return ''; }
         $anchor = esc_html((string)$row->anchor_text);
-        if ($row->is_duplicate) {
+        // Render as plain text for duplicates or non-200 status codes
+        if ($row->is_duplicate || (isset($row->status_code) && (int)$row->status_code !== 200)) {
             // Render as plain text for duplicates
             return $anchor;
         }
@@ -261,6 +317,23 @@ class DH_External_Link_Management {
         return false;
     }
 
+    private function http_check_url($url, $timeout = 10) {
+        $headers = array(
+            'user-agent' => 'Mozilla/5.0 (compatible; DirectoryHelpersBot/1.0; +' . home_url('/') . ')',
+            'referer' => home_url('/'),
+        );
+        $args = array('timeout' => $timeout, 'redirection' => 3, 'headers' => $headers);
+        $resp = wp_remote_head($url, $args);
+        $code = is_wp_error($resp) ? 0 : (int) wp_remote_retrieve_response_code($resp);
+        if (is_wp_error($resp) || $code === 405) {
+            $resp = wp_remote_get($url, $args);
+        }
+        if (is_wp_error($resp)) {
+            return array(0, $resp->get_error_message());
+        }
+        return array((int) wp_remote_retrieve_response_code($resp), (string) wp_remote_retrieve_response_message($resp));
+    }
+
     private function check_links_for_post($post_id) {
         global $wpdb;
         $table = $this->table_name();
@@ -270,13 +343,7 @@ class DH_External_Link_Management {
         foreach ($rows as $r) {
             $url = (string)$r->current_url;
             if (!$url) { continue; }
-            $resp = wp_remote_head($url, array('timeout' => $timeout, 'redirection' => 3));
-            if (is_wp_error($resp) || (int)wp_remote_retrieve_response_code($resp) === 405) {
-                // Fallback to GET
-                $resp = wp_remote_get($url, array('timeout' => $timeout, 'redirection' => 3));
-            }
-            $code = is_wp_error($resp) ? 0 : (int) wp_remote_retrieve_response_code($resp);
-            $text = is_wp_error($resp) ? $resp->get_error_message() : (string) wp_remote_retrieve_response_message($resp);
+            list($code, $text) = $this->http_check_url($url, $timeout);
             $wpdb->update(
                 $table,
                 array(
@@ -291,7 +358,35 @@ class DH_External_Link_Management {
             );
         }
     }
-}
 
-// Initialize module
-new DH_External_Link_Management();
+    public function ajax_recheck_link() {
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        if (!$id || !$post_id) { wp_send_json_error(array('message' => 'missing params')); }
+        check_ajax_referer('dh_elm_recheck_' . $post_id);
+        if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
+        global $wpdb;
+        $table = $this->table_name();
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, current_url FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
+        if (!$row) { wp_send_json_error(array('message' => 'not found')); }
+        list($code, $text) = $this->http_check_url((string)$row->current_url, 10);
+        $wpdb->update(
+            $table,
+            array(
+                'status_code' => $code,
+                'status_text' => $text,
+                'last_checked' => current_time('mysql'),
+                'updated_at' => current_time('mysql'),
+            ),
+            array('id' => $id),
+            array('%d','%s','%s','%s'),
+            array('%d')
+        );
+        $last_display = date_i18n(get_option('date_format') . ' ' . get_option('time_format'));
+        wp_send_json_success(array(
+            'status_code' => (int)$code,
+            'status_text' => (string)$text,
+            'last_checked_display' => $last_display,
+        ));
+    }
+}
