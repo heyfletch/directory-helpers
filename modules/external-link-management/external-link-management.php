@@ -90,6 +90,7 @@ class DH_External_Link_Management {
         }
         $nonce = wp_create_nonce('dh_elm_recheck_' . $post->ID);
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
+        echo '<th style="width:70px;">' . esc_html__('ID', 'directory-helpers') . '</th>';
         echo '<th>' . esc_html__('Anchor', 'directory-helpers') . '</th>';
         echo '<th>' . esc_html__('URL', 'directory-helpers') . '</th>';
         echo '<th style="width:110px;">' . esc_html__('Status', 'directory-helpers') . '</th>';
@@ -100,16 +101,17 @@ class DH_External_Link_Management {
         foreach ($rows as $r) {
             $status = is_null($r->status_code) ? '—' : (int)$r->status_code;
             $status_title = $r->status_text ? ' title="' . esc_attr($r->status_text) . '"' : '';
-            $last_checked = $r->last_checked ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($r->last_checked))) : '—';
+            $last_checked = $r->last_checked ? esc_html(date_i18n('Y-m-d g:ia', strtotime($r->last_checked))) : '—';
             $anchor_disp = esc_html(mb_strimwidth((string)$r->anchor_text, 0, 80, '…'));
             $anchor_q = rawurlencode((string)$r->anchor_text);
             $anchor_link = '<a href="https://www.google.com/search?q=' . $anchor_q . '" target="_blank" rel="noopener">' . $anchor_disp . '</a>';
             $url_disp = esc_html((string)$r->current_url);
             $url_link = '<a href="' . esc_url((string)$r->current_url) . '" target="_blank" rel="noopener" style="word-break:break-all;">' . $url_disp . '</a>';
             echo '<tr data-link-id="' . (int)$r->id . '">';
+            echo '<td>' . (int)$r->id . '</td>';
             echo '<td>' . $anchor_link . '</td>';
             echo '<td>' . $url_link . '</td>';
-            echo '<td class="dh-elm-status"' . $status_title . '>' . esc_html($status) . ( $r->status_text ? '<div style="color:#666;font-size:11px;line-height:1.3;">' . esc_html(mb_strimwidth($r->status_text, 0, 70, '…')) . '</div>' : '' ) . '</td>';
+            echo '<td class="dh-elm-status"' . $status_title . '>' . esc_html($status) . '</td>';
             echo '<td class="dh-elm-last-checked">' . $last_checked . '</td>';
             echo '<td>' . ($r->is_duplicate ? '<span class="dashicons dashicons-warning" title="Duplicate"></span>' : '') . '</td>';
             echo '<td><button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button></td>';
@@ -143,7 +145,11 @@ class DH_External_Link_Management {
                     try {
                         var res = JSON.parse(xhr.responseText);
                         if(res && res.success && res.data){
-                            tr.querySelector('.dh-elm-status').innerHTML = String(res.data.status_code) + (res.data.status_text ? '<div style="color:#666;font-size:11px;line-height:1.3;">' + res.data.status_text.substring(0,70) + (res.data.status_text.length>70?'…':'') + '</div>' : '');
+                            var cell = tr.querySelector('.dh-elm-status');
+                            if(cell){
+                                cell.textContent = String(res.data.status_code);
+                                if(res.data.status_text){ cell.setAttribute('title', res.data.status_text); } else { cell.removeAttribute('title'); }
+                            }
                             tr.querySelector('.dh-elm-last-checked').textContent = res.data.last_checked_display || '—';
                         } else {
                             alert('Check failed');
@@ -382,7 +388,7 @@ class DH_External_Link_Management {
             array('%d','%s','%s','%s'),
             array('%d')
         );
-        $last_display = date_i18n(get_option('date_format') . ' ' . get_option('time_format'));
+        $last_display = date_i18n('Y-m-d g:ia');
         wp_send_json_success(array(
             'status_code' => (int)$code,
             'status_text' => (string)$text,
