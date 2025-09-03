@@ -104,12 +104,12 @@ class DH_External_Link_Management {
 
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
         echo '<th class="dh-sort" data-key="id" style="width:70px; cursor:pointer;">' . esc_html__('ID', 'directory-helpers') . '</th>';
+        echo '<th style="width:170px;">' . esc_html__('Manage', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="anchor" style="cursor:pointer;">' . esc_html__('Anchor', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="url" style="cursor:pointer;">' . esc_html__('URL', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="status" style="width:110px; cursor:pointer;">' . esc_html__('Status', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="checked" style="width:140px; cursor:pointer;">' . esc_html__('Last checked', 'directory-helpers') . '</th>';
-        echo '<th class="dh-sort" data-key="dup" style="width:100px; cursor:pointer;">' . esc_html__('Duplicate', 'directory-helpers') . '</th>';
-        echo '<th style="width:170px;">' . esc_html__('Actions', 'directory-helpers') . '</th>';
+        echo '<th style="width:120px;">' . esc_html__('Re-check', 'directory-helpers') . '</th>';
         echo '</tr></thead><tbody>';
         foreach ($rows as $r) {
             $status = is_null($r->status_code) ? '—' : (int)$r->status_code;
@@ -124,23 +124,21 @@ class DH_External_Link_Management {
             $data_url = esc_attr(strtolower((string)$r->current_url));
             $data_status = is_null($r->status_code) ? 999999 : (int)$r->status_code;
             $data_checked = $r->last_checked ? (int) strtotime($r->last_checked) : 0;
-            $data_dup = $r->is_duplicate ? 1 : 0;
-            echo '<tr data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '" data-dup="' . (int)$data_dup . '">';
+            echo '<tr data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '">';
             echo '<td>' . (int)$r->id . '</td>';
+            echo '<td class="dh-elm-manage">'
+                . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button> '
+                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button>'
+                . '</td>';
             echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
             echo '<td class="dh-cell-url">' . $url_link . '</td>';
             echo '<td class="dh-elm-status"' . $status_title . '>' . esc_html($status) . '</td>';
             echo '<td class="dh-elm-last-checked">' . $last_checked . '</td>';
-            echo '<td>' . ($r->is_duplicate ? '<span class="dashicons dashicons-warning" title="Duplicate"></span>' : '') . '</td>';
-            echo '<td>'
-                . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button> '
-                . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button> '
-                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button>'
-                . '</td>';
+            echo '<td>' . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button>' . '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
-        echo '<p style="margin-top:8px;color:#666;">' . esc_html__('First occurrence of a URL remains linked. Subsequent occurrences are captured and flagged as duplicates (rendered as plain text).', 'directory-helpers') . '</p>';
+        echo '<p style="margin-top:8px;color:#666;">' . esc_html__('First occurrence of a URL is stored and converted to a shortcode. Subsequent occurrences are unlinked and not stored as records.', 'directory-helpers') . '</p>';
 
         // Inline JS for per-link recheck
         ?>
@@ -310,12 +308,6 @@ class DH_External_Link_Management {
                                 // Update row data attributes
                                 tr.setAttribute('data-anchor', String(updatedAnchor).toLowerCase());
                                 tr.setAttribute('data-url', String(updatedUrl).toLowerCase());
-                                // Duplicate icon may have changed; refresh cell if provided
-                                if(typeof res.data.is_duplicate !== 'undefined'){
-                                    var dupCell = tr.children[5];
-                                    dupCell.innerHTML = res.data.is_duplicate ? '<span class="dashicons dashicons-warning" title="Duplicate"></span>' : '';
-                                    tr.setAttribute('data-dup', res.data.is_duplicate ? '1' : '0');
-                                }
                                 // Restore actions
                                 tr.classList.remove('editing');
                                 actionsCell.innerHTML = actionsCell.getAttribute('data-orig') || '';
@@ -373,7 +365,6 @@ class DH_External_Link_Management {
                     else if(key === 'url'){ av = a.getAttribute('data-url')||''; bv = b.getAttribute('data-url')||''; }
                     else if(key === 'status'){ av = parseInt(a.getAttribute('data-status')||'0',10); bv = parseInt(b.getAttribute('data-status')||'0',10); }
                     else if(key === 'checked'){ av = parseInt(a.getAttribute('data-checked')||'0',10); bv = parseInt(b.getAttribute('data-checked')||'0',10); }
-                    else if(key === 'dup'){ av = parseInt(a.getAttribute('data-dup')||'0',10); bv = parseInt(b.getAttribute('data-dup')||'0',10); }
                     else { av = 0; bv = 0; }
                     if(av < bv) return -1*mul;
                     if(av > bv) return 1*mul;
@@ -408,9 +399,8 @@ class DH_External_Link_Management {
         $t_decoded = html_entity_decode((string)($atts['t'] ?? ''), ENT_QUOTES | ENT_HTML5);
         $anchor_source = ($row->anchor_text !== null && $row->anchor_text !== '') ? $row->anchor_text : $t_decoded;
         $anchor = esc_html((string)$anchor_source);
-        // Render as plain text for duplicates or non-200 status codes
-        if ($row->is_duplicate || (isset($row->status_code) && (int)$row->status_code !== 200)) {
-            // Render as plain text for duplicates
+        // Render as plain text only for duplicates; allow linking even if status is unknown/non-200
+        if ($row->is_duplicate) {
             return $anchor;
         }
         $url = esc_url((string)$row->current_url);
@@ -488,6 +478,15 @@ class DH_External_Link_Management {
         $seenUrls = array();
         global $wpdb;
         $table = $this->table_name();
+        // Build map of existing URLs to their record IDs (do not mark as seen yet)
+        $existing_rows = $wpdb->get_results($wpdb->prepare("SELECT id, LOWER(current_url) AS url FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post_id));
+        $existing_map = array();
+        if (is_array($existing_rows)) {
+            foreach ($existing_rows as $er) {
+                $u = isset($er->url) ? (string)$er->url : '';
+                if ($u !== '') { $existing_map[$u] = (int)$er->id; }
+            }
+        }
 
         foreach ($toProcess as $a) {
             if (!$a->hasAttribute('href')) { continue; }
@@ -510,12 +509,33 @@ class DH_External_Link_Management {
             if ($block && method_exists($block, 'textContent')) { $blockText = $block->textContent; }
             $context_sentence = $this->extract_context_sentence($blockText, $anchor_text);
 
-            // Determine duplicate based on current run
+            // Determine handling based on current scan and existing DB
             $norm = strtolower($href);
-            $is_duplicate = isset($seenUrls[$norm]) ? 1 : 0;
-            if (!isset($seenUrls[$norm])) { $seenUrls[$norm] = true; }
+            if (isset($seenUrls[$norm])) {
+                // Already handled one occurrence in this scan: unwrap duplicates
+                $frag = $doc->createDocumentFragment();
+                while ($a->firstChild) { $frag->appendChild($a->firstChild); }
+                if ($a->parentNode) { $a->parentNode->replaceChild($frag, $a); }
+                continue;
+            }
 
-            // Insert row
+            // First occurrence encountered in this scan
+            if (isset($existing_map[$norm])) {
+                // Reuse existing record ID and convert to shortcode
+                $existing_id = (int) $existing_map[$norm];
+                // Optionally refresh anchor_text and updated_at
+                $wpdb->update($table, array(
+                    'anchor_text' => $anchor_text,
+                    'updated_at' => current_time('mysql'),
+                ), array('id' => $existing_id), array('%s','%s'), array('%d'));
+                $t_attr = esc_attr($anchor_text);
+                $short = $doc->createTextNode('[link id="' . $existing_id . '" t="' . $t_attr . '"]');
+                if ($a->parentNode) { $a->parentNode->replaceChild($short, $a); }
+                $seenUrls[$norm] = true;
+                continue;
+            }
+
+            // No existing record: create one and convert to shortcode
             $now = current_time('mysql');
             $ins = array(
                 'post_id' => $post_id,
@@ -528,7 +548,7 @@ class DH_External_Link_Management {
                 'last_checked' => null,
                 'ai_suggestion_url' => null,
                 'ai_suggestion_sentence' => null,
-                'is_duplicate' => $is_duplicate,
+                'is_duplicate' => 0,
                 'created_at' => $now,
                 'updated_at' => $now,
             );
@@ -538,10 +558,10 @@ class DH_External_Link_Management {
             if ($ok === false) { continue; }
             $new_id = (int) $wpdb->insert_id;
 
-            // Replace <a> node with shortcode text node using new shortcode form [link id=".." t=".."]
             $t_attr = esc_attr($anchor_text);
             $short = $doc->createTextNode('[link id="' . $new_id . '" t="' . $t_attr . '"]');
-            $a->parentNode->replaceChild($short, $a);
+            if ($a->parentNode) { $a->parentNode->replaceChild($short, $a); }
+            $seenUrls[$norm] = true;
         }
 
         // Extract inner HTML of body
@@ -696,8 +716,13 @@ class DH_External_Link_Management {
             array('%s','%s','%s'),
             array('%d')
         );
-        // Recalculate duplicates for this post
-        $this->recalc_duplicates_for_post($post_id);
+        // Make this edited row canonical for its URL; mark others as duplicates
+        $now = current_time('mysql');
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET is_duplicate=1, updated_at=%s WHERE post_id=%d AND id<>%d AND LOWER(current_url)=LOWER(%s)",
+            $now, $post_id, $id, $current_url
+        ));
+        $wpdb->update($table, array('is_duplicate' => 0, 'updated_at' => $now), array('id' => $id), array('%d','%s'), array('%d'));
         // Return updated row
         $dup = (int) $wpdb->get_var($wpdb->prepare("SELECT is_duplicate FROM {$table} WHERE id=%d", $id));
         wp_send_json_success(array('anchor_text' => $anchor_text, 'current_url' => $current_url, 'is_duplicate' => $dup));
