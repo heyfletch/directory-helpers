@@ -11,6 +11,13 @@
       debounceTimer = setTimeout(fn, wait || 250);
     }
 
+    function scheduleInitialPasses(){
+      try {
+        var times = [0, 50, 150, 300, 600, 1200, 2400];
+        times.forEach(function(t){ setTimeout(function(){ try { highlight(); } catch(_){ } }, t); });
+      } catch(_){ }
+    }
+
     function runSilently(fn){
       try {
         if (editor.undoManager && typeof editor.undoManager.ignore === 'function') {
@@ -42,9 +49,25 @@
       } catch (e) { /* noop */ }
     }
 
+    function attachObserver(){
+      try {
+        if (!('MutationObserver' in window)) { return; }
+        var body = editor.getBody();
+        if (!body) { return; }
+        var observer = new MutationObserver(function(){
+          debounce(highlight, 60);
+          try {
+            if (body.querySelector('span.dh-shortcode')) { observer.disconnect(); }
+          } catch(_){ }
+        });
+        observer.observe(body, { childList: true, subtree: true, characterData: true });
+        // Safety auto-stop
+        setTimeout(function(){ try { observer.disconnect(); } catch(_){ } }, 8000);
+      } catch(_){ }
+    }
+
     function highlight(){
       try {
-        if (editor.isHidden && editor.isHidden()) { return; }
         var body = editor.getBody();
         if (!body) { return; }
 
@@ -103,11 +126,18 @@
 
     // Re-run highlight after content changes
     editor.on('init', function(){
-      highlight();
-      setTimeout(highlight, 0); // after first paint
-      setTimeout(highlight, 150); // safety after layout
+      scheduleInitialPasses();
+      attachObserver();
+      try {
+        var win = editor.getWin && editor.getWin();
+        if (win && win.addEventListener) {
+          win.addEventListener('load', function(){ scheduleInitialPasses(); attachObserver(); }, { once: true });
+        }
+      } catch(_){ }
     });
+    editor.on('PostRender', function(){ scheduleInitialPasses(); attachObserver(); });
     editor.on('keyup paste Undo Redo SetContent LoadContent NodeChange', function(){ debounce(highlight, 200); });
+    editor.on('LoadContent SetContent', function(){ attachObserver(); });
 
     // Ensure we do not save decorations to DB (strip during serialization only)
     editor.on('PreProcess', function(e){
@@ -122,6 +152,21 @@
         });
       } catch(err){ /* noop */ }
     });
+
+    // Run a short, bounded retry loop to catch late content without requiring user interaction
+    (function initialRetry(){
+      var attempts = 0, max = 60; // extend to allow slower boot
+      var iv = setInterval(function(){
+        try { highlight(); } catch(_){ }
+        try {
+          var b = editor.getBody && editor.getBody();
+          if (b && b.querySelector && b.querySelector('span.dh-shortcode')) {
+            clearInterval(iv);
+          }
+        } catch(_){ }
+        if (++attempts >= max) { clearInterval(iv); }
+      }, 150);
+    })();
 
   }
 
