@@ -207,16 +207,40 @@ jQuery(document).ready(function ($) {
                 lastSeen = data.dh_ai.timestamp || Date.now();
                 if (!notified && statusDiv) {
                     notified = true;
-                    // Render an inline reload button
+                    // Render styled success notice with icon and reload button
                     var btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'button button-primary';
                     btn.textContent = 'Reload to view AI content';
                     btn.addEventListener('click', function(){ window.location.reload(); });
-                    statusDiv.innerHTML = '✅ AI content received.';
-                    statusDiv.style.color = 'green';
-                    statusDiv.appendChild(document.createTextNode(' '));
+
+                    // Prefer WP success green, fallback to #46b450
+                    var successColor = getComputedStyle(document.documentElement).getPropertyValue('--wp-admin-theme-color-success').trim();
+                    if (!successColor) { successColor = '#46b450'; }
+
+                    statusDiv.innerHTML = '';
+                    statusDiv.style.background = successColor;
+                    statusDiv.style.color = '#ffffff';
+                    statusDiv.style.padding = '6px 10px';
+                    statusDiv.style.borderRadius = '4px';
+                    statusDiv.style.marginTop = '10px';
+                    statusDiv.style.fontSize = '12px';
+
+                    var icon = document.createElement('span');
+                    icon.className = 'dashicons dashicons-yes-alt';
+                    icon.style.color = '#ffffff';
+                    icon.style.verticalAlign = 'middle';
+                    icon.style.marginRight = '6px';
+
+                    var text = document.createElement('strong');
+                    text.appendChild(document.createTextNode('AI content received.'));
+                    text.style.verticalAlign = 'middle';
+                    text.style.marginRight = '8px';
+
+                    statusDiv.appendChild(icon);
+                    statusDiv.appendChild(text);
                     statusDiv.appendChild(btn);
+
                     // Re-enable the Generate button to allow another run if desired
                     if (generateBtn) { generateBtn.disabled = false; }
                 }
