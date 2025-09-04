@@ -49,8 +49,16 @@ jQuery(document).ready(function ($) {
             return;
         }
 
-        statusDiv.textContent = 'Sending request...';
-        statusDiv.style.color = 'inherit';
+        // Clear any existing AI timestamp and status
+        if (statusDiv) {
+            statusDiv.textContent = 'Sending request...';
+            statusDiv.style.color = 'inherit';
+            // Also clear any existing timestamp in the UI
+            const timestampEl = statusDiv.querySelector('.ai-timestamp');
+            if (timestampEl) {
+                timestampEl.remove();
+            }
+        }
 
         fetch(aiContentGenerator.triggerEndpoint, {
             method: 'POST',
@@ -191,29 +199,33 @@ jQuery(document).ready(function ($) {
         });
     }
 
-    // Heartbeat: auto-reload when AI content lands
+    // Heartbeat: check for AI content updates
     (function initHeartbeatNotify(){
         if (typeof wp === 'undefined' || !wp || !wp.heartbeat || !postId) { return; }
         var lastSeen = 0;
         var reloaded = false;
         // Send a small payload on each heartbeat
         $(document).on('heartbeat-send', function (e, data) {
-            data.dh_ai_check = { postId: parseInt(postId, 10) || 0, lastSeen: lastSeen };
+            data.dh_ai_check = { 
+                postId: parseInt(postId, 10) || 0, 
+                lastSeen: lastSeen 
+            };
         });
         // Receive server response
         $(document).on('heartbeat-tick', function (e, data) {
             if (!data || !data.dh_ai) { return; }
-            if (data.dh_ai.updated) {
+            if (data.dh_ai.updated && !reloaded) {
                 lastSeen = data.dh_ai.timestamp || Date.now();
-                if (!reloaded) {
-                    reloaded = true;
-                    try {
-                        if (statusDiv) {
-                            statusDiv.textContent = 'AI content received. Reloading…';
-                        }
-                    } catch(_) {}
-                    window.location.reload();
-                }
+                reloaded = true;
+                try {
+                    if (statusDiv) {
+                        statusDiv.textContent = 'AI content received. Reloading…';
+                    }
+                    // Only reload if we haven't already seen this update
+                    if (data.dh_ai.timestamp > lastSeen) {
+                        window.location.reload();
+                    }
+                } catch(_) {}
             }
         });
     })();

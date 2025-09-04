@@ -1079,6 +1079,10 @@ class DH_External_Link_Management {
         $rows = $wpdb->get_results($wpdb->prepare("SELECT id, current_url, status_override_code, status_override_expires FROM {$table} WHERE post_id=%d", $post_id));
         if (!$rows) { return; }
         $timeout = 10; // per request
+        
+        // Track non-200 URLs for AI suggestions
+        $non_200_urls = array();
+        
         foreach ($rows as $r) {
             $url = (string)$r->current_url;
             if (!$url) { continue; }
@@ -1086,6 +1090,7 @@ class DH_External_Link_Management {
             $ovr_exp = isset($r->status_override_expires) && $r->status_override_expires ? strtotime((string)$r->status_override_expires) : 0;
             $ovr_code = isset($r->status_override_code) ? (int)$r->status_override_code : 0;
             if ($ovr_code && $ovr_exp && $ovr_exp > time()) { continue; }
+            
             list($code, $text) = $this->http_check_url($url, $timeout);
             $wpdb->update(
                 $table,
@@ -1099,6 +1104,51 @@ class DH_External_Link_Management {
                 array('%d','%s','%s','%s'),
                 array('%d')
             );
+            
+            // Queue non-200 URLs for AI suggestions
+            if ($code !== 200) {
+                $non_200_urls[] = array(
+                    'id' => $r->id,
+                    'url' => $url,
+                    'post_id' => $post_id
+                );
+            }
+        }
+        
+        // Process AI suggestions for non-200 URLs
+        if (!empty($non_200_urls)) {
+            foreach ($non_200_urls as $link) {
+                // Get the full row data needed for AI suggestion
+                $row = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM {$table} WHERE id = %d AND post_id = %d",
+                    $link['id'],
+                    $post_id
+                ));
+                
+                if ($row) {
+                    // Call the AI suggestion function
+                    $suggestion = $this->call_gemini_for_link($post_id, $row);
+                    
+                    // If we got a suggestion, update the record
+                    if (!is_wp_error($suggestion) && !empty($suggestion['suggested_url'])) {
+                        $wpdb->update(
+                            $table,
+                            array(
+                                'ai_suggestion_url' => $suggestion['suggested_url'],
+                                'updated_at' => current_time('mysql'),
+                            ),
+                            array('id' => $link['id']),
+                            array('%s', '%s'),
+                            array('%d')
+                        );
+                    }
+                }
+                
+                // Add a small delay between API calls to avoid rate limiting
+                if (count($non_200_urls) > 1) {
+                    usleep(500000); // 0.5 second delay
+                }
+            }
         }
     }
 
