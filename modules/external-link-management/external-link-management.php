@@ -124,7 +124,7 @@ class DH_External_Link_Management {
         echo '<th class="dh-sort" data-key="url" style="cursor:pointer;">' . esc_html__('URL', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="status" style="width:110px; cursor:pointer;">' . esc_html__('Status', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="checked" style="width:140px; cursor:pointer;">' . esc_html__('Last checked', 'directory-helpers') . '</th>';
-        echo '<th style="width:120px;">' . esc_html__('Re-check', 'directory-helpers') . '</th>';
+        echo '<th style="width:120px;">' . esc_html__('Delete', 'directory-helpers') . '</th>';
         echo '</tr></thead><tbody>';
         foreach ($rows as $r) {
             $now_ts = time();
@@ -163,17 +163,19 @@ class DH_External_Link_Management {
             echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
             echo '<td class="dh-elm-manage">'
                 . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button> '
-                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button>'
                 . '</td>';
             echo '<td class="dh-cell-url">' . $url_link . '</td>';
             echo '<td class="dh-elm-status"' . $status_title . '><span class="dh-status-code">' . esc_html($status_disp) . '</span> '
+                . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button> '
                 . ($ovr_active
                     ? '<button type="button" class="button button-small dh-elm-override-clear" data-nonce="' . esc_attr($manage_nonce) . '">Clear override</button>'
                     : '<button type="button" class="button button-small dh-elm-override-ok" data-nonce="' . esc_attr($manage_nonce) . '">Mark OK (30d)</button>'
                   )
                 . '</td>';
             echo '<td class="dh-elm-last-checked">' . $last_checked . '</td>';
-            echo '<td>' . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button>' . '</td>';
+            echo '<td>'
+                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button>'
+                . '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
@@ -464,8 +466,27 @@ class DH_External_Link_Management {
                     actionsCell.appendChild(document.createTextNode(' '));
                     actionsCell.appendChild(cancelBtn);
 
+                    // Keyboard: Enter saves, Escape cancels (and do not submit the post form)
+                    function handleEditKey(e){
+                        var k = e.key || e.keyCode;
+                        if(k === 'Enter' || k === 13){ e.preventDefault(); e.stopPropagation(); saveBtn.click(); }
+                        else if(k === 'Escape' || k === 'Esc' || k === 27){ e.preventDefault(); e.stopPropagation(); cancelBtn.click(); }
+                    }
+                    aInput.addEventListener('keydown', handleEditKey);
+                    uInput.addEventListener('keydown', handleEditKey);
+                    saveBtn.addEventListener('keydown', handleEditKey);
+                    cancelBtn.addEventListener('keydown', handleEditKey);
+
+                    // Global ESC while editing: cancel
+                    var docEscHandler = function(e){
+                        var k = e.key || e.keyCode;
+                        if(k === 'Escape' || k === 'Esc' || k === 27){ e.preventDefault(); e.stopPropagation(); cancelBtn.click(); }
+                    };
+                    document.addEventListener('keydown', docEscHandler, true);
+
                     cancelBtn.addEventListener('click', function(){
                         tr.classList.remove('editing');
+                        document.removeEventListener('keydown', docEscHandler, true);
                         // Restore view
                         anchorCell.textContent = currentAnchorText;
                         if(currentAnchorText){
@@ -539,7 +560,11 @@ class DH_External_Link_Management {
                                 tr.setAttribute('data-checked', String(Math.floor(Date.now()/1000)));
                                 // Restore actions
                                 tr.classList.remove('editing');
+                                document.removeEventListener('keydown', docEscHandler, true);
                                 actionsCell.innerHTML = actionsCell.getAttribute('data-orig') || '';
+                                // Automatically trigger a re-check for this row after saving
+                                var reAfterSave = tr.querySelector('.dh-elm-recheck');
+                                if(reAfterSave){ reAfterSave.click(); }
                             } else {
                                 var msg = (res && res.data && res.data.message) ? res.data.message : 'Save failed.';
                                 alert(msg);
