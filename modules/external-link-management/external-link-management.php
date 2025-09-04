@@ -1156,56 +1156,101 @@ class DH_External_Link_Management {
         $title = get_the_title($post_id);
         $locale = get_locale();
 
-        $instructions = "You are assisting with replacing an external link in a WordPress post. Given the anchor text, the current (possibly broken or suboptimal) URL, the post title, and a short context sentence, propose the single best authoritative replacement URL. Prefer official, reputable, or high-authority sources. Ensure it is accessible and relevant to the anchor and context. Respond with just the best URL, nothing else.";
-
-        $prompt = "Post title: {$title}\nLocale: {$locale}\nAnchor: {$anchor}\nCurrent URL: {$current_url}\nContext: {$context}\n\n{$instructions}";
-
         $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-        $body = array(
-            'contents' => array(
-                array('parts' => array(array('text' => $prompt)))
-            ),
-            'tools' => array(array('google_search' => (object) array())),
-        );
-        $args = array(
-            'headers' => array(
+        $prompt = "This URL is broken: {$current_url}
+It has the anchor text: {$anchor}
+It is in or near the town: {$title}
+
+Do a web search to find the best URL replacement to link to that anchor text. 
+
+This will probably be the first search result, but if that result is not relevant for the anchor text or not relevant for a page about dog training in or near {$title}, then return the next most relevant URL. 
+
+Only return the URL. Nothing else. No explanations. No Intros. No Outros.";
+
+        $body = [
+            'contents' => [
+                [
+                    'parts' => [
+                        ['text' => $prompt]
+                    ]
+                ]
+            ],
+            'tools' => [
+                [
+                    'google_search' => new stdClass()
+                ]
+            ]
+        ];
+
+        $args = [
+            'headers' => [
                 'Content-Type' => 'application/json',
                 'x-goog-api-key' => $api_key,
-            ),
-            'timeout' => 20,
+            ],
+            'timeout' => 30, // Increased from 20 to 30 seconds
+            'sslverify' => true,
+            'httpversion' => '1.1',
+            'blocking' => true,
             'body' => wp_json_encode($body),
-        );
-        $resp = wp_remote_post($endpoint, $args);
-        if (is_wp_error($resp)) {
-            return $resp;
-        }
-        $code = (int) wp_remote_retrieve_response_code($resp);
-        if ($code < 200 || $code >= 300) {
-            return new WP_Error('http_error', 'Gemini HTTP error: ' . $code);
-        }
-        $data = json_decode((string) wp_remote_retrieve_body($resp), true);
-        if (!is_array($data)) {
-            return new WP_Error('bad_json', 'Gemini response parse error.');
-        }
-        $cand = isset($data['candidates'][0]) ? $data['candidates'][0] : null;
-        if (!$cand) {
-            return new WP_Error('no_candidates', 'No AI candidates returned.');
-        }
-        $parts = isset($cand['content']['parts']) && is_array($cand['content']['parts']) ? $cand['content']['parts'] : array();
-        $text = '';
-        foreach ($parts as $p) {
-            if (isset($p['text'])) { $text .= (string) $p['text']; }
-        }
-        $text = trim($text);
+        ];
 
-        // Parse suggested URL from text
-        $suggested_url = '';
-        if (preg_match('#https?://[^\s)]+#i', $text, $m)) {
-            $suggested_url = esc_url_raw($m[0]);
+        // Try the request up to 3 times
+        $max_retries = 3;
+        $attempt = 0;
+        $response = null;
+
+        while ($attempt < $max_retries) {
+            $attempt++;
+            $response = wp_remote_post($endpoint, $args);
+            
+            if (!is_wp_error($response)) {
+                $response_code = wp_remote_retrieve_response_code($response);
+                if ($response_code >= 200 && $response_code < 300) {
+                    break; // Success, exit retry loop
+                }
+                
+                // If we got a server error (5xx), retry
+                if ($response_code < 500) {
+                    return new WP_Error(
+                        'http_error', 
+                        sprintf('Gemini API request failed with code %d: %s', 
+                            $response_code, 
+                            wp_remote_retrieve_response_message($response)
+                        )
+                    );
+                }
+            } elseif ($attempt === $max_retries) {
+                // On last attempt, return the error
+                return new WP_Error(
+                    'http_request_failed', 
+                    'Failed to connect to Gemini API after ' . $max_retries . ' attempts: ' . $response->get_error_message()
+                );
+            }
+            
+            // Wait before retrying (1s, 2s, 3s, etc.)
+            if ($attempt < $max_retries) {
+                sleep($attempt);
+            }
         }
-        return array(
-            'suggested_url' => $suggested_url,
-        );
+
+        $response_body = wp_remote_retrieve_body($response);
+        $data = json_decode($response_body, true);
+        
+        if (!is_array($data) || !isset($data['candidates'][0]['content']['parts'][0]['text'])) {
+            return new WP_Error('invalid_response', 'Invalid response from Gemini API');
+        }
+
+        // Extract the URL from the response
+        $suggested_url = trim($data['candidates'][0]['content']['parts'][0]['text']);
+        
+        // Validate it's a URL
+        if (!filter_var($suggested_url, FILTER_VALIDATE_URL)) {
+            return new WP_Error('invalid_url', 'The response did not contain a valid URL');
+        }
+
+        return [
+            'suggested_url' => esc_url_raw($suggested_url)
+        ];
     }
 
     public function ajax_set_override() {
