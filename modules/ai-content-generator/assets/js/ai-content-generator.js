@@ -191,11 +191,11 @@ jQuery(document).ready(function ($) {
         });
     }
 
-    // Heartbeat: notify when AI content lands (no page refresh required)
+    // Heartbeat: auto-reload when AI content lands
     (function initHeartbeatNotify(){
         if (typeof wp === 'undefined' || !wp || !wp.heartbeat || !postId) { return; }
         var lastSeen = 0;
-        var notified = false;
+        var reloaded = false;
         // Send a small payload on each heartbeat
         $(document).on('heartbeat-send', function (e, data) {
             data.dh_ai_check = { postId: parseInt(postId, 10) || 0, lastSeen: lastSeen };
@@ -205,51 +205,14 @@ jQuery(document).ready(function ($) {
             if (!data || !data.dh_ai) { return; }
             if (data.dh_ai.updated) {
                 lastSeen = data.dh_ai.timestamp || Date.now();
-                if (!notified && statusDiv) {
-                    notified = true;
-                    // Render styled success notice with icon and reload button
-                    var btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'button';
-                    btn.textContent = 'Reload to view AI content';
-                    btn.addEventListener('click', function(){ window.location.reload(); });
-
-                    // Prefer WP success green, fallback to #46b450
-                    var successColor = getComputedStyle(document.documentElement).getPropertyValue('--wp-admin-theme-color-success').trim();
-                    if (!successColor) { successColor = '#46b450'; }
-
-                    statusDiv.innerHTML = '';
-                    statusDiv.style.background = successColor;
-                    statusDiv.style.color = '#ffffff';
-                    statusDiv.style.padding = '6px 10px';
-                    statusDiv.style.borderRadius = '4px';
-                    statusDiv.style.marginTop = '10px';
-                    statusDiv.style.fontSize = '12px';
-
-                    var icon = document.createElement('span');
-                    icon.className = 'dashicons dashicons-yes-alt';
-                    icon.style.color = '#ffffff';
-                    icon.style.verticalAlign = 'middle';
-                    icon.style.marginRight = '6px';
-
-                    var text = document.createElement('strong');
-                    text.appendChild(document.createTextNode('AI content received.'));
-                    text.style.verticalAlign = 'middle';
-                    text.style.marginRight = '8px';
-
-                    statusDiv.appendChild(icon);
-                    statusDiv.appendChild(text);
-                    // Style the button with white background and success green text/border
-                    btn.style.backgroundColor = '#ffffff';
-                    btn.style.color = successColor;
-                    btn.style.borderColor = successColor;
-                    btn.style.boxShadow = 'none';
-                    btn.style.fontWeight = '600';
-                    btn.style.marginLeft = '8px';
-                    statusDiv.appendChild(btn);
-
-                    // Re-enable the Generate button to allow another run if desired
-                    if (generateBtn) { generateBtn.disabled = false; }
+                if (!reloaded) {
+                    reloaded = true;
+                    try {
+                        if (statusDiv) {
+                            statusDiv.textContent = 'AI content received. Reloading…';
+                        }
+                    } catch(_) {}
+                    window.location.reload();
                 }
             }
         });

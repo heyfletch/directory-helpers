@@ -140,10 +140,14 @@ class DH_External_Link_Management {
             else if ($eff_code === 0) { $row_class = 'dh-status-0'; }
             $status_title_text = $r->status_text ?: '';
             if ($ovr_active) {
-                $status_title_text = trim(($status_title_text ? ($status_title_text . ' | ') : '') . 'Override until ' . date_i18n('Y-m-d', $ovr_exp));
+                $status_title_text = trim(($status_title_text ? ($status_title_text . ' | ') : '') . 'Override until ' . wp_date('Y-m-d', $ovr_exp));
             }
             $status_title = $status_title_text ? ' title="' . esc_attr($status_title_text) . '"' : '';
-            $last_checked = $r->last_checked ? esc_html(date_i18n('Y-m-d g:ia', strtotime($r->last_checked))) : '—';
+            $last_checked = '—';
+            if ($r->last_checked) {
+                $ts = strtotime($r->last_checked);
+                if ($ts) { $last_checked = esc_html(wp_date('Y-m-d g:ia', $ts)); }
+            }
             $anchor_disp = esc_html(mb_strimwidth((string)$r->anchor_text, 0, 80, '…'));
             $post_title_for_search = get_the_title($post);
             $search_query = trim(((string)$r->anchor_text) . ' ' . (string)$post_title_for_search);

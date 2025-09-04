@@ -76,7 +76,19 @@ class DH_AI_Content_Generator {
                     <?php esc_html_e('Create Notebook', 'directory-helpers'); ?>
                 </button>
             </p>
-            <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"></div>
+            <?php
+            $last_ai_ts = 0;
+            if (!empty($post) && isset($post->ID)) {
+                $last_ai_ts = (int) get_option('dh_ai_last_update_' . (int) $post->ID, 0);
+            }
+            $status_html = '';
+            if ($last_ai_ts) {
+                $disp = esc_html(wp_date('Y-m-d g:ia', $last_ai_ts));
+                $status_html = '<span class="dashicons dashicons-yes-alt" style="color:#46b450;vertical-align:middle;margin-right:6px;"></span>'
+                    . '<strong style="vertical-align:middle;">' . esc_html__('AI Content', 'directory-helpers') . ' - ' . $disp . '</strong>';
+            }
+            ?>
+            <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"><?php echo $status_html; ?></div>
         </div>
         <?php
     }
