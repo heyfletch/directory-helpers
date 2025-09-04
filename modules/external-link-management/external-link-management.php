@@ -1241,12 +1241,11 @@ class DH_External_Link_Management {
         return array('api_key' => $api, 'cx' => $cx);
     }
 
-    private function call_cse_for_link($post_id, $row) {
+    private function scrape_cse_for_link($post_id, $row) {
         $cfg = $this->get_cse_config();
-        $api_key = isset($cfg['api_key']) ? trim((string)$cfg['api_key']) : '';
         $cx = isset($cfg['cx']) ? trim((string)$cfg['cx']) : '';
-        if (!$api_key || !$cx) {
-            return new WP_Error('no_cse_config', 'CSE API key or CX is not configured.');
+        if (!$cx) {
+            return new WP_Error('no_cse_config', 'CSE CX is not configured.');
         }
         $post = get_post($post_id);
         if (!$post) {
@@ -1254,59 +1253,65 @@ class DH_External_Link_Management {
         }
         $anchor = trim((string)($row->anchor_text ?? ''));
         $title  = get_the_title($post_id);
-        $context = trim((string)($row->context_sentence ?? ''));
         $query = trim($anchor . ' ' . $title);
-        if ($context) { $query .= ' ' . $context; }
 
         $endpoint = add_query_arg(array(
-            'key' => $api_key,
             'cx'  => $cx,
             'q'   => $query,
-            'num' => 10,
-        ), 'https://www.googleapis.com/customsearch/v1');
+        ), 'https://cse.google.com/cse');
 
         $args = array(
             'timeout' => 20,
             'sslverify' => true,
             'httpversion' => '1.1',
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
         );
+
         $response = wp_remote_get($endpoint, $args);
         if (is_wp_error($response)) { return $response; }
+
         $rc = wp_remote_retrieve_response_code($response);
         if ($rc < 200 || $rc >= 300) {
-            return new WP_Error('http_error', sprintf('CSE API request failed with code %d: %s', $rc, wp_remote_retrieve_response_message($response)));
+            return new WP_Error('http_error', sprintf('CSE scrape request failed with code %d: %s', $rc, wp_remote_retrieve_response_message($response)));
         }
+
         $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-        if (!is_array($data) || empty($data['items']) || !is_array($data['items'])) {
-            return new WP_Error('no_results', 'No results from CSE API');
+        if (empty($body)) {
+            return new WP_Error('empty_response', 'CSE scrape returned an empty response body.');
         }
-        $current_url = trim((string)($row->current_url ?? ''));
-        foreach ($data['items'] as $item) {
-            if (!is_array($item) || empty($item['link'])) { continue; }
-            $link = trim((string)$item['link']);
-            if (!$link) { continue; }
-            if (!filter_var($link, FILTER_VALIDATE_URL)) { continue; }
-            if ($current_url && trim($current_url) === $link) { continue; }
-            if ($this->is_blocked_suggestion_url($link)) { continue; }
-            return array('suggested_url' => esc_url_raw($link));
+
+        // Find the first organic result link
+        preg_match('/<a class="gs-title" href="([^"]+)"/', $body, $matches);
+
+        if (empty($matches[1])) {
+            return new WP_Error('no_match', 'Could not find the first organic result link in CSE scrape.');
         }
-        return new WP_Error('no_valid_result', 'CSE returned no acceptable URL');
+
+        $link = trim($matches[1]);
+
+        if (!filter_var($link, FILTER_VALIDATE_URL)) {
+            return new WP_Error('invalid_url', 'The scraped URL is not valid.');
+        }
+
+        return array('suggested_url' => esc_url_raw($link));
     }
 
     private function call_ai_for_link($post_id, $row) {
-        // TEMP: Use only CSE for verification; do NOT fallback to Gemini
+        // TEMP: Use only CSE Scraper for verification; do NOT fallback to Gemini
         $cfg = $this->get_cse_config();
-        $has_cse = !empty($cfg['api_key']) && !empty($cfg['cx']);
-        if (!$has_cse) {
-            return new WP_Error('no_cse_config', 'CSE API key or CX is not configured (temporary CSE-only mode).');
+        $has_cx = !empty($cfg['cx']);
+        if (!$has_cx) {
+            return new WP_Error('no_cse_config', 'CSE CX is not configured (temporary CSE-only mode).');
         }
-        $cse = $this->call_cse_for_link($post_id, $row);
-        if (!is_wp_error($cse) && !empty($cse['suggested_url'])) {
-            return $cse;
+
+        $result = $this->scrape_cse_for_link($post_id, $row);
+
+        if (!is_wp_error($result) && !empty($result['suggested_url'])) {
+            return $result;
         }
-        // Surface CSE error (no fallback)
-        return is_wp_error($cse) ? $cse : new WP_Error('no_valid_result', 'CSE returned no acceptable URL (temporary CSE-only mode).');
+
+        // Surface scraper error (no fallback)
+        return is_wp_error($result) ? $result : new WP_Error('no_valid_result', 'CSE Scraper returned no acceptable URL (temporary CSE-only mode).');
     }
 
     private function call_gemini_for_link($post_id, $row) {
