@@ -154,7 +154,6 @@ class DH_External_Link_Management {
             $anchor_q = rawurlencode($search_query);
             $anchor_link = '<a href="https://www.google.com/search?q=' . $anchor_q . '" target="_blank" rel="noopener">' . $anchor_disp . '</a>';
             $url_disp = esc_html((string)$r->current_url);
-            $url_link = '<a href="' . esc_url((string)$r->current_url) . '" target="_blank" rel="noopener" style="word-break:break-all;">' . $url_disp . '</a>';
             $data_anchor = esc_attr(strtolower((string)$r->anchor_text));
             $data_url = esc_attr(strtolower((string)$r->current_url));
             // Use effective status for data-status and coloring
@@ -168,7 +167,7 @@ class DH_External_Link_Management {
             echo '<td class="dh-elm-manage">'
                 . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button> '
                 . '</td>';
-            echo '<td class="dh-cell-url">' . $url_link . '</td>';
+            echo '<td class="dh-cell-url" style="word-break:break-all; cursor:pointer;">' . $url_disp . '</td>';
             echo '<td class="dh-elm-status"' . $status_title . '><span class="dh-status-code">' . esc_html($status_disp) . '</span> '
                 . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button> '
                 . ($ovr_active
@@ -430,6 +429,24 @@ class DH_External_Link_Management {
                     xhr2.send(fd2);
                 }
 
+                // Click URL cell -> enter edit and select URL input
+                var urlCellClick = e.target && e.target.closest && e.target.closest('.dh-cell-url');
+                if(urlCellClick){
+                    e.preventDefault();
+                    var tr = urlCellClick.closest('tr');
+                    if(!tr){ return; }
+                    if(tr.classList.contains('editing')){ return; }
+                    var btn = tr.querySelector('.dh-elm-edit');
+                    if(btn){
+                        btn.click();
+                        setTimeout(function(){
+                            var inp = tr.querySelector('.dh-cell-url input');
+                            if(inp){ inp.focus(); inp.select(); }
+                        }, 0);
+                    }
+                    return;
+                }
+
                 // Edit button
                 var editBtn = e.target && e.target.closest && e.target.closest('.dh-elm-edit');
                 if(editBtn){
@@ -442,9 +459,7 @@ class DH_External_Link_Management {
                     var urlCell = tr.querySelector('.dh-cell-url');
                     var actionsCell = editBtn.parentNode;
                     var currentAnchorText = anchorCell ? anchorCell.textContent.trim() : '';
-                    var currentUrl = '';
-                    var linkEl = urlCell ? urlCell.querySelector('a') : null;
-                    if(linkEl){ currentUrl = linkEl.getAttribute('href') || linkEl.textContent.trim(); }
+                    var currentUrl = urlCell ? (urlCell.textContent || '').trim() : '';
                     // Build inputs
                     anchorCell.innerHTML = '';
                     var aInput = document.createElement('input');
@@ -499,12 +514,8 @@ class DH_External_Link_Management {
                             a.target = '_blank'; a.rel = 'noopener'; a.textContent = currentAnchorText;
                             anchorCell.innerHTML = ''; anchorCell.appendChild(a);
                         }
+                        urlCell.innerHTML = '';
                         urlCell.textContent = currentUrl;
-                        if(currentUrl){
-                            var u = document.createElement('a');
-                            u.href = currentUrl; u.target = '_blank'; u.rel = 'noopener'; u.style.wordBreak = 'break-all'; u.textContent = currentUrl;
-                            urlCell.innerHTML = ''; urlCell.appendChild(u);
-                        }
                         actionsCell.innerHTML = actionsCell.getAttribute('data-orig') || '';
                     });
 
@@ -538,7 +549,7 @@ class DH_External_Link_Management {
                                     var a = document.createElement('a'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent((updatedAnchor ? (updatedAnchor + ' ') : '') + dhPostTitle); a.target = '_blank'; a.rel = 'noopener'; a.textContent = updatedAnchor; anchorCell.appendChild(a);
                                 }
                                 urlCell.innerHTML = '';
-                                if(updatedUrl){ var u = document.createElement('a'); u.href = updatedUrl; u.target = '_blank'; u.rel = 'noopener'; u.style.wordBreak = 'break-all'; u.textContent = updatedUrl; urlCell.appendChild(u); }
+                                if(updatedUrl){ urlCell.textContent = updatedUrl; }
                                 // Update Status and Last checked cells
                                 var statusCell = tr.querySelector('.dh-elm-status');
                                 var newCode = (res.data.status_code != null ? parseInt(res.data.status_code,10) : 0) || 0;
