@@ -345,14 +345,9 @@ class Directory_Helpers {
             $options['n8n_webhook_url'] = isset($submitted_options['n8n_webhook_url']) ? esc_url_raw($submitted_options['n8n_webhook_url']) : '';
             $options['notebook_webhook_url'] = isset($submitted_options['notebook_webhook_url']) ? esc_url_raw($submitted_options['notebook_webhook_url']) : '';
             $options['shared_secret_key'] = isset($submitted_options['shared_secret_key']) ? sanitize_text_field($submitted_options['shared_secret_key']) : '';
-            // Gemini API Key (for AI integrations)
-            $options['gemini_api_key'] = isset($submitted_options['gemini_api_key']) ? sanitize_text_field($submitted_options['gemini_api_key']) : '';
-
-            // Google Programmable Search (CSE) credentials
-            // API key for the Custom Search JSON API
-            $options['cse_api_key'] = isset($submitted_options['cse_api_key']) ? sanitize_text_field($submitted_options['cse_api_key']) : '';
-            // Custom Search Engine ID (cx)
-            $options['cse_cx'] = isset($submitted_options['cse_cx']) ? sanitize_text_field($submitted_options['cse_cx']) : '';
+            // DataForSEO credentials (Basic Auth)
+            $options['dataforseo_login'] = isset($submitted_options['dataforseo_login']) ? sanitize_text_field($submitted_options['dataforseo_login']) : '';
+            $options['dataforseo_password'] = isset($submitted_options['dataforseo_password']) ? sanitize_text_field($submitted_options['dataforseo_password']) : '';
 
             // Handle Instant Search defaults (placeholder and labels)
             $options['instant_search_placeholder'] = isset($submitted_options['instant_search_placeholder']) ? sanitize_text_field($submitted_options['instant_search_placeholder']) : '';

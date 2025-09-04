@@ -1,4 +1,8 @@
-# Grounding with Google Search  |  Gemini API  |  Google AI for Developers
+# Grounding with Google Search  |  Gemini API  |  Google AI for Developers
+
+> DEPRECATED: This document is retained for historical reference. Directory Helpers no longer uses Gemini or Google Custom Search Engine (CSE) for AI link suggestions. The plugin now uses only the DataForSEO API.
+>
+> Active integration: see `modules/external-link-management/external-link-management.php` and the function `call_dataforseo_for_link()`.
 
 Source: https://ai.google.dev/gemini-api/docs/google-search
 Jina URL: https://r.jina.ai/https://ai.google.dev/gemini-api/docs/google-search

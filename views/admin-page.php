@@ -65,41 +65,20 @@
                         </tr>
                         <tr>
                             <th scope="row">
-                                <label for="gemini_api_key"><?php esc_html_e('Gemini API Key', 'directory-helpers'); ?></label>
+                                <label for="dataforseo_login"><?php esc_html_e('DataForSEO Login', 'directory-helpers'); ?></label>
                             </th>
                             <td>
-                                <input type="password" id="gemini_api_key" name="directory_helpers_options[gemini_api_key]" value="<?php echo esc_attr($options['gemini_api_key'] ?? ''); ?>" class="regular-text" placeholder="AIza...">
-                                <p class="description"><?php esc_html_e('Used by AI features (e.g., Suggest/Replace) that call Google Gemini. Stored in plugin options.', 'directory-helpers'); ?></p>
+                                <input type="text" id="dataforseo_login" name="directory_helpers_options[dataforseo_login]" value="<?php echo esc_attr($options['dataforseo_login'] ?? ''); ?>" class="regular-text" placeholder="email@example.com">
+                                <p class="description"><?php esc_html_e('Used for authenticating with DataForSEO API (Basic Auth).', 'directory-helpers'); ?></p>
                             </td>
                         </tr>
                         <tr>
                             <th scope="row">
-                                <label for="cse_api_key"><?php esc_html_e('Programmable Search API Key', 'directory-helpers'); ?></label>
+                                <label for="dataforseo_password"><?php esc_html_e('DataForSEO Password', 'directory-helpers'); ?></label>
                             </th>
                             <td>
-                                <input type="password" id="cse_api_key" name="directory_helpers_options[cse_api_key]" value="<?php echo esc_attr($options['cse_api_key'] ?? ''); ?>" class="regular-text" placeholder="AIza...">
-                                <p class="description">
-                                    <?php echo wp_kses_post(sprintf(
-                                        /* translators: 1: URL to Google Cloud console */
-                                        __('Primary provider for AI link suggestions. Create a key for the <strong>Custom Search JSON API</strong> in %1$s. This will be used first; if unavailable or no valid result is found, we fall back to Gemini.', 'directory-helpers'),
-                                        '<a href="https://console.cloud.google.com/apis/library/customsearch.googleapis.com" target="_blank" rel="noopener">Google Cloud Console</a>'
-                                    )); ?>
-                                </p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row">
-                                <label for="cse_cx"><?php esc_html_e('Custom Search Engine ID (cx)', 'directory-helpers'); ?></label>
-                            </th>
-                            <td>
-                                <input type="text" id="cse_cx" name="directory_helpers_options[cse_cx]" value="<?php echo esc_attr($options['cse_cx'] ?? ''); ?>" class="regular-text" placeholder="0123456789abcdefg:abc_xyz">
-                                <p class="description">
-                                    <?php echo wp_kses_post(sprintf(
-                                        /* translators: 1: URL to Programmable Search Engine control panel */
-                                        __('Get your CSE ID from the %1$s. An existing CSE can be reused if it searches the public web (or your chosen set of sites).', 'directory-helpers'),
-                                        '<a href="https://programmablesearchengine.google.com/controlpanel/all" target="_blank" rel="noopener">Programmable Search Engine control panel</a>'
-                                    )); ?>
-                                </p>
+                                <input type="password" id="dataforseo_password" name="directory_helpers_options[dataforseo_password]" value="<?php echo esc_attr($options['dataforseo_password'] ?? ''); ?>" class="regular-text">
+                                <p class="description"><?php esc_html_e('Your DataForSEO account password. Stored in plugin options.', 'directory-helpers'); ?></p>
                             </td>
                         </tr>
                         <tr>

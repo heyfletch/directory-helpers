@@ -1165,8 +1165,8 @@ class DH_External_Link_Management {
                 ));
                 
                 if ($row) {
-                    // Call the AI suggestion function (CSE-first with Gemini fallback)
-                    $suggestion = $this->call_ai_for_link($post_id, $row);
+            // Call the AI suggestion function (DataForSEO)
+            $suggestion = $this->call_ai_for_link($post_id, $row);
                     
                     // If we got a suggestion, update the record
                     if (!is_wp_error($suggestion) && !empty($suggestion['suggested_url'])) {
@@ -1222,312 +1222,123 @@ class DH_External_Link_Management {
         ));
     }
 
-    private function get_gemini_api_key() {
+    private function get_dataforseo_credentials() {
         $opts = get_option('directory_helpers_options');
-        if (is_array($opts) && !empty($opts['gemini_api_key'])) {
-            return (string) $opts['gemini_api_key'];
-        }
-        return '';
-    }
-
-    private function get_cse_config() {
-        $opts = get_option('directory_helpers_options');
-        $api = '';
-        $cx  = '';
+        $login = '';
+        $password = '';
         if (is_array($opts)) {
-            if (!empty($opts['cse_api_key'])) { $api = (string) $opts['cse_api_key']; }
-            if (!empty($opts['cse_cx'])) { $cx = (string) $opts['cse_cx']; }
+            if (!empty($opts['dataforseo_login'])) { $login = (string) $opts['dataforseo_login']; }
+            if (!empty($opts['dataforseo_password'])) { $password = (string) $opts['dataforseo_password']; }
         }
-        return array('api_key' => $api, 'cx' => $cx);
+        return array('login' => $login, 'password' => $password);
     }
 
-    private function scrape_cse_for_link($post_id, $row) {
-        $cfg = $this->get_cse_config();
-        $cx = isset($cfg['cx']) ? trim((string)$cfg['cx']) : '';
-        if (!$cx) {
-            return new WP_Error('no_cse_config', 'CSE CX is not configured.');
-        }
+    private function call_dataforseo_for_link($post_id, $row) {
+        // Build the keyword from anchor text and post title
         $post = get_post($post_id);
         if (!$post) {
             return new WP_Error('no_post', 'Post not found.');
         }
         $anchor = trim((string)($row->anchor_text ?? ''));
         $title  = get_the_title($post_id);
-        $query = trim($anchor . ' ' . $title);
+        $keyword = trim($anchor . ' ' . $title);
+        if ($keyword === '') {
+            return new WP_Error('empty_keyword', 'No keyword to search (missing anchor text and title).');
+        }
 
-        // 1) Try CSE Element API (JSONP) which mirrors the web UI organic results
-        //    Endpoint example:
-        //    https://cse.google.com/cse/element/v1?rsz=filtered_cse&num=1&hl=en&source=gcsc&gss=.com&cx=...&q=...&safe=off&callback=google.search.cse.api1234
-        $jsonp_endpoint = add_query_arg(array(
-            'rsz' => 'filtered_cse',
-            'num' => 10, // fetch more to be resilient if first is malformed
-            'hl'  => substr(get_locale(), 0, 2) ?: 'en',
-            'source' => 'gcsc',
-            'gss' => '.com',
-            'cx'  => $cx,
-            'q'   => $query,
-            'safe'=> 'off',
-            'callback' => 'google.search.cse.api' . wp_rand(1000, 9999),
-        ), 'https://cse.google.com/cse/element/v1');
+        // Credentials
+        $creds = $this->get_dataforseo_credentials();
+        $login = isset($creds['login']) ? (string) $creds['login'] : '';
+        $password = isset($creds['password']) ? (string) $creds['password'] : '';
+        if ($login === '' || $password === '') {
+            return new WP_Error('no_dataforseo_creds', 'DataForSEO credentials are not configured.');
+        }
 
-        $args = array(
-            'timeout' => 20,
-            'sslverify' => true,
-            'httpversion' => '1.1',
-            'headers' => array(
-                // Some installations require a referer that matches CSE origin
-                'Referer' => 'https://cse.google.com/cse?cx=' . rawurlencode($cx),
-                'Accept-Language' => (substr(get_locale(), 0, 2) ?: 'en') . ',en;q=0.8',
-            ),
-            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        // Endpoint and payload per DataForSEO Google Organic Live Advanced
+        $endpoint = 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced';
+        $lang = substr(get_locale(), 0, 2) ?: 'en';
+        $payload = array(
+            array(
+                'language_code' => $lang,
+                'location_code' => 2840, // United States
+                'keyword' => $keyword,
+                'device' => 'desktop',
+                'os' => 'windows',
+                'depth' => 20,
+            )
         );
 
-        $response = wp_remote_get($jsonp_endpoint, $args);
-        if (!is_wp_error($response)) {
-            $rc = wp_remote_retrieve_response_code($response);
-            if ($rc >= 200 && $rc < 300) {
-                $body = (string) wp_remote_retrieve_body($response);
-                if ($body !== '') {
-                    // Extract JSON from JSONP callback
-                    // Find the first '(' and the last ')'
-                    $open = strpos($body, '(');
-                    $close = strrpos($body, ')');
-                    if ($open !== false && $close !== false && $close > $open) {
-                        $json = substr($body, $open + 1, $close - $open - 1);
-                        $data = json_decode($json, true);
-                        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-                            // The Element API commonly returns an array under 'results'. Some variants may return 'items'.
-                            $results = array();
-                            if (isset($data['results']) && is_array($data['results'])) {
-                                $results = $data['results'];
-                            } elseif (isset($data['items']) && is_array($data['items'])) {
-                                $results = $data['items'];
-                            }
-                            if (!empty($results)) {
-                                foreach ($results as $r) {
-                                    $candidate = '';
-                                    if (is_array($r)) {
-                                        if (!empty($r['url'])) { $candidate = (string) $r['url']; }
-                                        elseif (!empty($r['link'])) { $candidate = (string) $r['link']; }
-                                        elseif (!empty($r['unescapedUrl'])) { $candidate = (string) $r['unescapedUrl']; }
-                                    }
-                                    $candidate = trim($candidate);
-                                    if ($candidate && filter_var($candidate, FILTER_VALIDATE_URL)) {
-                                        if (!$this->is_blocked_suggestion_url($candidate)) {
-                                            return array('suggested_url' => esc_url_raw($candidate));
-                                        }
-                                        // otherwise skip blocked candidate and continue
-                                    }
-                                }
-                            }
+        $args = array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($login . ':' . $password),
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ),
+            'timeout' => 30,
+            'sslverify' => true,
+            'httpversion' => '1.1',
+            'blocking' => true,
+            'body' => wp_json_encode($payload),
+        );
+
+        $response = wp_remote_post($endpoint, $args);
+        if (is_wp_error($response)) {
+            return new WP_Error('http_request_failed', 'Failed to connect to DataForSEO API: ' . $response->get_error_message());
+        }
+        $rc = (int) wp_remote_retrieve_response_code($response);
+        if ($rc < 200 || $rc >= 300) {
+            return new WP_Error('http_error', sprintf('DataForSEO API request failed with code %d: %s', $rc, wp_remote_retrieve_response_message($response)));
+        }
+        $body = (string) wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return new WP_Error('invalid_response', 'Invalid response from DataForSEO API');
+        }
+
+        // Parse results.
+        // 1) Prefer the first safe organic result with rank_group = 1.
+        // 2) If none, fall back to the best (lowest rank_group) safe organic result.
+        $best_fallback = null;
+        $best_rank = PHP_INT_MAX;
+        if (!empty($data['tasks']) && is_array($data['tasks'])) {
+            foreach ($data['tasks'] as $task) {
+                if (empty($task['result']) || !is_array($task['result'])) { continue; }
+                foreach ($task['result'] as $res) {
+                    if (empty($res['items']) || !is_array($res['items'])) { continue; }
+                    foreach ($res['items'] as $item) {
+                        $type = isset($item['type']) ? (string)$item['type'] : '';
+                        $rank_group = isset($item['rank_group']) ? (int)$item['rank_group'] : 0;
+                        $url = isset($item['url']) ? trim((string)$item['url']) : '';
+                        if ($type !== 'organic' || !$url || !filter_var($url, FILTER_VALIDATE_URL)) { continue; }
+                        if ($this->is_blocked_suggestion_url($url)) { continue; }
+                        // Primary: rank_group === 1
+                        if ($rank_group === 1) {
+                            return array('suggested_url' => esc_url_raw($url));
+                        }
+                        // Fallback: track the best (lowest) rank_group seen
+                        if ($rank_group > 0 && $rank_group < $best_rank) {
+                            $best_rank = $rank_group;
+                            $best_fallback = $url;
                         }
                     }
                 }
             }
         }
 
-        // 2) Fallback to scraping the CSE web UI HTML
-        $fallback_endpoint = add_query_arg(array(
-            'cx'  => $cx,
-            'q'   => $query,
-        ), 'https://cse.google.com/cse');
-
-        $response2 = wp_remote_get($fallback_endpoint, $args);
-        if (is_wp_error($response2)) { return $response2; }
-
-        $rc2 = wp_remote_retrieve_response_code($response2);
-        if ($rc2 < 200 || $rc2 >= 300) {
-            return new WP_Error('http_error', sprintf('CSE scrape request failed with code %d: %s', $rc2, wp_remote_retrieve_response_message($response2)));
+        if ($best_fallback) {
+            return array('suggested_url' => esc_url_raw($best_fallback));
         }
 
-        $body2 = wp_remote_retrieve_body($response2);
-        if (empty($body2)) {
-            return new WP_Error('empty_response', 'CSE scrape returned an empty response body.');
-        }
-
-        // Find the first organic result link (skip blocked/redirect hosts)
-        if (preg_match_all('/<a class="gs-title" href="([^"]+)"/i', $body2, $all, PREG_SET_ORDER)) {
-            foreach ($all as $m) {
-                $link = isset($m[1]) ? trim($m[1]) : '';
-                if ($link && filter_var($link, FILTER_VALIDATE_URL) && !$this->is_blocked_suggestion_url($link)) {
-                    return array('suggested_url' => esc_url_raw($link));
-                }
-            }
-        }
-
-        return new WP_Error('no_match', 'Could not find the first organic result link.');
+        return new WP_Error('no_match', 'No suitable organic result found from DataForSEO response.');
     }
 
+    
     private function call_ai_for_link($post_id, $row) {
-        // TEMP: Use only CSE Scraper for verification; do NOT fallback to Gemini
-        $cfg = $this->get_cse_config();
-        $has_cx = !empty($cfg['cx']);
-        if (!$has_cx) {
-            return new WP_Error('no_cse_config', 'CSE CX is not configured (temporary CSE-only mode).');
-        }
-
-        $result = $this->scrape_cse_for_link($post_id, $row);
-
-        if (!is_wp_error($result) && !empty($result['suggested_url'])) {
-            return $result;
-        }
-
-        // Surface scraper error (no fallback)
-        return is_wp_error($result) ? $result : new WP_Error('no_valid_result', 'CSE Scraper returned no acceptable URL (temporary CSE-only mode).');
+        // Delegates to DataForSEO for AI suggestion
+        return $this->call_dataforseo_for_link($post_id, $row);
     }
 
-    private function call_gemini_for_link($post_id, $row) {
-        $api_key = $this->get_gemini_api_key();
-        if (!$api_key) {
-            return new WP_Error('no_key', 'Gemini API key is not configured.');
-        }
-        $post = get_post($post_id);
-        if (!$post) {
-            return new WP_Error('no_post', 'Post not found.');
-        }
-        $anchor = trim((string)($row->anchor_text ?? ''));
-        $current_url = trim((string)($row->current_url ?? ''));
-        $context = trim((string)($row->context_sentence ?? ''));
-        $title = get_the_title($post_id);
-        $locale = get_locale();
-
-        $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-        $prompt = "This URL is broken: {$current_url}
-It has the anchor text: {$anchor}
-It is in: {$title}
-
-To find the best URL replacement to link to that anchor text, do a web search for: {$anchor} {$title}.
-
-Return a single direct URL to the destination page that best matches the anchor text and context. Do not return any search result pages, tracking/redirect links, or shortened URLs.
-
-Never return a URL from these hosts or their subdomains: google.com, cloud.google.com, googleusercontent.com, vertexaisearch.cloud.google.com, youtube.com, g.co, goo.gl, bit.ly, t.co.
-
-Only return the URL. Nothing else. No explanations. No Intros. No Outros.";
-
-        $body = [
-            'contents' => [
-                [
-                    'parts' => [
-                        ['text' => $prompt]
-                    ]
-                ]
-            ],
-            'tools' => [
-                [
-                    'google_search' => new stdClass()
-                ]
-            ]
-        ];
-
-        $args = [
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'x-goog-api-key' => $api_key,
-            ],
-            'timeout' => 30, // Increased from 20 to 30 seconds
-            'sslverify' => true,
-            'httpversion' => '1.1',
-            'blocking' => true,
-            'body' => wp_json_encode($body),
-        ];
-
-        // Try the request up to 3 times
-        $max_retries = 3;
-        $attempt = 0;
-        $response = null;
-
-        while ($attempt < $max_retries) {
-            $attempt++;
-            $response = wp_remote_post($endpoint, $args);
-            
-            if (!is_wp_error($response)) {
-                $response_code = wp_remote_retrieve_response_code($response);
-                if ($response_code >= 200 && $response_code < 300) {
-                    break; // Success, exit retry loop
-                }
-                
-                // If we got a server error (5xx), retry
-                if ($response_code < 500) {
-                    return new WP_Error(
-                        'http_error', 
-                        sprintf('Gemini API request failed with code %d: %s', 
-                            $response_code, 
-                            wp_remote_retrieve_response_message($response)
-                        )
-                    );
-                }
-            } elseif ($attempt === $max_retries) {
-                // On last attempt, return the error
-                return new WP_Error(
-                    'http_request_failed', 
-                    'Failed to connect to Gemini API after ' . $max_retries . ' attempts: ' . $response->get_error_message()
-                );
-            }
-            
-            // Wait before retrying (1s, 2s, 3s, etc.)
-            if ($attempt < $max_retries) {
-                sleep($attempt);
-            }
-        }
-
-        $response_body = wp_remote_retrieve_body($response);
-        $data = json_decode($response_body, true);
-        
-        if (!is_array($data) || !isset($data['candidates'][0]['content']['parts'][0]['text'])) {
-            return new WP_Error('invalid_response', 'Invalid response from Gemini API');
-        }
-
-        // Extract the URL from the response
-        $suggested_url = trim($data['candidates'][0]['content']['parts'][0]['text']);
-
-        // Validate it's a URL
-        if (!filter_var($suggested_url, FILTER_VALIDATE_URL)) {
-            return new WP_Error('invalid_url', 'The response did not contain a valid URL');
-        }
-
-        // If the suggestion is a blocked/redirect/search URL, try one stricter retry
-        if ($this->is_blocked_suggestion_url($suggested_url)) {
-            $prompt2 = $prompt . "\n\nThe previous suggestion was invalid because it was a Google/search/redirect/shortener URL. Return a direct URL to the official website page that best matches the anchor text and context. Do not return any URL from google.com, cloud.google.com, googleusercontent.com, vertexaisearch.cloud.google.com, youtube.com, g.co, goo.gl, bit.ly, t.co. Only return one direct URL.";
-            $body2 = [
-                'contents' => [ [ 'parts' => [ ['text' => $prompt2] ] ] ],
-                'tools' => [ [ 'google_search' => new stdClass() ] ]
-            ];
-            $args2 = $args;
-            $args2['body'] = wp_json_encode($body2);
-
-            $attempt2 = 0; $response2 = null; $max_retries = 3;
-            while ($attempt2 < $max_retries) {
-                $attempt2++;
-                $response2 = wp_remote_post($endpoint, $args2);
-                if (!is_wp_error($response2)) {
-                    $rc = wp_remote_retrieve_response_code($response2);
-                    if ($rc >= 200 && $rc < 300) { break; }
-                    if ($rc < 500) {
-                        return new WP_Error('http_error', sprintf('Gemini API request failed with code %d: %s', $rc, wp_remote_retrieve_response_message($response2)));
-                    }
-                } elseif ($attempt2 === $max_retries) {
-                    return new WP_Error('http_request_failed', 'Failed to connect to Gemini API on retry: ' . $response2->get_error_message());
-                }
-                if ($attempt2 < $max_retries) { sleep($attempt2); }
-            }
-            $response_body2 = wp_remote_retrieve_body($response2);
-            $data2 = json_decode($response_body2, true);
-            if (!is_array($data2) || !isset($data2['candidates'][0]['content']['parts'][0]['text'])) {
-                return new WP_Error('invalid_response', 'Invalid response from Gemini API');
-            }
-            $suggested2 = trim($data2['candidates'][0]['content']['parts'][0]['text']);
-            if (!filter_var($suggested2, FILTER_VALIDATE_URL)) {
-                return new WP_Error('invalid_url', 'The response did not contain a valid URL');
-            }
-            if ($this->is_blocked_suggestion_url($suggested2)) {
-                return new WP_Error('invalid_url', 'Model returned a blocked/redirect URL.');
-            }
-            return [ 'suggested_url' => esc_url_raw($suggested2) ];
-        }
-
-        return [ 'suggested_url' => esc_url_raw($suggested_url) ];
-    }
-
+    
     public function ajax_set_override() {
         $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
         $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
@@ -1584,7 +1395,7 @@ Only return the URL. Nothing else. No explanations. No Intros. No Outros.";
         $row = $wpdb->get_row($wpdb->prepare("SELECT id, anchor_text, current_url, context_sentence FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
         if (!$row) { wp_send_json_error(array('message' => 'not found')); }
 
-        // Use CSE-first with Gemini fallback
+        // Use DataForSEO for link suggestion
         $ai = $this->call_ai_for_link($post_id, $row);
         if (is_wp_error($ai)) {
             wp_send_json_error(array('message' => $ai->get_error_message()));
