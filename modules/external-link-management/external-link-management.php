@@ -543,6 +543,9 @@ class DH_External_Link_Management {
                             setRowVisual(tr, newCode);
                             var lcCell = tr.querySelector('.dh-elm-last-checked'); if(lcCell){ lcCell.textContent = res.data.last_checked_display || '—'; }
                             if(msg){ msg.className='dh-ai-msg'; msg.textContent='Replaced'; }
+                            // Remove the AI Replace button after successful replacement
+                            var aiApplyBtn = tr.querySelector('.dh-elm-ai-apply');
+                            if(aiApplyBtn) { aiApplyBtn.remove(); }
                         } else {
                             var err = (res && res.data && res.data.message) ? res.data.message : 'AI replace failed';
                             if(msg){ msg.className='dh-ai-msg dh-ai-error'; msg.textContent=err; }
@@ -1073,6 +1076,42 @@ class DH_External_Link_Management {
         return array($code, $text);
     }
 
+    /**
+     * Validate that a suggested URL is a direct, usable destination (not a Google/Vertex redirect, shortener, or tracker)
+     */
+    private function is_blocked_suggestion_url($url) {
+        if (!is_string($url) || $url === '') { return true; }
+        $parts = wp_parse_url($url);
+        if (!$parts || empty($parts['host'])) { return true; }
+        $host = strtolower($parts['host']);
+        $path = isset($parts['path']) ? strtolower($parts['path']) : '';
+        $query = isset($parts['query']) ? strtolower($parts['query']) : '';
+
+        // Hard blocklist of hosts we never want to accept
+        $blocked_hosts = array(
+            'vertexaisearch.cloud.google.com',
+            'cloud.google.com', 'console.cloud.google.com',
+            'google.com', 'www.google.com', 'news.google.com', 'maps.google.com', 'support.google.com', 'developers.google.com', 'accounts.google.com',
+            'googleusercontent.com', 'www.googleusercontent.com',
+            'g.co', 'goo.gl', 'bit.ly', 't.co'
+        );
+        if (in_array($host, $blocked_hosts, true)) { return true; }
+        // Any subdomain of google.com or googleusercontent.com
+        if (preg_match('/(^|\.)google\.com$/', $host) || preg_match('/(^|\.)googleusercontent\.com$/', $host)) { return true; }
+        if (preg_match('/(^|\.)cloud\.google\.com$/', $host)) { return true; }
+
+        // Block common redirect/tracker paths or query params
+        if (strpos($path, '/url') !== false || strpos($path, 'grounding-api-redirect') !== false) { return true; }
+        if (strpos($path, '/search') !== false || strpos($path, '/aclk') !== false) { return true; }
+        if (strpos($query, 'q=') !== false || strpos($query, 'url=') !== false) { return true; }
+
+        // Must be http(s)
+        $scheme = isset($parts['scheme']) ? strtolower($parts['scheme']) : '';
+        if ($scheme !== 'http' && $scheme !== 'https') { return true; }
+
+        return false; // not blocked
+    }
+
     private function check_links_for_post($post_id) {
         global $wpdb;
         $table = $this->table_name();
@@ -1209,11 +1248,13 @@ class DH_External_Link_Management {
         $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
         $prompt = "This URL is broken: {$current_url}
 It has the anchor text: {$anchor}
-It is in or near the town: {$title}
+It is in: {$title}
 
-Do a web search to find the best URL replacement to link to that anchor text. 
+To find the best URL replacement to link to that anchor text, do a web search for: {$anchor} {$title}.
 
-This will probably be the first search result, but if that result is not relevant for the anchor text or not relevant for a page about dog training in or near {$title}, then return the next most relevant URL. 
+Return a single direct URL to the destination page that best matches the anchor text and context. Do not return any search result pages, tracking/redirect links, or shortened URLs.
+
+Never return a URL from these hosts or their subdomains: google.com, cloud.google.com, googleusercontent.com, vertexaisearch.cloud.google.com, youtube.com, g.co, goo.gl, bit.ly, t.co.
 
 Only return the URL. Nothing else. No explanations. No Intros. No Outros.";
 
@@ -1292,15 +1333,53 @@ Only return the URL. Nothing else. No explanations. No Intros. No Outros.";
 
         // Extract the URL from the response
         $suggested_url = trim($data['candidates'][0]['content']['parts'][0]['text']);
-        
+
         // Validate it's a URL
         if (!filter_var($suggested_url, FILTER_VALIDATE_URL)) {
             return new WP_Error('invalid_url', 'The response did not contain a valid URL');
         }
 
-        return [
-            'suggested_url' => esc_url_raw($suggested_url)
-        ];
+        // If the suggestion is a blocked/redirect/search URL, try one stricter retry
+        if ($this->is_blocked_suggestion_url($suggested_url)) {
+            $prompt2 = $prompt . "\n\nThe previous suggestion was invalid because it was a Google/search/redirect/shortener URL. Return a direct URL to the official website page that best matches the anchor text and context. Do not return any URL from google.com, cloud.google.com, googleusercontent.com, vertexaisearch.cloud.google.com, youtube.com, g.co, goo.gl, bit.ly, t.co. Only return one direct URL.";
+            $body2 = [
+                'contents' => [ [ 'parts' => [ ['text' => $prompt2] ] ] ],
+                'tools' => [ [ 'google_search' => new stdClass() ] ]
+            ];
+            $args2 = $args;
+            $args2['body'] = wp_json_encode($body2);
+
+            $attempt2 = 0; $response2 = null; $max_retries = 3;
+            while ($attempt2 < $max_retries) {
+                $attempt2++;
+                $response2 = wp_remote_post($endpoint, $args2);
+                if (!is_wp_error($response2)) {
+                    $rc = wp_remote_retrieve_response_code($response2);
+                    if ($rc >= 200 && $rc < 300) { break; }
+                    if ($rc < 500) {
+                        return new WP_Error('http_error', sprintf('Gemini API request failed with code %d: %s', $rc, wp_remote_retrieve_response_message($response2)));
+                    }
+                } elseif ($attempt2 === $max_retries) {
+                    return new WP_Error('http_request_failed', 'Failed to connect to Gemini API on retry: ' . $response2->get_error_message());
+                }
+                if ($attempt2 < $max_retries) { sleep($attempt2); }
+            }
+            $response_body2 = wp_remote_retrieve_body($response2);
+            $data2 = json_decode($response_body2, true);
+            if (!is_array($data2) || !isset($data2['candidates'][0]['content']['parts'][0]['text'])) {
+                return new WP_Error('invalid_response', 'Invalid response from Gemini API');
+            }
+            $suggested2 = trim($data2['candidates'][0]['content']['parts'][0]['text']);
+            if (!filter_var($suggested2, FILTER_VALIDATE_URL)) {
+                return new WP_Error('invalid_url', 'The response did not contain a valid URL');
+            }
+            if ($this->is_blocked_suggestion_url($suggested2)) {
+                return new WP_Error('invalid_url', 'Model returned a blocked/redirect URL.');
+            }
+            return [ 'suggested_url' => esc_url_raw($suggested2) ];
+        }
+
+        return [ 'suggested_url' => esc_url_raw($suggested_url) ];
     }
 
     public function ajax_set_override() {
@@ -1475,6 +1554,10 @@ Only return the URL. Nothing else. No explanations. No Intros. No Outros.";
         if (!$row) { wp_send_json_error(array('message' => 'not found')); }
         $sug = isset($row->ai_suggestion_url) ? esc_url_raw((string)$row->ai_suggestion_url) : '';
         if (!$sug || !preg_match('#^https?://#i', $sug)) { wp_send_json_error(array('message' => 'No valid AI suggestion to apply')); }
+        // Block Google/search/redirect/shortener suggestions, ask user to re-run Suggest
+        if ($this->is_blocked_suggestion_url($sug)) {
+            wp_send_json_error(array('message' => 'AI suggestion points to a redirect/search URL. Please run AI Suggest again.'));
+        }
         // Check status of suggested URL
         list($code, $text) = $this->http_check_url($sug, 10);
         $now = current_time('mysql');
@@ -1505,6 +1588,7 @@ Only return the URL. Nothing else. No explanations. No Intros. No Outros.";
             'status_code' => (int) $code,
             'status_title' => (string) $text,
             'last_checked_display' => $last_checked_display,
+            'should_hide_button' => true // Flag to indicate the button should be hidden
         ));
     }
 
