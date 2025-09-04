@@ -112,6 +112,9 @@ class DH_External_Link_Management {
         // Inline styles for status coloring
         echo '<style>
         .dh-elm-table .dh-elm-status{ white-space: nowrap; }
+        /* Actions and ID columns: minimal width and no wrapping */
+        .dh-elm-table th.dh-col-actions, .dh-elm-table td.dh-elm-manage { width:1%; white-space:nowrap; }
+        .dh-elm-table th.dh-col-id, .dh-elm-table td.dh-cell-id { width:1%; white-space:nowrap; }
         /* Color rows: include URL cell text now that it is not a hyperlink */
         tr.dh-status-ok .dh-elm-status, tr.dh-status-ok .dh-cell-url, tr.dh-status-ok .dh-cell-anchor a { color:#1f8a3b; font-weight:600; }
         tr.dh-status-4xx .dh-elm-status, tr.dh-status-4xx .dh-cell-url, tr.dh-status-4xx .dh-cell-anchor a { color:#d63638; font-weight:600; }
@@ -119,13 +122,12 @@ class DH_External_Link_Management {
         </style>';
 
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
-        echo '<th class="dh-sort" data-key="id" style="width:70px; cursor:pointer;">' . esc_html__('ID', 'directory-helpers') . '</th>';
+        echo '<th class="dh-sort dh-col-id" data-key="id" style="cursor:pointer;">' . esc_html__('ID', 'directory-helpers') . '</th>';
+        echo '<th class="dh-col-actions">' . esc_html__('Actions', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="anchor" style="cursor:pointer;">' . esc_html__('Anchor', 'directory-helpers') . '</th>';
-        echo '<th style="width:170px;">' . esc_html__('Manage', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="url" style="cursor:pointer;">' . esc_html__('URL', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="status" style="width:110px; cursor:pointer;">' . esc_html__('Status', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="checked" style="width:140px; cursor:pointer;">' . esc_html__('Last checked', 'directory-helpers') . '</th>';
-        echo '<th style="width:120px;">' . esc_html__('Delete', 'directory-helpers') . '</th>';
         echo '</tr></thead><tbody>';
         foreach ($rows as $r) {
             $now_ts = time();
@@ -163,11 +165,12 @@ class DH_External_Link_Management {
             $data_ovr = $ovr_active ? 1 : 0;
             $data_ovrexp = $ovr_active ? $ovr_exp : 0;
             echo '<tr class="' . esc_attr($row_class) . '" data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '" data-override="' . (int)$data_ovr . '" data-override-expires="' . (int)$data_ovrexp . '">';
-            echo '<td>' . (int)$r->id . '</td>';
-            echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
+            echo '<td class="dh-cell-id">' . (int)$r->id . '</td>';
             echo '<td class="dh-elm-manage">'
-                . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button> '
+                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button> '
+                . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button>'
                 . '</td>';
+            echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
             echo '<td class="dh-cell-url" style="word-break:break-all; cursor:pointer;">' . $url_disp . '</td>';
             echo '<td class="dh-elm-status"' . $status_title . '><span class="dh-status-code">' . esc_html($status_disp) . '</span> '
                 . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button> '
@@ -177,9 +180,6 @@ class DH_External_Link_Management {
                   )
                 . '</td>';
             echo '<td class="dh-elm-last-checked">' . $last_checked . '</td>';
-            echo '<td>'
-                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button>'
-                . '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
