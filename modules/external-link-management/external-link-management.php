@@ -109,10 +109,18 @@ class DH_External_Link_Management {
             . '<button type="button" class="button dh-elm-open-200">' . esc_html__('↗️ Open all links', 'directory-helpers') . '</button>'
             . '</p>';
 
+        // Inline styles for status coloring
+        echo '<style>
+        .dh-elm-table .dh-elm-status{ white-space: nowrap; }
+        tr.dh-status-ok .dh-elm-status, tr.dh-status-ok .dh-cell-url a, tr.dh-status-ok .dh-cell-anchor a { color:#1f8a3b; font-weight:600; }
+        tr.dh-status-4xx .dh-elm-status, tr.dh-status-4xx .dh-cell-url a, tr.dh-status-4xx .dh-cell-anchor a { color:#d63638; font-weight:600; }
+        tr.dh-status-0 .dh-elm-status, tr.dh-status-0 .dh-cell-url a, tr.dh-status-0 .dh-cell-anchor a { color:#555; font-weight:600; }
+        </style>';
+
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
         echo '<th class="dh-sort" data-key="id" style="width:70px; cursor:pointer;">' . esc_html__('ID', 'directory-helpers') . '</th>';
-        echo '<th style="width:170px;">' . esc_html__('Manage', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="anchor" style="cursor:pointer;">' . esc_html__('Anchor', 'directory-helpers') . '</th>';
+        echo '<th style="width:170px;">' . esc_html__('Manage', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="url" style="cursor:pointer;">' . esc_html__('URL', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="status" style="width:110px; cursor:pointer;">' . esc_html__('Status', 'directory-helpers') . '</th>';
         echo '<th class="dh-sort" data-key="checked" style="width:140px; cursor:pointer;">' . esc_html__('Last checked', 'directory-helpers') . '</th>';
@@ -125,6 +133,11 @@ class DH_External_Link_Management {
             $ovr_active = ($ovr_code && $ovr_exp && $ovr_exp > $now_ts);
             $status_val = is_null($r->status_code) ? null : (int)$r->status_code;
             $status_disp = $ovr_active ? $ovr_code : ($status_val === null ? '—' : $status_val);
+            $eff_code = $ovr_active ? (int)$ovr_code : (int)($status_val === null ? 0 : $status_val);
+            $row_class = '';
+            if ($eff_code === 200) { $row_class = 'dh-status-ok'; }
+            else if ($eff_code >= 400 && $eff_code < 500) { $row_class = 'dh-status-4xx'; }
+            else if ($eff_code === 0) { $row_class = 'dh-status-0'; }
             $status_title_text = $r->status_text ?: '';
             if ($ovr_active) {
                 $status_title_text = trim(($status_title_text ? ($status_title_text . ' | ') : '') . 'Override until ' . date_i18n('Y-m-d', $ovr_exp));
@@ -138,23 +151,25 @@ class DH_External_Link_Management {
             $url_link = '<a href="' . esc_url((string)$r->current_url) . '" target="_blank" rel="noopener" style="word-break:break-all;">' . $url_disp . '</a>';
             $data_anchor = esc_attr(strtolower((string)$r->anchor_text));
             $data_url = esc_attr(strtolower((string)$r->current_url));
-            $data_status = is_null($r->status_code) ? 999999 : (int)$r->status_code;
+            // Use effective status for data-status and coloring
+            $data_status = (int)$eff_code;
             $data_checked = $r->last_checked ? (int) strtotime($r->last_checked) : 0;
             $data_ovr = $ovr_active ? 1 : 0;
             $data_ovrexp = $ovr_active ? $ovr_exp : 0;
-            echo '<tr data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '" data-override="' . (int)$data_ovr . '" data-override-expires="' . (int)$data_ovrexp . '">';
+            echo '<tr class="' . esc_attr($row_class) . '" data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '" data-override="' . (int)$data_ovr . '" data-override-expires="' . (int)$data_ovrexp . '">';
             echo '<td>' . (int)$r->id . '</td>';
+            echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
             echo '<td class="dh-elm-manage">'
                 . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button> '
-                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button> '
+                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button>'
+                . '</td>';
+            echo '<td class="dh-cell-url">' . $url_link . '</td>';
+            echo '<td class="dh-elm-status"' . $status_title . '><span class="dh-status-code">' . esc_html($status_disp) . '</span> '
                 . ($ovr_active
                     ? '<button type="button" class="button button-small dh-elm-override-clear" data-nonce="' . esc_attr($manage_nonce) . '">Clear override</button>'
                     : '<button type="button" class="button button-small dh-elm-override-ok" data-nonce="' . esc_attr($manage_nonce) . '">Mark OK (30d)</button>'
                   )
                 . '</td>';
-            echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
-            echo '<td class="dh-cell-url">' . $url_link . '</td>';
-            echo '<td class="dh-elm-status"' . $status_title . '>' . esc_html($status_disp) . '</td>';
             echo '<td class="dh-elm-last-checked">' . $last_checked . '</td>';
             echo '<td>' . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button>' . '</td>';
             echo '</tr>';
@@ -166,6 +181,30 @@ class DH_External_Link_Management {
         ?>
         <script type="text/javascript">
         (function(){
+            function setRowVisual(tr, effectiveCode){
+                if(!tr) return;
+                tr.classList.remove('dh-status-ok','dh-status-4xx','dh-status-0');
+                var cls = '';
+                if(effectiveCode === 200){ cls = 'dh-status-ok'; }
+                else if(effectiveCode >= 400 && effectiveCode < 500){ cls = 'dh-status-4xx'; }
+                else if(effectiveCode === 0){ cls = 'dh-status-0'; }
+                if(cls){ tr.classList.add(cls); }
+                tr.setAttribute('data-status', String(effectiveCode||0));
+            }
+
+            function setStatusCell(tr, code, title){
+                var cell = tr && tr.querySelector && tr.querySelector('.dh-elm-status');
+                if(!cell) return;
+                var span = cell.querySelector('.dh-status-code');
+                if(!span){
+                    span = document.createElement('span');
+                    span.className = 'dh-status-code';
+                    cell.insertBefore(span, cell.firstChild);
+                }
+                span.textContent = String(code);
+                if(title){ cell.setAttribute('title', title); } else { cell.removeAttribute('title'); }
+            }
+
             function onClick(e){
                 // Open all 200 links button
                 var openBtn = e.target && e.target.closest && e.target.closest('.dh-elm-open-200');
@@ -206,18 +245,25 @@ class DH_External_Link_Management {
                         try {
                             var res = JSON.parse(xhr.responseText);
                             if(res && res.success && res.data){
-                                var cell = tr.querySelector('.dh-elm-status');
-                                if(cell){
-                                    cell.textContent = String(res.data.status_code);
-                                    if(res.data.status_title){ cell.setAttribute('title', res.data.status_title); }
-                                }
+                                setStatusCell(tr, res.data.status_code, res.data.status_title || '');
                                 var lc = tr.querySelector('.dh-elm-last-checked'); if(lc){ lc.textContent = res.data.last_checked_display || '—'; }
-                                tr.setAttribute('data-status', String(parseInt(res.data.status_code,10)||0));
                                 tr.setAttribute('data-override','1');
                                 tr.setAttribute('data-override-expires', String(res.data.override_expires_ts||0));
-                                // Swap buttons
-                                var manage = tr.querySelector('.dh-elm-manage');
-                                if(manage){ manage.innerHTML = manage.innerHTML.replace('dh-elm-override-ok','dh-elm-override-clear').replace('Mark OK (30d)','Clear override'); }
+                                // Swap buttons in Status cell
+                                var statusCell = tr.querySelector('.dh-elm-status');
+                                if(statusCell){
+                                    var btn = statusCell.querySelector('.dh-elm-override-ok');
+                                    if(btn){ btn.classList.remove('dh-elm-override-ok'); btn.classList.add('dh-elm-override-clear'); btn.textContent = 'Clear override'; }
+                                    else {
+                                        var newBtn = document.createElement('button');
+                                        newBtn.type = 'button'; newBtn.className = 'button button-small dh-elm-override-clear';
+                                        newBtn.setAttribute('data-nonce', ovrSetBtn.getAttribute('data-nonce'));
+                                        newBtn.textContent = 'Clear override';
+                                        statusCell.appendChild(document.createTextNode(' '));
+                                        statusCell.appendChild(newBtn);
+                                    }
+                                }
+                                setRowVisual(tr, 200);
                             } else { alert('Override failed'); }
                         } catch(err){ alert('Override failed'); }
                     };
@@ -245,16 +291,25 @@ class DH_External_Link_Management {
                         try {
                             var res = JSON.parse(xhr.responseText);
                             if(res && res.success && res.data){
-                                var cell = tr.querySelector('.dh-elm-status');
-                                if(cell){
-                                    cell.textContent = String(res.data.status_code_disp);
-                                    if(res.data.status_title){ if(res.data.status_title){ cell.setAttribute('title', res.data.status_title); } else { cell.removeAttribute('title'); } }
-                                }
+                                setStatusCell(tr, res.data.status_code_disp, res.data.status_title || '');
                                 tr.setAttribute('data-override','0');
                                 tr.setAttribute('data-override-expires', '0');
-                                // Swap buttons
-                                var manage = tr.querySelector('.dh-elm-manage');
-                                if(manage){ manage.innerHTML = manage.innerHTML.replace('dh-elm-override-clear','dh-elm-override-ok').replace('Clear override','Mark OK (30d)'); }
+                                // Swap buttons in Status cell
+                                var statusCell = tr.querySelector('.dh-elm-status');
+                                if(statusCell){
+                                    var btn = statusCell.querySelector('.dh-elm-override-clear');
+                                    if(btn){ btn.classList.remove('dh-elm-override-clear'); btn.classList.add('dh-elm-override-ok'); btn.textContent = 'Mark OK (30d)'; }
+                                    else {
+                                        var newBtn = document.createElement('button');
+                                        newBtn.type = 'button'; newBtn.className = 'button button-small dh-elm-override-ok';
+                                        newBtn.setAttribute('data-nonce', ovrClrBtn.getAttribute('data-nonce'));
+                                        newBtn.textContent = 'Mark OK (30d)';
+                                        statusCell.appendChild(document.createTextNode(' '));
+                                        statusCell.appendChild(newBtn);
+                                    }
+                                }
+                                var eff = parseInt(res.data.status_code_disp,10) || 0;
+                                setRowVisual(tr, eff);
                             } else { alert('Clear override failed'); }
                         } catch(err){ alert('Clear override failed'); }
                     };
@@ -284,15 +339,45 @@ class DH_External_Link_Management {
                         try {
                             var res = JSON.parse(xhr.responseText);
                             if(res && res.success && res.data){
-                                var cell = tr.querySelector('.dh-elm-status');
-                                if(cell){
-                                    cell.textContent = String(res.data.status_code);
-                                    if(res.data.status_text){ cell.setAttribute('title', res.data.status_text); } else { cell.removeAttribute('title'); }
+                                var now = Math.floor(Date.now()/1000);
+                                var ovActive = (tr.getAttribute('data-override') === '1') && (parseInt(tr.getAttribute('data-override-expires')||'0',10) > now);
+                                var code = parseInt(res.data.status_code,10) || 0;
+                                var eff = ovActive ? 200 : code;
+                                var title = res.data.status_text || '';
+                                if(ovActive){
+                                    var exp = parseInt(tr.getAttribute('data-override-expires')||'0',10);
+                                    if(exp){
+                                        var d = new Date(exp*1000);
+                                        var y = d.getFullYear(); var m = ('0'+(d.getMonth()+1)).slice(-2); var da = ('0'+d.getDate()).slice(-2);
+                                        title = (title ? (title + ' | ') : '') + 'Override until ' + y + '-' + m + '-' + da;
+                                    }
                                 }
+                                setStatusCell(tr, eff, title);
                                 tr.querySelector('.dh-elm-last-checked').textContent = res.data.last_checked_display || '—';
-                                // update sort attributes
-                                tr.setAttribute('data-status', String(parseInt(res.data.status_code,10)||0));
+                                // update sort/visual attributes
+                                setRowVisual(tr, eff);
                                 tr.setAttribute('data-checked', String(Math.floor(Date.now()/1000)));
+                                // ensure button presence in status cell matches override state
+                                var statusCell = tr.querySelector('.dh-elm-status');
+                                if(statusCell){
+                                    var hasClear = statusCell.querySelector('.dh-elm-override-clear');
+                                    var hasOk = statusCell.querySelector('.dh-elm-override-ok');
+                                    if(ovActive){
+                                        if(!hasClear){
+                                            if(hasOk){ hasOk.classList.remove('dh-elm-override-ok'); hasOk.classList.add('dh-elm-override-clear'); hasOk.textContent = 'Clear override'; }
+                                            else {
+                                                var b = document.createElement('button'); b.type='button'; b.className='button button-small dh-elm-override-clear'; b.setAttribute('data-nonce', reBtn.getAttribute('data-nonce')); b.textContent='Clear override'; statusCell.appendChild(document.createTextNode(' ')); statusCell.appendChild(b);
+                                            }
+                                        }
+                                    } else {
+                                        if(!hasOk){
+                                            if(hasClear){ hasClear.classList.remove('dh-elm-override-clear'); hasClear.classList.add('dh-elm-override-ok'); hasClear.textContent = 'Mark OK (30d)'; }
+                                            else {
+                                                var b2 = document.createElement('button'); b2.type='button'; b2.className='button button-small dh-elm-override-ok'; b2.setAttribute('data-nonce', reBtn.getAttribute('data-nonce')); b2.textContent='Mark OK (30d)'; statusCell.appendChild(document.createTextNode(' ')); statusCell.appendChild(b2);
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 alert('Check failed');
                             }
@@ -428,7 +513,18 @@ class DH_External_Link_Management {
                                 if(updatedUrl){ var u = document.createElement('a'); u.href = updatedUrl; u.target = '_blank'; u.rel = 'noopener'; u.style.wordBreak = 'break-all'; u.textContent = updatedUrl; urlCell.appendChild(u); }
                                 // Update Status and Last checked cells
                                 var statusCell = tr.querySelector('.dh-elm-status');
-                                if(statusCell){ statusCell.textContent = String((res.data.status_code != null ? res.data.status_code : '—')); statusCell.removeAttribute('title'); }
+                                var newCode = (res.data.status_code != null ? parseInt(res.data.status_code,10) : 0) || 0;
+                                setStatusCell(tr, newCode, '');
+                                setRowVisual(tr, newCode);
+                                // ensure Mark OK button exists after save (no override state change here)
+                                if(statusCell){
+                                    var btn = statusCell.querySelector('.dh-elm-override-ok, .dh-elm-override-clear');
+                                    if(!btn){
+                                        var mk = document.createElement('button'); mk.type='button'; mk.className='button button-small dh-elm-override-ok';
+                                        mk.setAttribute('data-nonce', actionsCell.querySelector('[data-nonce]') ? actionsCell.querySelector('[data-nonce]').getAttribute('data-nonce') : '');
+                                        mk.textContent='Mark OK (30d)'; statusCell.appendChild(document.createTextNode(' ')); statusCell.appendChild(mk);
+                                    }
+                                }
                                 var lcCell = tr.querySelector('.dh-elm-last-checked');
                                 if(lcCell){ lcCell.textContent = res.data.last_checked_display || '—'; }
                                 // Update row data attributes for sorting
@@ -524,7 +620,7 @@ class DH_External_Link_Management {
         if (!$id) { return ''; }
         global $wpdb;
         $table = $this->table_name();
-        $row = $wpdb->get_row($wpdb->prepare("SELECT current_url, anchor_text, is_duplicate, status_code FROM {$table} WHERE id=%d", $id));
+        $row = $wpdb->get_row($wpdb->prepare("SELECT current_url, anchor_text, is_duplicate, status_code, status_override_code, status_override_expires FROM {$table} WHERE id=%d", $id));
         if (!$row) { return ''; }
         $t_decoded = html_entity_decode((string)($atts['t'] ?? ''), ENT_QUOTES | ENT_HTML5);
         $anchor_source = ($row->anchor_text !== null && $row->anchor_text !== '') ? $row->anchor_text : $t_decoded;
@@ -535,8 +631,22 @@ class DH_External_Link_Management {
         }
         $url = esc_url((string)$row->current_url);
         if (!$url) { return $anchor; }
-        // Default attributes: open in new tab with safe rel including nofollow
-        return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer nofollow">' . $anchor . '</a>';
+        // Only render hyperlink when effective status is 200 (consider active overrides)
+        $effective = 0;
+        $base = isset($row->status_code) ? (int)$row->status_code : 0;
+        $ov_code = isset($row->status_override_code) ? (int)$row->status_override_code : 0;
+        $ov_exp  = isset($row->status_override_expires) && $row->status_override_expires ? strtotime((string)$row->status_override_expires) : 0;
+        $now_ts = current_time('timestamp');
+        if ($ov_code && $ov_exp && $ov_exp > $now_ts) {
+            $effective = (int)$ov_code;
+        } else {
+            $effective = $base;
+        }
+        if ($effective === 200) {
+            // Default attributes: open in new tab with safe rel including nofollow
+            return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer nofollow">' . $anchor . '</a>';
+        }
+        return $anchor;
     }
 
     public function on_ai_content_updated($post_id, $content) {
