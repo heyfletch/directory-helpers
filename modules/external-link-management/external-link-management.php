@@ -1255,45 +1255,107 @@ class DH_External_Link_Management {
         $title  = get_the_title($post_id);
         $query = trim($anchor . ' ' . $title);
 
-        $endpoint = add_query_arg(array(
+        // 1) Try CSE Element API (JSONP) which mirrors the web UI organic results
+        //    Endpoint example:
+        //    https://cse.google.com/cse/element/v1?rsz=filtered_cse&num=1&hl=en&source=gcsc&gss=.com&cx=...&q=...&safe=off&callback=google.search.cse.api1234
+        $jsonp_endpoint = add_query_arg(array(
+            'rsz' => 'filtered_cse',
+            'num' => 10, // fetch more to be resilient if first is malformed
+            'hl'  => substr(get_locale(), 0, 2) ?: 'en',
+            'source' => 'gcsc',
+            'gss' => '.com',
             'cx'  => $cx,
             'q'   => $query,
-        ), 'https://cse.google.com/cse');
+            'safe'=> 'off',
+            'callback' => 'google.search.cse.api' . wp_rand(1000, 9999),
+        ), 'https://cse.google.com/cse/element/v1');
 
         $args = array(
             'timeout' => 20,
             'sslverify' => true,
             'httpversion' => '1.1',
-            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+            'headers' => array(
+                // Some installations require a referer that matches CSE origin
+                'Referer' => 'https://cse.google.com/cse?cx=' . rawurlencode($cx),
+                'Accept-Language' => (substr(get_locale(), 0, 2) ?: 'en') . ',en;q=0.8',
+            ),
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         );
 
-        $response = wp_remote_get($endpoint, $args);
-        if (is_wp_error($response)) { return $response; }
-
-        $rc = wp_remote_retrieve_response_code($response);
-        if ($rc < 200 || $rc >= 300) {
-            return new WP_Error('http_error', sprintf('CSE scrape request failed with code %d: %s', $rc, wp_remote_retrieve_response_message($response)));
+        $response = wp_remote_get($jsonp_endpoint, $args);
+        if (!is_wp_error($response)) {
+            $rc = wp_remote_retrieve_response_code($response);
+            if ($rc >= 200 && $rc < 300) {
+                $body = (string) wp_remote_retrieve_body($response);
+                if ($body !== '') {
+                    // Extract JSON from JSONP callback
+                    // Find the first '(' and the last ')'
+                    $open = strpos($body, '(');
+                    $close = strrpos($body, ')');
+                    if ($open !== false && $close !== false && $close > $open) {
+                        $json = substr($body, $open + 1, $close - $open - 1);
+                        $data = json_decode($json, true);
+                        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+                            // The Element API commonly returns an array under 'results'. Some variants may return 'items'.
+                            $results = array();
+                            if (isset($data['results']) && is_array($data['results'])) {
+                                $results = $data['results'];
+                            } elseif (isset($data['items']) && is_array($data['items'])) {
+                                $results = $data['items'];
+                            }
+                            if (!empty($results)) {
+                                foreach ($results as $r) {
+                                    $candidate = '';
+                                    if (is_array($r)) {
+                                        if (!empty($r['url'])) { $candidate = (string) $r['url']; }
+                                        elseif (!empty($r['link'])) { $candidate = (string) $r['link']; }
+                                        elseif (!empty($r['unescapedUrl'])) { $candidate = (string) $r['unescapedUrl']; }
+                                    }
+                                    $candidate = trim($candidate);
+                                    if ($candidate && filter_var($candidate, FILTER_VALIDATE_URL)) {
+                                        if (!$this->is_blocked_suggestion_url($candidate)) {
+                                            return array('suggested_url' => esc_url_raw($candidate));
+                                        }
+                                        // otherwise skip blocked candidate and continue
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        $body = wp_remote_retrieve_body($response);
-        if (empty($body)) {
+        // 2) Fallback to scraping the CSE web UI HTML
+        $fallback_endpoint = add_query_arg(array(
+            'cx'  => $cx,
+            'q'   => $query,
+        ), 'https://cse.google.com/cse');
+
+        $response2 = wp_remote_get($fallback_endpoint, $args);
+        if (is_wp_error($response2)) { return $response2; }
+
+        $rc2 = wp_remote_retrieve_response_code($response2);
+        if ($rc2 < 200 || $rc2 >= 300) {
+            return new WP_Error('http_error', sprintf('CSE scrape request failed with code %d: %s', $rc2, wp_remote_retrieve_response_message($response2)));
+        }
+
+        $body2 = wp_remote_retrieve_body($response2);
+        if (empty($body2)) {
             return new WP_Error('empty_response', 'CSE scrape returned an empty response body.');
         }
 
-        // Find the first organic result link
-        preg_match('/<a class="gs-title" href="([^"]+)"/', $body, $matches);
-
-        if (empty($matches[1])) {
-            return new WP_Error('no_match', 'Could not find the first organic result link in CSE scrape.');
+        // Find the first organic result link (skip blocked/redirect hosts)
+        if (preg_match_all('/<a class="gs-title" href="([^"]+)"/i', $body2, $all, PREG_SET_ORDER)) {
+            foreach ($all as $m) {
+                $link = isset($m[1]) ? trim($m[1]) : '';
+                if ($link && filter_var($link, FILTER_VALIDATE_URL) && !$this->is_blocked_suggestion_url($link)) {
+                    return array('suggested_url' => esc_url_raw($link));
+                }
+            }
         }
 
-        $link = trim($matches[1]);
-
-        if (!filter_var($link, FILTER_VALIDATE_URL)) {
-            return new WP_Error('invalid_url', 'The scraped URL is not valid.');
-        }
-
-        return array('suggested_url' => esc_url_raw($link));
+        return new WP_Error('no_match', 'Could not find the first organic result link.');
     }
 
     private function call_ai_for_link($post_id, $row) {
