@@ -1295,24 +1295,18 @@ class DH_External_Link_Management {
     }
 
     private function call_ai_for_link($post_id, $row) {
-        // Try CSE first (primary) if configured
+        // TEMP: Use only CSE for verification; do NOT fallback to Gemini
         $cfg = $this->get_cse_config();
         $has_cse = !empty($cfg['api_key']) && !empty($cfg['cx']);
-        $cse = null;
-        if ($has_cse) {
-            $cse = $this->call_cse_for_link($post_id, $row);
-            if (!is_wp_error($cse) && !empty($cse['suggested_url'])) {
-                return $cse;
-            }
+        if (!$has_cse) {
+            return new WP_Error('no_cse_config', 'CSE API key or CX is not configured (temporary CSE-only mode).');
         }
-        // Fallback to Gemini
-        $gemini = $this->call_gemini_for_link($post_id, $row);
-        if (!is_wp_error($gemini) && !empty($gemini['suggested_url'])) {
-            return $gemini;
+        $cse = $this->call_cse_for_link($post_id, $row);
+        if (!is_wp_error($cse) && !empty($cse['suggested_url'])) {
+            return $cse;
         }
-        // If both failed, return the CSE error (if present) else Gemini error
-        if ($has_cse && is_wp_error($cse)) { return $cse; }
-        return $gemini;
+        // Surface CSE error (no fallback)
+        return is_wp_error($cse) ? $cse : new WP_Error('no_valid_result', 'CSE returned no acceptable URL (temporary CSE-only mode).');
     }
 
     private function call_gemini_for_link($post_id, $row) {
