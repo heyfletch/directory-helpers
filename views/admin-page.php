@@ -74,6 +74,36 @@
                         </tr>
                         <tr>
                             <th scope="row">
+                                <label for="cse_api_key"><?php esc_html_e('Programmable Search API Key', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="password" id="cse_api_key" name="directory_helpers_options[cse_api_key]" value="<?php echo esc_attr($options['cse_api_key'] ?? ''); ?>" class="regular-text" placeholder="AIza...">
+                                <p class="description">
+                                    <?php echo wp_kses_post(sprintf(
+                                        /* translators: 1: URL to Google Cloud console */
+                                        __('Primary provider for AI link suggestions. Create a key for the <strong>Custom Search JSON API</strong> in %1$s. This will be used first; if unavailable or no valid result is found, we fall back to Gemini.', 'directory-helpers'),
+                                        '<a href="https://console.cloud.google.com/apis/library/customsearch.googleapis.com" target="_blank" rel="noopener">Google Cloud Console</a>'
+                                    )); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="cse_cx"><?php esc_html_e('Custom Search Engine ID (cx)', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="text" id="cse_cx" name="directory_helpers_options[cse_cx]" value="<?php echo esc_attr($options['cse_cx'] ?? ''); ?>" class="regular-text" placeholder="0123456789abcdefg:abc_xyz">
+                                <p class="description">
+                                    <?php echo wp_kses_post(sprintf(
+                                        /* translators: 1: URL to Programmable Search Engine control panel */
+                                        __('Get your CSE ID from the %1$s. An existing CSE can be reused if it searches the public web (or your chosen set of sites).', 'directory-helpers'),
+                                        '<a href="https://programmablesearchengine.google.com/controlpanel/all" target="_blank" rel="noopener">Programmable Search Engine control panel</a>'
+                                    )); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
                                 <label for="notebook_webhook_url"><?php esc_html_e('Notebook Webhook URL', 'directory-helpers'); ?></label>
                             </th>
                             <td>

@@ -1165,8 +1165,8 @@ class DH_External_Link_Management {
                 ));
                 
                 if ($row) {
-                    // Call the AI suggestion function
-                    $suggestion = $this->call_gemini_for_link($post_id, $row);
+                    // Call the AI suggestion function (CSE-first with Gemini fallback)
+                    $suggestion = $this->call_ai_for_link($post_id, $row);
                     
                     // If we got a suggestion, update the record
                     if (!is_wp_error($suggestion) && !empty($suggestion['suggested_url'])) {
@@ -1228,6 +1228,91 @@ class DH_External_Link_Management {
             return (string) $opts['gemini_api_key'];
         }
         return '';
+    }
+
+    private function get_cse_config() {
+        $opts = get_option('directory_helpers_options');
+        $api = '';
+        $cx  = '';
+        if (is_array($opts)) {
+            if (!empty($opts['cse_api_key'])) { $api = (string) $opts['cse_api_key']; }
+            if (!empty($opts['cse_cx'])) { $cx = (string) $opts['cse_cx']; }
+        }
+        return array('api_key' => $api, 'cx' => $cx);
+    }
+
+    private function call_cse_for_link($post_id, $row) {
+        $cfg = $this->get_cse_config();
+        $api_key = isset($cfg['api_key']) ? trim((string)$cfg['api_key']) : '';
+        $cx = isset($cfg['cx']) ? trim((string)$cfg['cx']) : '';
+        if (!$api_key || !$cx) {
+            return new WP_Error('no_cse_config', 'CSE API key or CX is not configured.');
+        }
+        $post = get_post($post_id);
+        if (!$post) {
+            return new WP_Error('no_post', 'Post not found.');
+        }
+        $anchor = trim((string)($row->anchor_text ?? ''));
+        $title  = get_the_title($post_id);
+        $context = trim((string)($row->context_sentence ?? ''));
+        $query = trim($anchor . ' ' . $title);
+        if ($context) { $query .= ' ' . $context; }
+
+        $endpoint = add_query_arg(array(
+            'key' => $api_key,
+            'cx'  => $cx,
+            'q'   => $query,
+            'num' => 10,
+        ), 'https://www.googleapis.com/customsearch/v1');
+
+        $args = array(
+            'timeout' => 20,
+            'sslverify' => true,
+            'httpversion' => '1.1',
+        );
+        $response = wp_remote_get($endpoint, $args);
+        if (is_wp_error($response)) { return $response; }
+        $rc = wp_remote_retrieve_response_code($response);
+        if ($rc < 200 || $rc >= 300) {
+            return new WP_Error('http_error', sprintf('CSE API request failed with code %d: %s', $rc, wp_remote_retrieve_response_message($response)));
+        }
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        if (!is_array($data) || empty($data['items']) || !is_array($data['items'])) {
+            return new WP_Error('no_results', 'No results from CSE API');
+        }
+        $current_url = trim((string)($row->current_url ?? ''));
+        foreach ($data['items'] as $item) {
+            if (!is_array($item) || empty($item['link'])) { continue; }
+            $link = trim((string)$item['link']);
+            if (!$link) { continue; }
+            if (!filter_var($link, FILTER_VALIDATE_URL)) { continue; }
+            if ($current_url && trim($current_url) === $link) { continue; }
+            if ($this->is_blocked_suggestion_url($link)) { continue; }
+            return array('suggested_url' => esc_url_raw($link));
+        }
+        return new WP_Error('no_valid_result', 'CSE returned no acceptable URL');
+    }
+
+    private function call_ai_for_link($post_id, $row) {
+        // Try CSE first (primary) if configured
+        $cfg = $this->get_cse_config();
+        $has_cse = !empty($cfg['api_key']) && !empty($cfg['cx']);
+        $cse = null;
+        if ($has_cse) {
+            $cse = $this->call_cse_for_link($post_id, $row);
+            if (!is_wp_error($cse) && !empty($cse['suggested_url'])) {
+                return $cse;
+            }
+        }
+        // Fallback to Gemini
+        $gemini = $this->call_gemini_for_link($post_id, $row);
+        if (!is_wp_error($gemini) && !empty($gemini['suggested_url'])) {
+            return $gemini;
+        }
+        // If both failed, return the CSE error (if present) else Gemini error
+        if ($has_cse && is_wp_error($cse)) { return $cse; }
+        return $gemini;
     }
 
     private function call_gemini_for_link($post_id, $row) {
@@ -1438,7 +1523,8 @@ Only return the URL. Nothing else. No explanations. No Intros. No Outros.";
         $row = $wpdb->get_row($wpdb->prepare("SELECT id, anchor_text, current_url, context_sentence FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
         if (!$row) { wp_send_json_error(array('message' => 'not found')); }
 
-        $ai = $this->call_gemini_for_link($post_id, $row);
+        // Use CSE-first with Gemini fallback
+        $ai = $this->call_ai_for_link($post_id, $row);
         if (is_wp_error($ai)) {
             wp_send_json_error(array('message' => $ai->get_error_message()));
         }

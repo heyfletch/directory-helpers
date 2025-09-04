@@ -348,6 +348,12 @@ class Directory_Helpers {
             // Gemini API Key (for AI integrations)
             $options['gemini_api_key'] = isset($submitted_options['gemini_api_key']) ? sanitize_text_field($submitted_options['gemini_api_key']) : '';
 
+            // Google Programmable Search (CSE) credentials
+            // API key for the Custom Search JSON API
+            $options['cse_api_key'] = isset($submitted_options['cse_api_key']) ? sanitize_text_field($submitted_options['cse_api_key']) : '';
+            // Custom Search Engine ID (cx)
+            $options['cse_cx'] = isset($submitted_options['cse_cx']) ? sanitize_text_field($submitted_options['cse_cx']) : '';
+
             // Handle Instant Search defaults (placeholder and labels)
             $options['instant_search_placeholder'] = isset($submitted_options['instant_search_placeholder']) ? sanitize_text_field($submitted_options['instant_search_placeholder']) : '';
             $options['instant_search_label_c'] = isset($submitted_options['instant_search_label_c']) ? sanitize_text_field($submitted_options['instant_search_label_c']) : '';
