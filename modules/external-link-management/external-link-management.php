@@ -112,9 +112,10 @@ class DH_External_Link_Management {
         // Inline styles for status coloring
         echo '<style>
         .dh-elm-table .dh-elm-status{ white-space: nowrap; }
-        tr.dh-status-ok .dh-elm-status, tr.dh-status-ok .dh-cell-url a, tr.dh-status-ok .dh-cell-anchor a { color:#1f8a3b; font-weight:600; }
-        tr.dh-status-4xx .dh-elm-status, tr.dh-status-4xx .dh-cell-url a, tr.dh-status-4xx .dh-cell-anchor a { color:#d63638; font-weight:600; }
-        tr.dh-status-0 .dh-elm-status, tr.dh-status-0 .dh-cell-url a, tr.dh-status-0 .dh-cell-anchor a { color:#555; font-weight:600; }
+        /* Color rows: include URL cell text now that it is not a hyperlink */
+        tr.dh-status-ok .dh-elm-status, tr.dh-status-ok .dh-cell-url, tr.dh-status-ok .dh-cell-anchor a { color:#1f8a3b; font-weight:600; }
+        tr.dh-status-4xx .dh-elm-status, tr.dh-status-4xx .dh-cell-url, tr.dh-status-4xx .dh-cell-anchor a { color:#d63638; font-weight:600; }
+        tr.dh-status-0 .dh-elm-status, tr.dh-status-0 .dh-cell-url, tr.dh-status-0 .dh-cell-anchor a { color:#555; font-weight:600; }
         </style>';
 
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
@@ -223,9 +224,9 @@ class DH_External_Link_Management {
                     rows.forEach(function(tr){
                         var status = parseInt(tr.getAttribute('data-status')||'0',10);
                         if(status === 200){
-                            var a = tr.querySelector('.dh-cell-url a');
-                            var href = a ? (a.getAttribute('href')||'') : '';
-                            if(href){ window.open(href, '_blank'); }
+                            var cell = tr.querySelector('.dh-cell-url');
+                            var href = cell ? (cell.textContent || '').trim() : '';
+                            if(/^https?:\/\//i.test(href)){ window.open(href, '_blank'); }
                         }
                     });
                     return;
