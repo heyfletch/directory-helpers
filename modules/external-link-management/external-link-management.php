@@ -38,6 +38,9 @@ class DH_External_Link_Management {
         add_action('wp_ajax_dh_elm_delete_link', array($this, 'ajax_delete_link'));
         // AJAX: set/clear override (treat as OK for a period)
         add_action('wp_ajax_dh_elm_set_override', array($this, 'ajax_set_override'));
+        // AJAX: AI suggest/apply
+        add_action('wp_ajax_dh_elm_ai_suggest_link', array($this, 'ajax_ai_suggest_link'));
+        add_action('wp_ajax_dh_elm_ai_apply_suggestion', array($this, 'ajax_ai_apply_suggestion'));
     }
 
     private function table_name() {
@@ -104,6 +107,8 @@ class DH_External_Link_Management {
         $scan_nonce = wp_create_nonce('dh_elm_scan_' . $post->ID);
         // Manage nonce (edit/delete)
         $manage_nonce = wp_create_nonce('dh_elm_manage_' . $post->ID);
+        // AI nonce
+        $ai_nonce = wp_create_nonce('dh_elm_ai_' . $post->ID);
         echo '<p>'
             . '<button type="button" class="button button-primary dh-elm-scan-now" data-nonce="' . esc_attr($scan_nonce) . '">Scan HTML and create shortcodes</button> '
             . '<button type="button" class="button dh-elm-open-200">' . esc_html__('↗️ Open all links', 'directory-helpers') . '</button>'
@@ -119,6 +124,10 @@ class DH_External_Link_Management {
         tr.dh-status-ok .dh-elm-status, tr.dh-status-ok .dh-cell-url, tr.dh-status-ok .dh-cell-anchor a { color:#1f8a3b; font-weight:600; }
         tr.dh-status-4xx .dh-elm-status, tr.dh-status-4xx .dh-cell-url, tr.dh-status-4xx .dh-cell-anchor a { color:#d63638; font-weight:600; }
         tr.dh-status-0 .dh-elm-status, tr.dh-status-0 .dh-cell-url, tr.dh-status-0 .dh-cell-anchor a { color:#555; font-weight:600; }
+        .dh-ai-msg{ display:inline-block; margin-left:6px; font-size:12px; color:#444; }
+        .dh-ai-msg.dh-ai-loading{ color:#3c434a; }
+        .dh-ai-msg.dh-ai-error{ color:#b32d2e; }
+        .dh-ai-msg a{ text-decoration:none; }
         </style>';
 
         echo '<table class="widefat striped dh-elm-table"><thead><tr>';
@@ -169,6 +178,7 @@ class DH_External_Link_Management {
             echo '<td class="dh-elm-manage">'
                 . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button> '
                 . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button>'
+                . ' <button type="button" class="button button-small dh-elm-ai-suggest" data-nonce-ai="' . esc_attr($ai_nonce) . '">AI Suggest</button>'
                 . '</td>';
             echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
             echo '<td class="dh-cell-url" style="word-break:break-all; cursor:pointer;">' . $url_disp . '</td>';
@@ -428,6 +438,119 @@ class DH_External_Link_Management {
                     };
                     xhr2.onerror = function(){ scanBtn.disabled = false; scanBtn.textContent = 'Scan HTML and create shortcodes'; alert('Network error'); };
                     xhr2.send(fd2);
+                }
+
+                // AI Suggest button
+                var aiBtn = e.target && e.target.closest && e.target.closest('.dh-elm-ai-suggest');
+                if(aiBtn){
+                    e.preventDefault();
+                    var tr = aiBtn.closest('tr');
+                    if(!tr){ return; }
+                    var id = tr.getAttribute('data-link-id'); if(!id){ return; }
+                    aiBtn.disabled = true; var oldTxt = aiBtn.textContent; aiBtn.textContent = 'AI suggesting…';
+                    var actionsCell = tr.querySelector('.dh-elm-manage');
+                    var msg = actionsCell ? actionsCell.querySelector('.dh-ai-msg') : null;
+                    if(!msg && actionsCell){ msg = document.createElement('span'); msg.className = 'dh-ai-msg dh-ai-loading'; msg.textContent = 'AI suggesting…'; actionsCell.appendChild(document.createTextNode(' ')); actionsCell.appendChild(msg); }
+                    else if(msg){ msg.className = 'dh-ai-msg dh-ai-loading'; msg.textContent = 'AI suggesting…'; }
+                    var fdA = new FormData();
+                    fdA.append('action','dh_elm_ai_suggest_link');
+                    fdA.append('id', id);
+                    fdA.append('post_id', <?php echo (int) $post->ID; ?>);
+                    fdA.append('_ajax_nonce', aiBtn.getAttribute('data-nonce-ai'));
+                    var xhrA = new XMLHttpRequest();
+                    xhrA.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                    xhrA.onload = function(){
+                        aiBtn.disabled = false; aiBtn.textContent = oldTxt;
+                        var txt = xhrA.responseText || '';
+                        if(txt === '-1'){ if(msg){ msg.className='dh-ai-msg dh-ai-error'; msg.textContent='Security check failed. Refresh and try again.'; } return; }
+                        var res = null; try { res = JSON.parse(txt); } catch(e){}
+                        if(res && res.success && res.data){
+                            var sUrl = (res.data.suggested_url || '').trim();
+                            if(msg){
+                                if(sUrl){
+                                    msg.className = 'dh-ai-msg';
+                                    msg.innerHTML = 'Suggested: <a href="'+ sUrl.replace(/"/g,'&quot;') +'" target="_blank" rel="noopener">'+ sUrl.replace(/&/g,'&amp;').replace(/</g,'&lt;') +'</a>';
+                                } else {
+                                    msg.className = 'dh-ai-msg dh-ai-error';
+                                    msg.textContent = 'No suggestion returned';
+                                }
+                            }
+                            if(sUrl){
+                                // Add/ensure Apply button
+                                var actionsCell2 = tr.querySelector('.dh-elm-manage');
+                                if(actionsCell2){
+                                    var applyBtn = actionsCell2.querySelector('.dh-elm-ai-apply');
+                                    if(!applyBtn){
+                                        applyBtn = document.createElement('button');
+                                        applyBtn.type = 'button'; applyBtn.className = 'button button-small dh-elm-ai-apply';
+                                        applyBtn.textContent = 'AI Replace';
+                                        applyBtn.setAttribute('data-nonce-ai', aiBtn.getAttribute('data-nonce-ai'));
+                                        actionsCell2.appendChild(document.createTextNode(' '));
+                                        actionsCell2.appendChild(applyBtn);
+                                    }
+                                    applyBtn.setAttribute('data-suggested-url', sUrl);
+                                }
+                            }
+                        } else {
+                            var err = (res && res.data && res.data.message) ? res.data.message : 'AI suggest failed';
+                            if(msg){ msg.className = 'dh-ai-msg dh-ai-error'; msg.textContent = err; }
+                        }
+                    };
+                    xhrA.onerror = function(){ aiBtn.disabled = false; aiBtn.textContent = oldTxt; if(msg){ msg.className='dh-ai-msg dh-ai-error'; msg.textContent='Network error'; } };
+                    xhrA.send(fdA);
+                    return;
+                }
+
+                // AI Apply button
+                var aiApply = e.target && e.target.closest && e.target.closest('.dh-elm-ai-apply');
+                if(aiApply){
+                    e.preventDefault();
+                    var tr = aiApply.closest('tr'); if(!tr){ return; }
+                    var id = tr.getAttribute('data-link-id'); if(!id){ return; }
+                    aiApply.disabled = true; var old = aiApply.textContent; aiApply.textContent = 'Replacing…';
+                    var actionsCell = tr.querySelector('.dh-elm-manage');
+                    var msg = actionsCell ? actionsCell.querySelector('.dh-ai-msg') : null;
+                    if(!msg && actionsCell){ msg = document.createElement('span'); msg.className = 'dh-ai-msg dh-ai-loading'; msg.textContent = 'Replacing…'; actionsCell.appendChild(document.createTextNode(' ')); actionsCell.appendChild(msg); }
+                    else if(msg){ msg.className = 'dh-ai-msg dh-ai-loading'; msg.textContent = 'Replacing…'; }
+                    var fdB = new FormData();
+                    fdB.append('action','dh_elm_ai_apply_suggestion');
+                    fdB.append('id', id);
+                    fdB.append('post_id', <?php echo (int) $post->ID; ?>);
+                    fdB.append('_ajax_nonce', aiApply.getAttribute('data-nonce-ai'));
+                    var xhrB = new XMLHttpRequest();
+                    xhrB.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
+                    xhrB.onload = function(){
+                        aiApply.disabled = false; aiApply.textContent = old;
+                        var txt = xhrB.responseText || '';
+                        if(txt === '-1'){ if(msg){ msg.className='dh-ai-msg dh-ai-error'; msg.textContent='Security check failed. Refresh and try again.'; } return; }
+                        var res = null; try { res = JSON.parse(txt); } catch(e){}
+                        if(res && res.success && res.data){
+                            // Update UI similar to manual Save path
+                            var urlCell = tr.querySelector('.dh-cell-url');
+                            var anchorCell = tr.querySelector('.dh-cell-anchor');
+                            var updatedAnchor = res.data.anchor_text || (anchorCell ? anchorCell.textContent.trim() : '');
+                            var updatedUrl = res.data.current_url || '';
+                            if(anchorCell && updatedAnchor){
+                                anchorCell.innerHTML = '';
+                                var a = document.createElement('a');
+                                a.href = 'https://www.google.com/search?q=' + encodeURIComponent((updatedAnchor ? (updatedAnchor + ' ') : '') + dhPostTitle);
+                                a.target = '_blank'; a.rel = 'noopener'; a.textContent = updatedAnchor; anchorCell.appendChild(a);
+                            }
+                            if(urlCell && updatedUrl){ urlCell.textContent = updatedUrl; }
+                            var statusCell = tr.querySelector('.dh-elm-status');
+                            var newCode = (res.data.status_code != null ? parseInt(res.data.status_code,10) : 0) || 0;
+                            setStatusCell(tr, newCode, res.data.status_title || '');
+                            setRowVisual(tr, newCode);
+                            var lcCell = tr.querySelector('.dh-elm-last-checked'); if(lcCell){ lcCell.textContent = res.data.last_checked_display || '—'; }
+                            if(msg){ msg.className='dh-ai-msg'; msg.textContent='Replaced'; }
+                        } else {
+                            var err = (res && res.data && res.data.message) ? res.data.message : 'AI replace failed';
+                            if(msg){ msg.className='dh-ai-msg dh-ai-error'; msg.textContent=err; }
+                        }
+                    };
+                    xhrB.onerror = function(){ aiApply.disabled = false; aiApply.textContent = old; if(msg){ msg.className='dh-ai-msg dh-ai-error'; msg.textContent='Network error'; } };
+                    xhrB.send(fdB);
+                    return;
                 }
 
                 // Click URL cell -> enter edit and select URL input
@@ -1010,6 +1133,81 @@ class DH_External_Link_Management {
         ));
     }
 
+    private function get_gemini_api_key() {
+        $opts = get_option('directory_helpers_options');
+        if (is_array($opts) && !empty($opts['gemini_api_key'])) {
+            return (string) $opts['gemini_api_key'];
+        }
+        return '';
+    }
+
+    private function call_gemini_for_link($post_id, $row) {
+        $api_key = $this->get_gemini_api_key();
+        if (!$api_key) {
+            return new WP_Error('no_key', 'Gemini API key is not configured.');
+        }
+        $post = get_post($post_id);
+        if (!$post) {
+            return new WP_Error('no_post', 'Post not found.');
+        }
+        $anchor = trim((string)($row->anchor_text ?? ''));
+        $current_url = trim((string)($row->current_url ?? ''));
+        $context = trim((string)($row->context_sentence ?? ''));
+        $title = get_the_title($post_id);
+        $locale = get_locale();
+
+        $instructions = "You are assisting with replacing an external link in a WordPress post. Given the anchor text, the current (possibly broken or suboptimal) URL, the post title, and a short context sentence, propose the single best authoritative replacement URL. Prefer official, reputable, or high-authority sources. Ensure it is accessible and relevant to the anchor and context. Respond with just the best URL, nothing else.";
+
+        $prompt = "Post title: {$title}\nLocale: {$locale}\nAnchor: {$anchor}\nCurrent URL: {$current_url}\nContext: {$context}\n\n{$instructions}";
+
+        $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        $body = array(
+            'contents' => array(
+                array('parts' => array(array('text' => $prompt)))
+            ),
+            'tools' => array(array('google_search' => (object) array())),
+        );
+        $args = array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'x-goog-api-key' => $api_key,
+            ),
+            'timeout' => 20,
+            'body' => wp_json_encode($body),
+        );
+        $resp = wp_remote_post($endpoint, $args);
+        if (is_wp_error($resp)) {
+            return $resp;
+        }
+        $code = (int) wp_remote_retrieve_response_code($resp);
+        if ($code < 200 || $code >= 300) {
+            return new WP_Error('http_error', 'Gemini HTTP error: ' . $code);
+        }
+        $data = json_decode((string) wp_remote_retrieve_body($resp), true);
+        if (!is_array($data)) {
+            return new WP_Error('bad_json', 'Gemini response parse error.');
+        }
+        $cand = isset($data['candidates'][0]) ? $data['candidates'][0] : null;
+        if (!$cand) {
+            return new WP_Error('no_candidates', 'No AI candidates returned.');
+        }
+        $parts = isset($cand['content']['parts']) && is_array($cand['content']['parts']) ? $cand['content']['parts'] : array();
+        $text = '';
+        foreach ($parts as $p) {
+            if (isset($p['text'])) { $text .= (string) $p['text']; }
+        }
+        $text = trim($text);
+
+        // Parse suggested URL from text
+        $suggested_url = '';
+        if (preg_match('#https?://[^\s)]+#i', $text, $m)) {
+            $suggested_url = esc_url_raw($m[0]);
+        }
+        return array(
+            'suggested_url' => $suggested_url,
+        );
+    }
+
     public function ajax_set_override() {
         $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
         $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
@@ -1053,6 +1251,33 @@ class DH_External_Link_Management {
             'status_title' => $status_title,
             'last_checked_display' => date_i18n('Y-m-d g:ia', strtotime($now)),
             'override_expires_ts' => $expires_ts,
+        ));
+    }
+
+    public function ajax_ai_suggest_link() {
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        if (!$id || !$post_id) { wp_send_json_error(array('message' => 'missing params')); }
+        check_ajax_referer('dh_elm_ai_' . $post_id);
+        if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
+        global $wpdb; $table = $this->table_name();
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, anchor_text, current_url, context_sentence FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
+        if (!$row) { wp_send_json_error(array('message' => 'not found')); }
+
+        $ai = $this->call_gemini_for_link($post_id, $row);
+        if (is_wp_error($ai)) {
+            wp_send_json_error(array('message' => $ai->get_error_message()));
+        }
+
+        $sug_url = isset($ai['suggested_url']) ? esc_url_raw($ai['suggested_url']) : '';
+        $now = current_time('mysql');
+        $wpdb->update($table, array(
+            'ai_suggestion_url' => $sug_url ? $sug_url : null,
+            'updated_at' => $now,
+        ), array('id' => $id), array('%s','%s'), array('%d'));
+
+        wp_send_json_success(array(
+            'suggested_url' => $sug_url,
         ));
     }
 
@@ -1140,6 +1365,50 @@ class DH_External_Link_Management {
             'current_url' => $current_url,
             'is_duplicate' => $dup,
             'status_code' => 200,
+            'last_checked_display' => $last_checked_display,
+        ));
+    }
+
+    public function ajax_ai_apply_suggestion() {
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        if (!$id || !$post_id) { wp_send_json_error(array('message' => 'missing params')); }
+        check_ajax_referer('dh_elm_ai_' . $post_id);
+        if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
+        global $wpdb; $table = $this->table_name();
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, anchor_text, ai_suggestion_url FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
+        if (!$row) { wp_send_json_error(array('message' => 'not found')); }
+        $sug = isset($row->ai_suggestion_url) ? esc_url_raw((string)$row->ai_suggestion_url) : '';
+        if (!$sug || !preg_match('#^https?://#i', $sug)) { wp_send_json_error(array('message' => 'No valid AI suggestion to apply')); }
+        // Check status of suggested URL
+        list($code, $text) = $this->http_check_url($sug, 10);
+        $now = current_time('mysql');
+        $wpdb->update(
+            $table,
+            array(
+                'current_url' => $sug,
+                'status_code' => $code,
+                'status_text' => $text,
+                'last_checked' => $now,
+                'updated_at' => $now,
+            ),
+            array('id' => $id),
+            array('%s','%d','%s','%s','%s'),
+            array('%d')
+        );
+        // Make this row canonical for its URL; mark others as duplicates
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET is_duplicate=1, updated_at=%s WHERE post_id=%d AND id<>%d AND LOWER(current_url)=LOWER(%s)",
+            $now, $post_id, $id, $sug
+        ));
+        $wpdb->update($table, array('is_duplicate' => 0, 'updated_at' => $now), array('id' => $id), array('%d','%s'), array('%d'));
+
+        $last_checked_display = date_i18n('Y-m-d g:ia', strtotime($now));
+        wp_send_json_success(array(
+            'anchor_text' => (string)($row->anchor_text ?? ''),
+            'current_url' => $sug,
+            'status_code' => (int) $code,
+            'status_title' => (string) $text,
             'last_checked_display' => $last_checked_display,
         ));
     }

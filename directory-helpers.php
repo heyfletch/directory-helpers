@@ -345,6 +345,8 @@ class Directory_Helpers {
             $options['n8n_webhook_url'] = isset($submitted_options['n8n_webhook_url']) ? esc_url_raw($submitted_options['n8n_webhook_url']) : '';
             $options['notebook_webhook_url'] = isset($submitted_options['notebook_webhook_url']) ? esc_url_raw($submitted_options['notebook_webhook_url']) : '';
             $options['shared_secret_key'] = isset($submitted_options['shared_secret_key']) ? sanitize_text_field($submitted_options['shared_secret_key']) : '';
+            // Gemini API Key (for AI integrations)
+            $options['gemini_api_key'] = isset($submitted_options['gemini_api_key']) ? sanitize_text_field($submitted_options['gemini_api_key']) : '';
 
             // Handle Instant Search defaults (placeholder and labels)
             $options['instant_search_placeholder'] = isset($submitted_options['instant_search_placeholder']) ? sanitize_text_field($submitted_options['instant_search_placeholder']) : '';

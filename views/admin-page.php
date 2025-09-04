@@ -65,6 +65,15 @@
                         </tr>
                         <tr>
                             <th scope="row">
+                                <label for="gemini_api_key"><?php esc_html_e('Gemini API Key', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="password" id="gemini_api_key" name="directory_helpers_options[gemini_api_key]" value="<?php echo esc_attr($options['gemini_api_key'] ?? ''); ?>" class="regular-text" placeholder="AIza...">
+                                <p class="description"><?php esc_html_e('Used by AI features (e.g., Suggest/Replace) that call Google Gemini. Stored in plugin options.', 'directory-helpers'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
                                 <label for="notebook_webhook_url"><?php esc_html_e('Notebook Webhook URL', 'directory-helpers'); ?></label>
                             </th>
                             <td>
