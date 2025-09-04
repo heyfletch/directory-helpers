@@ -145,7 +145,9 @@ class DH_External_Link_Management {
             $status_title = $status_title_text ? ' title="' . esc_attr($status_title_text) . '"' : '';
             $last_checked = $r->last_checked ? esc_html(date_i18n('Y-m-d g:ia', strtotime($r->last_checked))) : '—';
             $anchor_disp = esc_html(mb_strimwidth((string)$r->anchor_text, 0, 80, '…'));
-            $anchor_q = rawurlencode((string)$r->anchor_text);
+            $post_title_for_search = get_the_title($post);
+            $search_query = trim(((string)$r->anchor_text) . ' ' . (string)$post_title_for_search);
+            $anchor_q = rawurlencode($search_query);
             $anchor_link = '<a href="https://www.google.com/search?q=' . $anchor_q . '" target="_blank" rel="noopener">' . $anchor_disp . '</a>';
             $url_disp = esc_html((string)$r->current_url);
             $url_link = '<a href="' . esc_url((string)$r->current_url) . '" target="_blank" rel="noopener" style="word-break:break-all;">' . $url_disp . '</a>';
@@ -181,6 +183,7 @@ class DH_External_Link_Management {
         ?>
         <script type="text/javascript">
         (function(){
+            var dhPostTitle = '<?php echo esc_js(get_the_title($post)); ?>';
             function setRowVisual(tr, effectiveCode){
                 if(!tr) return;
                 tr.classList.remove('dh-status-ok','dh-status-4xx','dh-status-0');
@@ -467,7 +470,7 @@ class DH_External_Link_Management {
                         anchorCell.textContent = currentAnchorText;
                         if(currentAnchorText){
                             var a = document.createElement('a');
-                            a.href = 'https://www.google.com/search?q=' + encodeURIComponent(currentAnchorText);
+                            a.href = 'https://www.google.com/search?q=' + encodeURIComponent((currentAnchorText ? (currentAnchorText + ' ') : '') + dhPostTitle);
                             a.target = '_blank'; a.rel = 'noopener'; a.textContent = currentAnchorText;
                             anchorCell.innerHTML = ''; anchorCell.appendChild(a);
                         }
@@ -507,7 +510,7 @@ class DH_External_Link_Management {
                                 // Update display
                                 anchorCell.innerHTML = '';
                                 if(updatedAnchor){
-                                    var a = document.createElement('a'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent(updatedAnchor); a.target = '_blank'; a.rel = 'noopener'; a.textContent = updatedAnchor; anchorCell.appendChild(a);
+                                    var a = document.createElement('a'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent((updatedAnchor ? (updatedAnchor + ' ') : '') + dhPostTitle); a.target = '_blank'; a.rel = 'noopener'; a.textContent = updatedAnchor; anchorCell.appendChild(a);
                                 }
                                 urlCell.innerHTML = '';
                                 if(updatedUrl){ var u = document.createElement('a'); u.href = updatedUrl; u.target = '_blank'; u.rel = 'noopener'; u.style.wordBreak = 'break-all'; u.textContent = updatedUrl; urlCell.appendChild(u); }
