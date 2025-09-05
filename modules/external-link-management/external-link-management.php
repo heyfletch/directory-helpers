@@ -225,6 +225,34 @@ class DH_External_Link_Management {
             }
 
             function onClick(e){
+                // Initial sort by ID asc (already default), but ensure dataset present
+            sortRows(currentSortKey);
+
+            // Auto-run AI Suggest on page load for non-200 rows without a suggestion
+            function autoSuggestNon200(){
+                var rows = Array.prototype.slice.call(document.querySelectorAll('.dh-elm-table tbody tr'));
+                var queue = rows.filter(function(tr){
+                    var status = parseInt(tr.getAttribute('data-status')||'0',10);
+                    var ovr = tr.getAttribute('data-override') === '1';
+                    if(ovr) return false; // skip overrides
+                    if(status === 200) return false;
+                    var msg = tr.querySelector('.dh-ai-msg');
+                    if(!msg) return true;
+                    var txt = (msg.textContent || '').trim().toLowerCase();
+                    return !txt || txt === 'no suggestion';
+                });
+                var i = 0;
+                function next(){
+                    if(i >= queue.length) return;
+                    var tr = queue[i++];
+                    var btn = tr.querySelector('.dh-elm-ai-suggest');
+                    if(btn){ btn.click(); }
+                    setTimeout(next, 600); // stagger requests to be friendly to API
+                }
+                if(queue.length){ next(); }
+            }
+            autoSuggestNon200();
+
                 // Open all 200 links button
                 var openBtn = e.target && e.target.closest && e.target.closest('.dh-elm-open-200');
                 if(openBtn){
@@ -427,6 +455,7 @@ class DH_External_Link_Management {
                         try { res = JSON.parse(txt); } catch(e){ }
                         if(res && res.success === true){
                             if(res.data && res.data.updated){
+                                // After scan completes, reload to reflect new rows; onload hook will auto-suggest for non-200
                                 location.reload();
                             } else {
                                 alert('No changes found.');
@@ -1421,7 +1450,7 @@ class DH_External_Link_Management {
         $post = get_post($post_id);
         if (!$post) { wp_send_json_error(array('message' => 'not found')); }
         if (!class_exists('DOMDocument')) {
-            wp_send_json_error(array('message' => 'PHP DOM extension is not available on this server. Unable to scan.'));
+            wp_send_json_error(array('message' => 'PHP DOM extension is not available on this server. Unable to scan.' ));
         }
         try {
             $updated = $this->scan_convert_and_save($post_id, (string)$post->post_content);
@@ -1433,10 +1462,18 @@ class DH_External_Link_Management {
             return;
         }
         if ($updated !== false) {
+            // Save updated content if changes were made
             wp_update_post(array('ID' => $post_id, 'post_content' => $updated));
-            wp_send_json_success(array('updated' => true));
         }
-        wp_send_json_success(array('updated' => false));
+
+        // After scanning, recalc duplicates and perform HTTP status checks
+        // plus AI suggestions for non-200 links server-side, so the full workflow
+        // runs from this single action.
+        $this->recalc_duplicates_for_post($post_id);
+        $this->check_links_for_post($post_id);
+
+        // Report whether content was updated
+        wp_send_json_success(array('updated' => $updated !== false));
     }
 
     private function recalc_duplicates_for_post($post_id) {
