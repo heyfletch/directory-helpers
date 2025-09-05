@@ -306,21 +306,12 @@ class DH_AI_Content_Generator {
             }
         }
 
-        // Store body images in ACF fields if available, else in post meta
-        if ($image_1_id) {
-            if (function_exists('update_field')) {
-                // ACF field key/name 'body_image_1'
-                update_field('body_image_1', $image_1_id, $post_id);
-            } else {
-                update_post_meta($post_id, 'body_image_1', $image_1_id);
-            }
+        // Store body images in ACF fields only
+        if ($image_1_id && function_exists('update_field')) {
+            update_field('body_image_1', $image_1_id, $post_id);
         }
-        if ($image_2_id) {
-            if (function_exists('update_field')) {
-                update_field('body_image_2', $image_2_id, $post_id);
-            } else {
-                update_post_meta($post_id, 'body_image_2', $image_2_id);
-            }
+        if ($image_2_id && function_exists('update_field')) {
+            update_field('body_image_2', $image_2_id, $post_id);
         }
 
         $response = array('message' => 'Content updated successfully.');
@@ -371,33 +362,72 @@ class DH_AI_Content_Generator {
             return $content;
         }
 
-        // Retrieve image IDs from ACF or post meta
-        $img1_id = function_exists('get_field') ? get_field('body_image_1', $post->ID) : get_post_meta($post->ID, 'body_image_1', true);
-        $img2_id = function_exists('get_field') ? get_field('body_image_2', $post->ID) : get_post_meta($post->ID, 'body_image_2', true);
-
-        // If ACF returns an array, pull the ID
-        if (is_array($img1_id) && isset($img1_id['ID'])) {
-            $img1_id = $img1_id['ID'];
-        }
-        if (is_array($img2_id) && isset($img2_id['ID'])) {
-            $img2_id = $img2_id['ID'];
+        // Retrieve image IDs from ACF fields only
+        if (!function_exists('get_field')) {
+            return $content; // No ACF, no injection
         }
 
-        $img1_id = absint($img1_id);
-        $img2_id = absint($img2_id);
+        // Read raw ACF values to avoid formatting/return-format dependencies
+        $img1_id_raw = get_field('body_image_1', $post->ID, false);
+        $img2_id_raw = get_field('body_image_2', $post->ID, false);
+        // If raw is empty (e.g., stale field mapping), read the stored meta directly (read-only)
+        if (!$img1_id_raw) { $img1_id_raw = get_post_meta($post->ID, 'body_image_1', true); }
+        if (!$img2_id_raw) { $img2_id_raw = get_post_meta($post->ID, 'body_image_2', true); }
 
-        if (!$img1_id && !$img2_id) {
+        $img1_id = $this->normalize_acf_image_id($img1_id_raw);
+        $img2_id = $this->normalize_acf_image_id($img2_id_raw);
+        $img1_url = $this->extract_acf_image_url($img1_id_raw);
+        $img2_url = $this->extract_acf_image_url($img2_id_raw);
+
+        // Ensure attachments exist and are images
+        if ($img1_id) {
+            $att1 = get_post($img1_id);
+            if (!$att1 || $att1->post_type !== 'attachment' || strpos(get_post_mime_type($img1_id), 'image/') !== 0) {
+                $img1_id = 0;
+            }
+        }
+        if ($img2_id) {
+            $att2 = get_post($img2_id);
+            if (!$att2 || $att2->post_type !== 'attachment' || strpos(get_post_mime_type($img2_id), 'image/') !== 0) {
+                $img2_id = 0;
+            }
+        }
+        
+        // Debug logging (remove after testing)
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            $d1 = is_scalar($img1_id_raw) ? (string)$img1_id_raw : json_encode($img1_id_raw);
+            $d2 = is_scalar($img2_id_raw) ? (string)$img2_id_raw : json_encode($img2_id_raw);
+            error_log("DH Image Injection Debug - Post {$post->ID} raw1={$d1} raw2={$d2} norm1={$img1_id} norm2={$img2_id}");
+        }
+
+        if (!$img1_id && !$img2_id && empty($img1_url) && empty($img2_url)) {
             return $content;
         }
 
-        // Avoid duplicates if image markup already present
-        if ($img1_id && strpos($content, 'wp-image-' . $img1_id) !== false) {
-            $img1_id = 0;
+        // Avoid duplicates if image markup already present (match class attribute with wp-image-{ID})
+        if ($img1_id) {
+            $pattern1 = '/class\s*=\s*"[^"]*\bwp-image-' . preg_quote((string)$img1_id, '/') . '\b[^"]*"/i';
+            if (preg_match($pattern1, $content)) {
+                $img1_id = 0;
+            }
+        } elseif (!empty($img1_url)) {
+            $pattern1url = '/<img\b[^>]*src\s*=\s*"' . preg_quote($img1_url, '/') . '"/i';
+            if (preg_match($pattern1url, $content)) {
+                $img1_url = '';
+            }
         }
-        if ($img2_id && strpos($content, 'wp-image-' . $img2_id) !== false) {
-            $img2_id = 0;
+        if ($img2_id) {
+            $pattern2 = '/class\s*=\s*"[^"]*\bwp-image-' . preg_quote((string)$img2_id, '/') . '\b[^"]*"/i';
+            if (preg_match($pattern2, $content)) {
+                $img2_id = 0;
+            }
+        } elseif (!empty($img2_url)) {
+            $pattern2url = '/<img\b[^>]*src\s*=\s*"' . preg_quote($img2_url, '/') . '"/i';
+            if (preg_match($pattern2url, $content)) {
+                $img2_url = '';
+            }
         }
-        if (!$img1_id && !$img2_id) {
+        if (!$img1_id && !$img2_id && empty($img1_url) && empty($img2_url)) {
             return $content;
         }
 
@@ -406,7 +436,7 @@ class DH_AI_Content_Generator {
         $ops = array();
 
         // Compute insertion for Image 1: after the 3rd H2–H4 (fallbacks applied)
-        if ($img1_id) {
+        if ($img1_id || !empty($img1_url)) {
             $pattern = '/<h([2-4])\b[^>]*>.*?<\/h\1>/is';
             if (preg_match_all($pattern, $html, $m, PREG_OFFSET_CAPTURE)) {
                 if (count($m[0]) >= 3) {
@@ -421,11 +451,14 @@ class DH_AI_Content_Generator {
             } else {
                 $pos = 0; // no headings
             }
-            $ops[] = array('pos' => $pos, 'snippet' => "\n\n" . $this->build_image_html($img1_id) . "\n\n");
+            $img1_markup = $this->build_image_markup_from_acf($img1_id, $img1_url, $img1_id_raw);
+            if ($img1_markup) {
+                $ops[] = array('pos' => $pos, 'snippet' => "\n\n" . $img1_markup . "\n\n");
+            }
         }
 
         // Compute insertion for Image 2: before the last FAQ-like heading, else at end
-        if ($img2_id) {
+        if ($img2_id || !empty($img2_url)) {
             $patternFaq = '/<h([2-6])\b[^>]*>(.*?)<\/h\1>/is';
             $faqPos = -1;
             if (preg_match_all($patternFaq, $html, $m2, PREG_OFFSET_CAPTURE)) {
@@ -433,14 +466,18 @@ class DH_AI_Content_Generator {
                 for ($i = 0; $i < $total; $i++) {
                     $inner = $m2[2][$i][0];
                     $text = trim(wp_strip_all_tags($inner));
-                    if (preg_match('/\bfaq\b|\bfaqs\b|frequently\s+asked|commonly\s+asked|common\s+questions/i', $text)) {
+                    // Enhanced FAQ detection including "questions"
+                    if (preg_match('/\bfaq\b|\bfaqs\b|frequently\s+asked|commonly\s+asked|common\s+questions|questions\s+about/i', $text)) {
                         // keep the last matching heading position
                         $faqPos = $m2[0][$i][1];
                     }
                 }
             }
             $pos2 = ($faqPos >= 0) ? $faqPos : strlen($html);
-            $ops[] = array('pos' => $pos2, 'snippet' => "\n\n" . $this->build_image_html($img2_id) . "\n\n");
+            $img2_markup = $this->build_image_markup_from_acf($img2_id, $img2_url, $img2_id_raw);
+            if ($img2_markup) {
+                $ops[] = array('pos' => $pos2, 'snippet' => "\n\n" . $img2_markup . "\n\n");
+            }
         }
 
         // Apply insertions in ascending order of position
@@ -478,6 +515,129 @@ class DH_AI_Content_Generator {
             return '<figure class="wp-caption alignnone">' . $img . '<figcaption class="wp-caption-text">' . esc_html($caption) . '</figcaption></figure>';
         }
         return $img;
+    }
+
+    /**
+     * Normalize an ACF image field value into an attachment ID.
+     * Supports ID, array with 'ID' or 'id', or URL string/array.
+     *
+     * @param mixed $value
+     * @return int Attachment ID or 0 if not resolvable
+     */
+    private function normalize_acf_image_id($value) {
+        if (empty($value)) {
+            return 0;
+        }
+        // If already numeric ID
+        if (is_numeric($value)) {
+            return absint($value);
+        }
+        // If ACF array
+        if (is_array($value)) {
+            if (isset($value['ID'])) {
+                return absint($value['ID']);
+            }
+            if (isset($value['id'])) {
+                return absint($value['id']);
+            }
+            if (isset($value['url']) && is_string($value['url'])) {
+                $maybe = attachment_url_to_postid($value['url']);
+                if ($maybe) {
+                    return (int) $maybe;
+                }
+            }
+            if (isset($value['sizes']) && is_array($value['sizes'])) {
+                foreach ($value['sizes'] as $size) {
+                    if (is_string($size) && preg_match('#^https?://#i', $size)) {
+                        $maybe = attachment_url_to_postid($size);
+                        if ($maybe) {
+                            return (int) $maybe;
+                        }
+                    } elseif (is_array($size) && isset($size['url'])) {
+                        $maybe = attachment_url_to_postid($size['url']);
+                        if ($maybe) {
+                            return (int) $maybe;
+                        }
+                    }
+                }
+            }
+        }
+        // If URL string
+        if (is_string($value) && preg_match('#^https?://#i', $value)) {
+            $maybe = attachment_url_to_postid($value);
+            if ($maybe) {
+                return (int) $maybe;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Extract a URL from an ACF image field value (array or string or ID).
+     * Returns empty string if no URL resolvable.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private function extract_acf_image_url($value) {
+        if (empty($value)) {
+            return '';
+        }
+        if (is_string($value) && preg_match('#^https?://#i', $value)) {
+            return $value;
+        }
+        if (is_numeric($value)) {
+            $url = wp_get_attachment_url((int) $value);
+            return $url ? $url : '';
+        }
+        if (is_array($value)) {
+            if (!empty($value['url']) && is_string($value['url'])) {
+                return $value['url'];
+            }
+            // Try common sized entries
+            if (!empty($value['sizes']) && is_array($value['sizes'])) {
+                foreach (['full', 'large', 'medium_large', 'medium'] as $k) {
+                    if (isset($value['sizes'][$k]) && is_string($value['sizes'][$k])) {
+                        return $value['sizes'][$k];
+                    }
+                    if (isset($value['sizes'][$k]) && is_array($value['sizes'][$k]) && !empty($value['sizes'][$k]['url'])) {
+                        return $value['sizes'][$k]['url'];
+                    }
+                }
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Build <img>/<figure> markup from either attachment ID or URL.
+     * If $id is valid, defer to build_image_html().
+     * For URLs, construct a basic <img> with alt derived from ACF array when available.
+     *
+     * @param int $id
+     * @param string $url
+     * @param mixed $raw
+     * @return string
+     */
+    private function build_image_markup_from_acf($id, $url, $raw) {
+        $id = absint($id);
+        if ($id) {
+            return $this->build_image_html($id);
+        }
+        $url = is_string($url) ? trim($url) : '';
+        if (!$url) {
+            return '';
+        }
+        $alt = '';
+        if (is_array($raw)) {
+            if (!empty($raw['alt']) && is_string($raw['alt'])) {
+                $alt = $raw['alt'];
+            } elseif (!empty($raw['title']) && is_string($raw['title'])) {
+                $alt = $raw['title'];
+            }
+        }
+        $alt_attr = $alt !== '' ? ' alt="' . esc_attr($alt) . '"' : ' alt=""';
+        return '<img class="alignnone size-full" src="' . esc_url($url) . '"' . $alt_attr . ' />';
     }
 
     /**
