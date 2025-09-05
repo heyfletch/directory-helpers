@@ -856,9 +856,6 @@ class DH_External_Link_Management {
         // Before rescanning, delete any existing link rows for this post
         $this->delete_links_for_post($post_id);
 
-        // Ensure incoming content has no leftover [link]/[ext_link] shortcodes
-        $content = $this->strip_link_shortcodes_to_text($content);
-
         // Convert external links to shortcodes and persist
         $updated = $this->scan_convert_and_save($post_id, $content);
         if ($updated !== false) {
@@ -882,25 +879,6 @@ class DH_External_Link_Management {
         return $wpdb->rows_affected;
     }
 
-    /**
-     * Replace any [link ... t="Anchor"] or [ext_link ... t="Anchor"] shortcodes with their anchor text,
-     * otherwise strip them out to avoid leaving shortcode artifacts in new content.
-     */
-    private function strip_link_shortcodes_to_text($html){
-        $replacer = function($m){
-            $atts = $m[0];
-            // Extract t attribute (supports single or double quotes)
-            if (preg_match('/\\bt=(\"|\')(.*?)(\1)/i', $atts, $mm)){
-                return $mm[2];
-            }
-            return '';
-        };
-        // [link ...]
-        $html = preg_replace_callback('/\\[link\\b[^\\]]*\\]/i', $replacer, (string)$html);
-        // [ext_link ...] legacy
-        $html = preg_replace_callback('/\\[ext_link\\b[^\\]]*\\]/i', $replacer, (string)$html);
-        return $html;
-    }
 
     private function is_internal_url($href) {
         $href = (string)$href;
