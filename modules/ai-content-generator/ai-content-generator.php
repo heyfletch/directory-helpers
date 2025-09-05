@@ -122,6 +122,8 @@ class DH_AI_Content_Generator {
 
         // Ensure Heartbeat API is available for live notifications
         wp_enqueue_script('heartbeat');
+        // Ensure Dashicons are available for status icons
+        wp_enqueue_style('dashicons');
 
         wp_enqueue_script(
             'dh-ai-content-generator-js',

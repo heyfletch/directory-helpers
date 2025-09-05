@@ -202,30 +202,40 @@ jQuery(document).ready(function ($) {
     // Heartbeat: check for AI content updates
     (function initHeartbeatNotify(){
         if (typeof wp === 'undefined' || !wp || !wp.heartbeat || !postId) { return; }
-        var lastSeen = 0;
-        var reloaded = false;
+        var storageKey = 'dh_ai_last_reload_' + String(postId);
+        var lastSeen = 0; // server comparison hint (optional)
+
         // Send a small payload on each heartbeat
         $(document).on('heartbeat-send', function (e, data) {
-            data.dh_ai_check = { 
-                postId: parseInt(postId, 10) || 0, 
-                lastSeen: lastSeen 
+            data.dh_ai_check = {
+                postId: parseInt(postId, 10) || 0,
+                lastSeen: lastSeen
             };
         });
+
         // Receive server response
         $(document).on('heartbeat-tick', function (e, data) {
             if (!data || !data.dh_ai) { return; }
-            if (data.dh_ai.updated && !reloaded) {
-                lastSeen = data.dh_ai.timestamp || Date.now();
-                reloaded = true;
+            var serverTs = parseInt(data.dh_ai.timestamp || 0, 10) || 0;
+            if (!data.dh_ai.updated || !serverTs) { return; }
+
+            var storedTs = parseInt(localStorage.getItem(storageKey) || '0', 10) || 0;
+            if (serverTs > storedTs) {
+                // Persist before reload to avoid a second reload on page return
+                try { localStorage.setItem(storageKey, String(serverTs)); } catch(_) {}
+                lastSeen = serverTs;
+
+                // Style and icon for visibility
                 try {
+                    var cssVar = getComputedStyle(document.documentElement).getPropertyValue('--wp-admin-theme-color--warning').trim();
+                    var warningColor = cssVar || '#ffcb09';
                     if (statusDiv) {
-                        statusDiv.textContent = 'AI content received. Reloading…';
-                    }
-                    // Only reload if we haven't already seen this update
-                    if (data.dh_ai.timestamp > lastSeen) {
-                        window.location.reload();
+                        statusDiv.innerHTML = '<span class="dashicons dashicons-update" style="vertical-align:middle;margin-right:6px;color:' + warningColor + ';"></span>' +
+                                              '<strong style="vertical-align:middle;color:' + warningColor + ';">AI content received. Reloading…</strong>';
                     }
                 } catch(_) {}
+
+                window.location.reload();
             }
         });
     })();
