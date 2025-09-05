@@ -225,33 +225,6 @@ class DH_External_Link_Management {
             }
 
             function onClick(e){
-                // Initial sort by ID asc (already default), but ensure dataset present
-            sortRows(currentSortKey);
-
-            // Auto-run AI Suggest on page load for non-200 rows without a suggestion
-            function autoSuggestNon200(){
-                var rows = Array.prototype.slice.call(document.querySelectorAll('.dh-elm-table tbody tr'));
-                var queue = rows.filter(function(tr){
-                    var status = parseInt(tr.getAttribute('data-status')||'0',10);
-                    var ovr = tr.getAttribute('data-override') === '1';
-                    if(ovr) return false; // skip overrides
-                    if(status === 200) return false;
-                    var msg = tr.querySelector('.dh-ai-msg');
-                    if(!msg) return true;
-                    var txt = (msg.textContent || '').trim().toLowerCase();
-                    return !txt || txt === 'no suggestion';
-                });
-                var i = 0;
-                function next(){
-                    if(i >= queue.length) return;
-                    var tr = queue[i++];
-                    var btn = tr.querySelector('.dh-elm-ai-suggest');
-                    if(btn){ btn.click(); }
-                    setTimeout(next, 600); // stagger requests to be friendly to API
-                }
-                if(queue.length){ next(); }
-            }
-            autoSuggestNon200();
 
                 // Open all 200 links button
                 var openBtn = e.target && e.target.closest && e.target.closest('.dh-elm-open-200');
@@ -588,10 +561,12 @@ class DH_External_Link_Management {
                 // Click URL cell -> enter edit and select URL input
                 var urlCellClick = e.target && e.target.closest && e.target.closest('.dh-cell-url');
                 if(urlCellClick){
-                    e.preventDefault();
                     var tr = urlCellClick.closest('tr');
                     if(!tr){ return; }
+                    // If already editing, do not block default behavior so inputs can be focused/selected
                     if(tr.classList.contains('editing')){ return; }
+                    // Only prevent default when we are transitioning into edit mode
+                    e.preventDefault();
                     var btn = tr.querySelector('.dh-elm-edit');
                     if(btn){
                         btn.click();
@@ -775,6 +750,30 @@ class DH_External_Link_Management {
             }
             document.addEventListener('click', onClick, false);
 
+            // Auto-run AI Suggest on page load for non-200 rows without a suggestion
+            function autoSuggestNon200(){
+                var rows = Array.prototype.slice.call(document.querySelectorAll('.dh-elm-table tbody tr'));
+                var queue = rows.filter(function(tr){
+                    var status = parseInt(tr.getAttribute('data-status')||'0',10);
+                    var ovr = tr.getAttribute('data-override') === '1';
+                    if(ovr) return false; // skip overrides
+                    if(status === 200) return false;
+                    var msg = tr.querySelector('.dh-ai-msg');
+                    if(!msg) return true;
+                    var txt = (msg.textContent || '').trim().toLowerCase();
+                    return !txt || txt === 'no suggestion';
+                });
+                var i = 0;
+                function next(){
+                    if(i >= queue.length) return;
+                    var tr = queue[i++];
+                    var btn = tr.querySelector('.dh-elm-ai-suggest');
+                    if(btn){ btn.click(); }
+                    setTimeout(next, 600); // stagger requests to be friendly to API
+                }
+                if(queue.length){ next(); }
+            }
+
             // Sorting
             var currentSortKey = 'id';
             var currentSortDir = 'asc';
@@ -808,6 +807,8 @@ class DH_External_Link_Management {
             });
             // Initial sort by ID asc (already default), but ensure dataset present
             sortRows(currentSortKey);
+            // After initial render, auto-run AI suggestions for non-200 rows
+            autoSuggestNon200();
         })();
         </script>
         <?php
