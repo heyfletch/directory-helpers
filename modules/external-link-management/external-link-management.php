@@ -512,7 +512,7 @@ class DH_External_Link_Management {
                                     if(!applyBtn){
                                         applyBtn = document.createElement('button');
                                         applyBtn.type = 'button'; applyBtn.className = 'button button-small dh-elm-ai-apply';
-                                        applyBtn.textContent = 'AI Replace';
+                                        applyBtn.textContent = 'Replace';
                                         applyBtn.setAttribute('data-nonce-ai', aiBtn.getAttribute('data-nonce-ai'));
                                         actionsCell2.appendChild(document.createTextNode(' '));
                                         actionsCell2.appendChild(applyBtn);
