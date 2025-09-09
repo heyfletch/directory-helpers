@@ -222,11 +222,14 @@ class DH_AI_Content_Generator {
         // Unified payload for simplicity across services
         $post_url = get_permalink($post_id);
         $post_title = wp_strip_all_tags(get_the_title($post_id));
+        // Derive a useful video title for downstream automations
+        $video_title = $this->generate_video_title($post_id);
         $body = wp_json_encode(array(
             'postId'     => $post_id,
             'postUrl'    => $post_url,
             'postTitle'  => $post_title,
             'keyword'    => $keyword,
+            'videoTitle' => $video_title,
         ));
 
         $response = wp_remote_post($url, array(
@@ -607,6 +610,136 @@ class DH_AI_Content_Generator {
             }
         }
         return '';
+    }
+
+    /**
+     * Generate a video title for the given post.
+     * Priority:
+     * 1) Use the saved Directory Helpers prompt with key 'thumbnail-title' (with token replacement)
+     * 2) Fallback to "{area} {state} Dog Training - How to Choose the Best Trainer"
+     *
+     * @param int $post_id
+     * @return string
+     */
+    private function generate_video_title($post_id) {
+        $post = get_post($post_id);
+        if (!$post) { return ''; }
+
+        // Try prompt-based title first
+        $prompt_text = '';
+        if (class_exists('Directory_Helpers')) {
+            $prompts = Directory_Helpers::get_prompts();
+            if (is_array($prompts)) {
+                if (!empty($prompts['thumbnail-title'])) {
+                    $prompt_text = (string) $prompts['thumbnail-title'];
+                } elseif (!empty($prompts['thumnail-title'])) { // tolerate common misspelling
+                    $prompt_text = (string) $prompts['thumnail-title'];
+                }
+            }
+        }
+
+        if ($prompt_text !== '') {
+            $current_pt = get_post_type($post);
+            $replacements = array(
+                '{title}' => (string) get_the_title($post),
+            );
+            // Back-compat legacy token used in prompts UI
+            $replacements['{city-state}'] = (string) get_the_title($post);
+
+            // Populate taxonomy tokens {taxonomy}
+            $tax_objs = get_object_taxonomies($current_pt, 'objects');
+            if (is_array($tax_objs)) {
+                foreach ($tax_objs as $tax_name => $tax_obj) {
+                    $terms = get_the_terms($post->ID, $tax_name);
+                    $val = '';
+                    if (is_array($terms) && !empty($terms)) {
+                        $names = wp_list_pluck($terms, 'name');
+                        $val = implode(', ', array_map('wp_strip_all_tags', array_map('strval', $names)));
+                    }
+                    $replacements['{' . $tax_name . '}'] = $val;
+                }
+            }
+
+            // Ensure {state} has a best-effort value on city pages
+            if (strpos($prompt_text, '{state}') !== false) {
+                $cur = isset($replacements['{state}']) ? (string) $replacements['{state}'] : '';
+                if ($cur === '') {
+                    $derived = $this->derive_state_name_for_city_post($post);
+                    $replacements['{state}'] = $derived;
+                }
+            }
+
+            // Ensure all tokens present in the text are defined in the replacement map
+            if (preg_match_all('/\{[a-z0-9_-]+\}/i', (string) $prompt_text, $m)) {
+                foreach (array_unique($m[0]) as $tok) {
+                    if (!array_key_exists($tok, $replacements)) {
+                        $replacements[$tok] = '';
+                    }
+                }
+            }
+
+            $title = strtr($prompt_text, $replacements);
+            $title = str_replace("'", "’", $title);
+            $title = trim($title);
+            if ($title !== '') { return $title; }
+        }
+
+        // Fallback: build from area + state
+        $city = '';
+        $state_full = '';
+        $area_terms = get_the_terms($post_id, 'area');
+        if (is_array($area_terms) && !empty($area_terms)) {
+            $area_name = (string) $area_terms[0]->name;
+            // Strip trailing " - ST"
+            $city = preg_replace('/\s-\s[A-Za-z]{2}$/', '', $area_name);
+        }
+        // Prefer state taxonomy name when present (e.g., state-listing)
+        $state_terms = get_the_terms($post_id, 'state');
+        if (is_array($state_terms) && !empty($state_terms)) {
+            $state_full = (string) $state_terms[0]->name;
+        }
+        if ($state_full === '') {
+            $state_full = $this->derive_state_name_for_city_post($post);
+        }
+        if ($city === '') {
+            $city = wp_strip_all_tags(get_the_title($post));
+        }
+        $suffix = 'Dog Training - How to Choose the Best Trainer';
+        $parts = array_filter(array($city, $state_full));
+        $prefix = trim(implode(' ', $parts));
+        $title = $prefix ? ($prefix . ' ' . $suffix) : $suffix;
+        return $title;
+    }
+
+    /**
+     * Best-effort derivation of US state full name for a city-listing post.
+     * Uses slug/title to detect a 2-letter code and maps to full name.
+     * Returns empty string if not determinable.
+     *
+     * @param WP_Post|int $post
+     * @return string
+     */
+    private function derive_state_name_for_city_post($post) {
+        $post = is_object($post) ? $post : get_post($post);
+        if (!$post) { return ''; }
+        // Only attempt for city-listing; state-listing uses taxonomy name elsewhere
+        $pt = get_post_type($post);
+        if ($pt !== 'city-listing') { return ''; }
+        $code = '';
+        $slug = isset($post->post_name) ? (string) $post->post_name : '';
+        if ($slug && preg_match('/-([a-z]{2})(?:-|$)/i', $slug, $m)) {
+            $code = strtoupper($m[1]);
+        } else {
+            $title = (string) $post->post_title;
+            if ($title && preg_match('/,\s*([A-Za-z]{2})(\b|$)/', $title, $mm)) {
+                $code = strtoupper($mm[1]);
+            }
+        }
+        if (!$code) { return ''; }
+        $us = array(
+            'AL'=>'Alabama','AK'=>'Alaska','AZ'=>'Arizona','AR'=>'Arkansas','CA'=>'California','CO'=>'Colorado','CT'=>'Connecticut','DE'=>'Delaware','FL'=>'Florida','GA'=>'Georgia','HI'=>'Hawaii','ID'=>'Idaho','IL'=>'Illinois','IN'=>'Indiana','IA'=>'Iowa','KS'=>'Kansas','KY'=>'Kentucky','LA'=>'Louisiana','ME'=>'Maine','MD'=>'Maryland','MA'=>'Massachusetts','MI'=>'Michigan','MN'=>'Minnesota','MS'=>'Mississippi','MO'=>'Missouri','MT'=>'Montana','NE'=>'Nebraska','NV'=>'Nevada','NH'=>'New Hampshire','NJ'=>'New Jersey','NM'=>'New Mexico','NY'=>'New York','NC'=>'North Carolina','ND'=>'North Dakota','OH'=>'Ohio','OK'=>'Oklahoma','OR'=>'Oregon','PA'=>'Pennsylvania','RI'=>'Rhode Island','SC'=>'South Carolina','SD'=>'South Dakota','TN'=>'Tennessee','TX'=>'Texas','UT'=>'Utah','VT'=>'Vermont','VA'=>'Virginia','WA'=>'Washington','WV'=>'West Virginia','WI'=>'Wisconsin','WY'=>'Wyoming'
+        );
+        return isset($us[$code]) ? $us[$code] : '';
     }
 
     /**
