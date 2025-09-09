@@ -222,6 +222,18 @@ class DH_AI_Content_Generator {
         // Unified payload for simplicity across services
         $post_url = get_permalink($post_id);
         $post_title = wp_strip_all_tags(get_the_title($post_id));
+        // Featured image URL (full)
+        $featured_image_url = '';
+        $thumb_id = get_post_thumbnail_id($post_id);
+        if ($thumb_id) {
+            $src = wp_get_attachment_image_src($thumb_id, 'full');
+            if (is_array($src) && !empty($src[0])) {
+                $featured_image_url = esc_url_raw($src[0]);
+            } else {
+                $maybe = wp_get_attachment_url($thumb_id);
+                if ($maybe) { $featured_image_url = esc_url_raw($maybe); }
+            }
+        }
         // Derive a useful video title for downstream automations
         $video_title = $this->generate_video_title($post_id);
         // Derive a YouTube description from prompt or fallback
@@ -233,6 +245,7 @@ class DH_AI_Content_Generator {
             'keyword'    => $keyword,
             'videoTitle' => $video_title,
             'youtubeDescription' => $youtube_description,
+            'featuredImage' => $featured_image_url,
         ));
 
         $response = wp_remote_post($url, array(
