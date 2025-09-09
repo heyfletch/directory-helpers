@@ -224,12 +224,15 @@ class DH_AI_Content_Generator {
         $post_title = wp_strip_all_tags(get_the_title($post_id));
         // Derive a useful video title for downstream automations
         $video_title = $this->generate_video_title($post_id);
+        // Derive a YouTube description from prompt or fallback
+        $youtube_description = $this->generate_youtube_description($post_id);
         $body = wp_json_encode(array(
             'postId'     => $post_id,
             'postUrl'    => $post_url,
             'postTitle'  => $post_title,
             'keyword'    => $keyword,
             'videoTitle' => $video_title,
+            'youtubeDescription' => $youtube_description,
         ));
 
         $response = wp_remote_post($url, array(
@@ -740,6 +743,102 @@ class DH_AI_Content_Generator {
             'AL'=>'Alabama','AK'=>'Alaska','AZ'=>'Arizona','AR'=>'Arkansas','CA'=>'California','CO'=>'Colorado','CT'=>'Connecticut','DE'=>'Delaware','FL'=>'Florida','GA'=>'Georgia','HI'=>'Hawaii','ID'=>'Idaho','IL'=>'Illinois','IN'=>'Indiana','IA'=>'Iowa','KS'=>'Kansas','KY'=>'Kentucky','LA'=>'Louisiana','ME'=>'Maine','MD'=>'Maryland','MA'=>'Massachusetts','MI'=>'Michigan','MN'=>'Minnesota','MS'=>'Mississippi','MO'=>'Missouri','MT'=>'Montana','NE'=>'Nebraska','NV'=>'Nevada','NH'=>'New Hampshire','NJ'=>'New Jersey','NM'=>'New Mexico','NY'=>'New York','NC'=>'North Carolina','ND'=>'North Dakota','OH'=>'Ohio','OK'=>'Oklahoma','OR'=>'Oregon','PA'=>'Pennsylvania','RI'=>'Rhode Island','SC'=>'South Carolina','SD'=>'South Dakota','TN'=>'Tennessee','TX'=>'Texas','UT'=>'Utah','VT'=>'Vermont','VA'=>'Virginia','WA'=>'Washington','WV'=>'West Virginia','WI'=>'Wisconsin','WY'=>'Wyoming'
         );
         return isset($us[$code]) ? $us[$code] : '';
+    }
+
+    /**
+     * Build a YouTube description string from a saved prompt 'youtube-description' with token replacement,
+     * or fallback to a generic description using area/state and post URL.
+     *
+     * @param int $post_id
+     * @return string
+     */
+    private function generate_youtube_description($post_id) {
+        $post = get_post($post_id);
+        if (!$post) { return ''; }
+
+        $post_url = get_permalink($post_id);
+
+        // Attempt prompt-based description first
+        $prompt_text = '';
+        if (class_exists('Directory_Helpers')) {
+            $prompts = Directory_Helpers::get_prompts();
+            if (is_array($prompts) && !empty($prompts['youtube-description'])) {
+                $prompt_text = (string) $prompts['youtube-description'];
+            }
+        }
+
+        if ($prompt_text !== '') {
+            $current_pt = get_post_type($post);
+            $replacements = array(
+                '{title}'    => (string) get_the_title($post),
+                '{postUrl}'  => (string) $post_url,
+            );
+            // Back-compat token
+            $replacements['{city-state}'] = (string) get_the_title($post);
+
+            // Shortlink token (if created by Shortlinks module)
+            $slug_meta_key = class_exists('DH_Shortlinks') ? DH_Shortlinks::META_SLUG : '_dh_shortlink_slug';
+            $short_slug = (string) get_post_meta($post->ID, $slug_meta_key, true);
+            $shortlink = $short_slug ? home_url('/' . ltrim($short_slug, '/')) : '';
+            $replacements['{shortlink}'] = $shortlink;
+
+            // Taxonomy tokens
+            $tax_objs = get_object_taxonomies($current_pt, 'objects');
+            if (is_array($tax_objs)) {
+                foreach ($tax_objs as $tax_name => $tax_obj) {
+                    $terms = get_the_terms($post->ID, $tax_name);
+                    $val = '';
+                    if (is_array($terms) && !empty($terms)) {
+                        $names = wp_list_pluck($terms, 'name');
+                        $val = implode(', ', array_map('wp_strip_all_tags', array_map('strval', $names)));
+                    }
+                    $replacements['{' . $tax_name . '}'] = $val;
+                }
+            }
+
+            // Ensure {state} has value on city pages when missing
+            if (strpos($prompt_text, '{state}') !== false) {
+                $cur = isset($replacements['{state}']) ? (string) $replacements['{state}'] : '';
+                if ($cur === '') {
+                    $derived = $this->derive_state_name_for_city_post($post);
+                    $replacements['{state}'] = $derived;
+                }
+            }
+
+            // Define any missing tokens to blank
+            if (preg_match_all('/\{[a-z0-9_-]+\}/i', (string) $prompt_text, $m)) {
+                foreach (array_unique($m[0]) as $tok) {
+                    if (!array_key_exists($tok, $replacements)) {
+                        $replacements[$tok] = '';
+                    }
+                }
+            }
+
+            $out = strtr($prompt_text, $replacements);
+            return trim($out);
+        }
+
+        // Fallback generic description
+        $city = '';
+        $state_full = '';
+        $area_terms = get_the_terms($post_id, 'area');
+        if (is_array($area_terms) && !empty($area_terms)) {
+            $area_name = (string) $area_terms[0]->name;
+            $city = preg_replace('/\s-\s[A-Za-z]{2}$/', '', $area_name);
+        }
+        $state_terms = get_the_terms($post_id, 'state');
+        if (is_array($state_terms) && !empty($state_terms)) {
+            $state_full = (string) $state_terms[0]->name;
+        }
+        if ($state_full === '') {
+            $state_full = $this->derive_state_name_for_city_post($post);
+        }
+
+        $loc = trim(implode(', ', array_filter(array($city, $state_full))));
+        $intro = $loc ? ("For our ultimate guide to $loc dog trainers, costs, and local resources, visit:\n$post_url")
+                      : ("For our ultimate guide to dog trainers, costs, and local resources, visit:\n$post_url");
+        $body = "\n\nThis video covers training methods, typical costs, certifications, legal requirements, program formats, local resources, and must-ask questions.\n\nLearn more here: $post_url";
+        return trim($intro . $body);
     }
 
     /**
