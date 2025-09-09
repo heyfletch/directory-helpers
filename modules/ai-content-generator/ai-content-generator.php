@@ -828,7 +828,7 @@ class DH_AI_Content_Generator {
             }
 
             $out = strtr($prompt_text, $replacements);
-            return trim($out);
+            return $this->normalize_multiline_text($out);
         }
 
         // Fallback generic description
@@ -851,7 +851,37 @@ class DH_AI_Content_Generator {
         $intro = $loc ? ("For our ultimate guide to $loc dog trainers, costs, and local resources, visit:\n$post_url")
                       : ("For our ultimate guide to dog trainers, costs, and local resources, visit:\n$post_url");
         $body = "\n\nThis video covers training methods, typical costs, certifications, legal requirements, program formats, local resources, and must-ask questions.\n\nLearn more here: $post_url";
-        return trim($intro . $body);
+        return $this->normalize_multiline_text($intro . $body);
+    }
+
+    /**
+     * Normalize multiline text for external systems (e.g., YouTube description):
+     * - Convert CRLF/CR to LF
+     * - Remove BOM and zero‑width characters
+     * - Replace non‑breaking spaces with normal spaces
+     * - Trim trailing spaces on each line
+     * - Collapse 3+ blank lines to 1 blank line (two \n)
+     *
+     * @param string $text
+     * @return string
+     */
+    private function normalize_multiline_text($text) {
+        if (!is_string($text) || $text === '') { return ''; }
+        // Normalize line endings
+        $text = str_replace(["\r\n", "\r"], "\n", $text);
+        // Remove BOM and zero-width chars
+        $text = str_replace(["\xEF\xBB\xBF", "\xE2\x80\x8B", "\xE2\x80\x8C", "\xE2\x80\x8D", "\xE2\x80\x8E", "\xE2\x80\x8F"], '', $text);
+        // Replace non-breaking space with normal space
+        $text = str_replace("\xC2\xA0", ' ', $text);
+        // Trim trailing spaces per line
+        $lines = explode("\n", $text);
+        foreach ($lines as &$l) { $l = rtrim($l, " \t"); }
+        unset($l);
+        $text = implode("\n", $lines);
+        // Collapse 3+ newlines to exactly 2 (one blank line)
+        $text = preg_replace("/\n{3,}/", "\n\n", $text);
+        // Final trim
+        return trim($text);
     }
 
     /**
