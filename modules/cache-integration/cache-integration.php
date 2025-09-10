@@ -13,6 +13,11 @@ class DH_LSCache_Integration {
         add_action( 'transition_post_status', [ $this, 'maybe_purge_on_first_publish' ], 10, 3 );
         // Handler to warm a URL via WP-Cron fallback
         add_action( 'dh_warm_url', [ $this, 'warm_url_handler' ], 10, 1 );
+        // Prime when LSCache is asked to purge a specific post or URL
+        add_action( 'litespeed_purge_post', [ $this, 'on_lscache_purge_post' ], 999, 1 );
+        add_action( 'litespeed_purge_url', [ $this, 'on_lscache_purge_url' ], 999, 1 );
+        // Prime on publish and subsequent updates (as long as status is publish) for all post types
+        add_action( 'transition_post_status', [ $this, 'prime_on_publish_or_update' ], 11, 3 );
     }
 
     /**
@@ -77,6 +82,12 @@ class DH_LSCache_Integration {
         $url = esc_url_raw( (string) $url );
         if ( ! $url ) { return; }
 
+        // In-request dedupe to avoid duplicate immediate warms
+        static $warmed = [];
+        $key = md5( $url );
+        if ( isset( $warmed[ $key ] ) ) { return; }
+        $warmed[ $key ] = true;
+
         // Attempt immediate non-blocking warm
         $args = [
             'timeout'     => 5,
@@ -118,5 +129,60 @@ class DH_LSCache_Integration {
         try {
             wp_remote_get( $url, $args );
         } catch ( \Exception $e ) { /* no-op */ }
+    }
+
+    /**
+     * Listener: when LSCache is asked to purge a post ID, prime that post's URL if published.
+     *
+     * @param int $post_id
+     * @return void
+     */
+    public function on_lscache_purge_post( $post_id ) {
+        $post_id = (int) $post_id;
+        if ( ! $post_id ) { return; }
+        $post = get_post( $post_id );
+        if ( ! $post || $post->post_status !== 'publish' ) { return; }
+        $url = get_permalink( $post );
+        if ( $url ) { $this->prime_cache_url( $url ); }
+    }
+
+    /**
+     * Listener: when LSCache is asked to purge a URL, prime it if it maps to a published post.
+     *
+     * @param string $url
+     * @return void
+     */
+    public function on_lscache_purge_url( $url ) {
+        $url = esc_url_raw( (string) $url );
+        if ( ! $url ) { return; }
+        // Limit to same host
+        $home_host = wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+        $url_host  = wp_parse_url( $url, PHP_URL_HOST );
+        if ( ! $home_host || ! $url_host || strcasecmp( $home_host, $url_host ) !== 0 ) { return; }
+        $maybe_id = url_to_postid( $url );
+        if ( $maybe_id ) {
+            $post = get_post( $maybe_id );
+            if ( $post && $post->post_status === 'publish' ) {
+                $this->prime_cache_url( $url );
+            }
+        }
+    }
+
+    /**
+     * Prime the post's own URL whenever a post becomes or remains published after an update.
+     * Applies to all post types.
+     *
+     * @param string  $new_status
+     * @param string  $old_status
+     * @param WP_Post $post
+     * @return void
+     */
+    public function prime_on_publish_or_update( $new_status, $old_status, $post ) {
+        if ( ! $post ) { return; }
+        if ( $new_status !== 'publish' ) { return; }
+        // Avoid autosaves/revisions
+        if ( wp_is_post_revision( $post->ID ) || wp_is_post_autosave( $post->ID ) ) { return; }
+        $url = get_permalink( $post );
+        if ( $url ) { $this->prime_cache_url( $url ); }
     }
 }
