@@ -680,6 +680,13 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/shortlinks/shortlinks.php',
                 'class' => 'DH_Shortlinks'
             )
+            ,
+            'cache-integration' => array(
+                'name' => __('Cache Integration', 'directory-helpers'),
+                'description' => __('Purges LiteSpeed Cache for a city page on first publish to ensure fresh content.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/cache-integration/cache-integration.php',
+                'class' => 'DH_LSCache_Integration'
+            )
             // Add more modules here as needed
         );
         
