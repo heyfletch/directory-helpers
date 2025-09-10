@@ -1,6 +1,6 @@
 <?php
 /**
- * LiteSpeed Cache integration: purge city page on first publish
+ * LiteSpeed Cache integration: on a city's first publish, purge the related state-listing page
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -14,7 +14,7 @@ class DH_LSCache_Integration {
     }
 
     /**
-     * Purge the just-published city-listing page from LiteSpeed Cache on first publish.
+     * On first publish of a city-listing, purge the corresponding state-listing page.
      *
      * @param string  $new_status
      * @param string  $old_status
@@ -28,14 +28,38 @@ class DH_LSCache_Integration {
             return;
         }
 
-        // Purge this page using LiteSpeed Cache hooks if available.
-        // Equivalent to clicking "Purge this page - LSCache" in the admin bar.
-        // Use both post- and URL-based hooks defensively (no-op if LSCache not active).
-        do_action( 'litespeed_purge_post', (int) $post->ID );
+        // Derive the 2-letter state code from the city slug pattern:
+        // e.g., city-name-PA-dog-trainers -> "pa"
+        $slug = isset( $post->post_name ) ? (string) $post->post_name : '';
+        if ( ! $slug || ! preg_match( '/^(.+)-([a-z]{2})-dog-trainers$/', $slug, $m ) ) {
+            return; // Can't determine state; nothing to purge
+        }
+        $state_slug = strtolower( $m[2] );
 
-        $permalink = get_permalink( $post );
-        if ( $permalink ) {
-            do_action( 'litespeed_purge_url', esc_url_raw( $permalink ) );
+        // Find the state-listing post that has the matching 'state' taxonomy term (by slug)
+        $q = new WP_Query( [
+            'post_type'      => 'state-listing',
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'no_found_rows'  => true,
+            'tax_query'      => [
+                [
+                    'taxonomy' => 'state',
+                    'field'    => 'slug',
+                    'terms'    => $state_slug,
+                ],
+            ],
+        ] );
+        if ( ! $q->have_posts() ) {
+            return;
+        }
+        $state_post = $q->posts[0];
+
+        // Purge the state listing page (preferred: by post ID, and also explicit URL for safety)
+        do_action( 'litespeed_purge_post', (int) $state_post->ID );
+        $state_url = get_permalink( $state_post );
+        if ( $state_url ) {
+            do_action( 'litespeed_purge_url', esc_url_raw( $state_url ) );
         }
     }
 }

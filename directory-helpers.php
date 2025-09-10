@@ -683,7 +683,7 @@ class Directory_Helpers {
             ,
             'cache-integration' => array(
                 'name' => __('Cache Integration', 'directory-helpers'),
-                'description' => __('Purges LiteSpeed Cache for a city page on first publish to ensure fresh content.', 'directory-helpers'),
+                'description' => __('On first publish of a city, purges the related state-listing page from LiteSpeed Cache.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/cache-integration/cache-integration.php',
                 'class' => 'DH_LSCache_Integration'
             )
