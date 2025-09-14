@@ -11,6 +11,8 @@ class DH_LSCache_Integration {
     public function __construct() {
         // Only trigger on first transition to publish
         add_action( 'transition_post_status', [ $this, 'maybe_purge_on_first_publish' ], 10, 3 );
+        // Also handle first publish for state-listing to purge all its cities
+        add_action( 'transition_post_status', [ $this, 'maybe_purge_cities_on_state_first_publish' ], 10, 3 );
         // Handler to warm a URL via WP-Cron fallback
         add_action( 'dh_warm_url', [ $this, 'warm_url_handler' ], 10, 1 );
         // Prime when LSCache is asked to purge a specific post or URL
@@ -70,6 +72,9 @@ class DH_LSCache_Integration {
             // Prime the cache for the state page (non-blocking immediate request + cron fallback)
             $this->prime_cache_url( $state_url );
         }
+
+        // Also purge all published profiles in this city (match by 'area' term assigned to the city)
+        $this->purge_profiles_for_city( $post );
     }
 
     /**
@@ -129,6 +134,76 @@ class DH_LSCache_Integration {
         try {
             wp_remote_get( $url, $args );
         } catch ( \Exception $e ) { /* no-op */ }
+    }
+
+    /**
+     * Purge all published profiles that belong to the same 'area' as the given city post.
+     *
+     * @param WP_Post $city_post
+     * @return void
+     */
+    private function purge_profiles_for_city( $city_post ) {
+        $city_post = is_object( $city_post ) ? $city_post : get_post( $city_post );
+        if ( ! $city_post || $city_post->post_type !== 'city-listing' ) { return; }
+        $area_terms = get_the_terms( $city_post->ID, 'area' );
+        if ( ! is_array( $area_terms ) || empty( $area_terms ) ) { return; }
+        $area_ids = wp_list_pluck( $area_terms, 'term_id' );
+        $area_ids = array_values( array_filter( array_map( 'intval', $area_ids ) ) );
+        if ( empty( $area_ids ) ) { return; }
+
+        $q = new WP_Query( [
+            'post_type'      => 'profile',
+            'post_status'    => 'publish',
+            'fields'         => 'ids',
+            'posts_per_page' => -1,
+            'no_found_rows'  => true,
+            'tax_query'      => [
+                [
+                    'taxonomy' => 'area',
+                    'field'    => 'term_id',
+                    'terms'    => $area_ids,
+                ],
+            ],
+        ] );
+        if ( empty( $q->posts ) ) { return; }
+        foreach ( $q->posts as $pid ) {
+            do_action( 'litespeed_purge_post', (int) $pid );
+            $u = get_permalink( $pid );
+            if ( $u ) { do_action( 'litespeed_purge_url', esc_url_raw( $u ) ); }
+        }
+    }
+
+    /**
+     * On first publish of a state-listing, purge all published city-listing pages that belong to that state.
+     * Uses the 'state' taxonomy slug (2-letter code) to match city post_name suffix "-{code}-dog-trainers".
+     *
+     * @param string  $new_status
+     * @param string  $old_status
+     * @param WP_Post $post
+     * @return void
+     */
+    public function maybe_purge_cities_on_state_first_publish( $new_status, $old_status, $post ) {
+        if ( $new_status !== 'publish' || $old_status === 'publish' ) { return; }
+        if ( ! $post || $post->post_type !== 'state-listing' ) { return; }
+        $state_terms = get_the_terms( $post->ID, 'state' );
+        if ( ! is_array( $state_terms ) || empty( $state_terms ) ) { return; }
+        $state_slug = strtolower( (string) $state_terms[0]->slug );
+        if ( ! $state_slug || strlen( $state_slug ) !== 2 ) { return; }
+
+        global $wpdb;
+        $like = $wpdb->esc_like( '-' . $state_slug . '-dog-trainers' );
+        $sql  = $wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish' AND post_name LIKE %s",
+            'city-listing',
+            '%' . $like
+        );
+        $city_ids = $wpdb->get_col( $sql );
+        if ( empty( $city_ids ) ) { return; }
+        foreach ( $city_ids as $cid ) {
+            do_action( 'litespeed_purge_post', (int) $cid );
+            $cu = get_permalink( $cid );
+            if ( $cu ) { do_action( 'litespeed_purge_url', esc_url_raw( $cu ) ); }
+        }
     }
 
     /**
