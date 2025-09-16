@@ -686,6 +686,12 @@ class Directory_Helpers {
                 'description' => __('On first publish of a city, purges the related state-listing page from LiteSpeed Cache.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/cache-integration/cache-integration.php',
                 'class' => 'DH_LSCache_Integration'
+            ),
+            'nearest-cities' => array(
+                'name' => __('Nearest Cities', 'directory-helpers'),
+                'description' => __('Shortcode to list the 5 closest city pages based on area lat/lng. Use [dh_nearest_cities limit="5"].', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/nearest-cities/nearest-cities.php',
+                'class' => 'DH_Nearest_Cities'
             )
             // Add more modules here as needed
         );
