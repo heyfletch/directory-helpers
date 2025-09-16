@@ -93,16 +93,8 @@ class DH_Nearest_Cities {
 
         if (empty($items)) { return ''; }
 
-        // Output minimal CSS once per request
-        static $did_css = false;
-        $css = '';
-        if (!$did_css) {
-            $did_css = true;
-            $css = '<style>.nc-list{list-style:none;margin:0;padding:0;font-size:var(--text-s);text-align:left}.nc-list .nc-item{margin:0;padding:0}.nc-list .nc-link{text-decoration:none}.nc-list.inline{display:flex;flex-wrap:wrap;gap:.75rem;font-size:var(--text-xs)}.nc-list.inline .nc-item{display:inline}</style>';
-        }
-
         $ul_class = 'nc-list ' . $list_mode;
-        return $css . '<ul class="' . esc_attr($ul_class) . '">' . implode('', $items) . '</ul>';
+        return '<ul class="' . esc_attr($ul_class) . '">' . implode('', $items) . '</ul>';
     }
 
     /**

@@ -74,6 +74,8 @@ class Directory_Helpers {
         // Setup admin hooks separately
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        // Frontend assets
+        add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
 
         // Make prompts available on post edit screens (Classic and Block editor)
         add_action('admin_head-post.php', array($this, 'output_prompts_js'));
@@ -176,6 +178,23 @@ class Directory_Helpers {
             DIRECTORY_HELPERS_VERSION,
             true
         );
+    }
+
+    /**
+     * Enqueue frontend assets (shared styles for shortcodes/modules)
+     */
+    public function enqueue_frontend_assets() {
+        $rel = 'assets/css/frontend.css';
+        $path = DIRECTORY_HELPERS_PATH . $rel;
+        if (file_exists($path)) {
+            $ver = (string) @filemtime($path);
+            wp_enqueue_style(
+                'directory-helpers-frontend',
+                DIRECTORY_HELPERS_URL . $rel,
+                array(),
+                $ver
+            );
+        }
     }
 
     /**

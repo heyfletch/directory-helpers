@@ -1,0 +1,62 @@
+/* Directory Helpers - Frontend shared styles */
+
+/* Generic list styles used by multiple modules (e.g., nearest cities) */
+.nc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.nc-list.vertical {
+  font-size: var(--text-s);
+}
+
+.nc-list .nc-item {
+  margin: 0;
+  padding: 0;
+}
+
+.nc-list .nc-link {
+  text-decoration: none;
+}
+
+/* Inline/Horizontal list variant */
+.nc-list.inline {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: var(--text-xs);
+}
+
+.nc-list.inline .nc-item {
+  display: inline;
+}
+
+/* Nearby wrapper helpers to align label and list inline in Bricks */
+.nearby-cities-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: var(--text-xs);
+}
+
+.nearby-cities-wrap .brxe-shortcode {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: var(--text-xs);
+}
+
+.nearby-cities-wrap .brxe-shortcode .nc-list {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
