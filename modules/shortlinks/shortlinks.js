@@ -55,6 +55,9 @@
                   + '<button type="button" class="button-link dh-copy-shortlink" data-url="' + url + '" aria-label="Copy shortlink" title="Copy shortlink">'
                   + '<span class="dashicons dashicons-admin-page" aria-hidden="true"></span>'
                   + '</button>'
+                  + '<button type="button" class="button-link dh-edit-shortlink" data-post="' + postId + '" data-current="' + d.slug + '" aria-label="Edit shortlink" title="Edit shortlink">'
+                  + '<span class="dashicons dashicons-edit" aria-hidden="true"></span>'
+                  + '</button>'
                   + '</p>';
                 $wrapper.prepend(rowHtml);
               }
@@ -144,6 +147,64 @@
         $tmp.remove();
       }
       setStatus('Copied permalink to clipboard.', 'success');
+    });
+
+    // Edit shortlink handler
+    $(document).on('click', '.dh-edit-shortlink', function(e){
+      e.preventDefault();
+      var $btn = $(this);
+      var postId = $btn.data('post');
+      var currentSlug = $btn.data('current');
+
+      if($btn.prop('disabled')){ return; }
+
+      var newSlug = prompt('Edit shortlink slug (without leading slash):', currentSlug);
+      if(newSlug === null || newSlug === currentSlug){ 
+        return; // cancelled or no change
+      }
+
+      newSlug = newSlug.replace(/^\/+/, '').toLowerCase(); // remove leading slashes and lowercase
+      if(!newSlug){
+        setStatus('Invalid slug provided.', 'error');
+        return;
+      }
+
+      $btn.prop('disabled', true);
+      setStatus('Updating shortlink...', 'info');
+
+      $.post(DHShortlinks.ajaxurl, {
+        action: 'dh_edit_shortlink',
+        post_id: postId,
+        new_slug: newSlug,
+        nonce: DHShortlinks.nonce
+      }).done(function(resp){
+        if(resp && resp.success && resp.data){
+          var d = resp.data;
+          var msg = (d.status === 'updated') ? 'Shortlink updated: ' : 
+                   (d.status === 'unchanged') ? 'Shortlink unchanged: ' : 'Shortlink: ';
+          var url = d.url || '';
+          if(url){
+            var path = urlPath(url);
+            setStatus(msg + '<a href="' + url + '" target="_blank" rel="noopener">' + path + '</a>', 'success');
+
+            // Update the display link and button data
+            var $row = $('.dh-shortlink-row');
+            $row.find('a').attr('href', url).text(path);
+            $row.find('.dh-copy-shortlink').attr('data-url', url);
+            $row.find('.dh-edit-shortlink').attr('data-current', d.slug);
+          } else {
+            setStatus(msg, 'success');
+          }
+        } else {
+          var m = (resp && resp.data && resp.data.message) ? resp.data.message : 'Unknown error';
+          setStatus('Error: ' + m, 'error');
+        }
+      }).fail(function(xhr){
+        var m = (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) ? xhr.responseJSON.data.message : 'Request failed';
+        setStatus('Error: ' + m, 'error');
+      }).always(function(){
+        $btn.prop('disabled', false);
+      });
     });
   });
 })(jQuery);

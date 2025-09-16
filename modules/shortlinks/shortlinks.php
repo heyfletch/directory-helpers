@@ -22,6 +22,7 @@ class DH_Shortlinks {
         add_action( 'add_meta_boxes', [ $this, 'add_meta_box' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'admin_enqueue' ] );
         add_action( 'wp_ajax_dh_create_shortlink', [ $this, 'ajax_create_shortlink' ] );
+        add_action( 'wp_ajax_dh_edit_shortlink', [ $this, 'ajax_edit_shortlink' ] );
 
         // Auto create on first publish/update to publish if not created yet
         add_action( 'transition_post_status', [ $this, 'maybe_auto_create_on_publish' ], 10, 3 );
@@ -61,8 +62,10 @@ class DH_Shortlinks {
             $display = '/' . ltrim( $slug, '/' );
             echo '<p class="dh-shortlink-row">';
             echo '<a href="' . $url . '" target="_blank" rel="noopener">' . esc_html( $display ) . '</a> ';
-            // Using dashicons-admin-page. Alternatives: swap class to dashicons-clipboard or dashicons-share
+            // Copy button
             echo '<button type="button" class="button-link dh-copy-shortlink" data-url="' . $url . '" aria-label="' . esc_attr__( 'Copy shortlink', 'directory-helpers' ) . '" title="' . esc_attr__( 'Copy shortlink', 'directory-helpers' ) . '"><span class="dashicons dashicons-admin-page" aria-hidden="true"></span></button>';
+            // Edit button
+            echo '<button type="button" class="button-link dh-edit-shortlink" data-post="' . esc_attr( $post->ID ) . '" data-current="' . esc_attr( $slug ) . '" aria-label="' . esc_attr__( 'Edit shortlink', 'directory-helpers' ) . '" title="' . esc_attr__( 'Edit shortlink', 'directory-helpers' ) . '"><span class="dashicons dashicons-edit" aria-hidden="true"></span></button>';
             echo '</p>';
         } else {
             echo '<p>' . esc_html__( 'No shortlink created yet.', 'directory-helpers' ) . '</p>';
@@ -92,7 +95,11 @@ class DH_Shortlinks {
             /* Permalink copy icon next to Edit */
             #edit-slug-box .dh-copy-permalink{ text-decoration:none; box-shadow:none; margin-left:6px; vertical-align:middle; }
             #edit-slug-box .dh-copy-permalink:hover{ text-decoration:none; }
-            #edit-slug-box .dh-copy-permalink .dashicons{ text-decoration:none; }';
+            #edit-slug-box .dh-copy-permalink .dashicons{ text-decoration:none; }
+            /* Edit shortlink button styling */
+            .dh-shortlinks-meta .dh-edit-shortlink{ text-decoration:none !important; box-shadow:none; margin-left:4px; border:none; background:none; color:inherit; }
+            .dh-shortlinks-meta .dh-edit-shortlink:hover{ text-decoration:none !important; }
+            .dh-shortlinks-meta .dh-edit-shortlink .dashicons{ text-decoration:none !important; }';
         wp_add_inline_style( 'dashicons', $inline_css );
         wp_enqueue_script(
             'dh-shortlinks-admin',
@@ -124,6 +131,26 @@ class DH_Shortlinks {
         }
 
         $result = $this->create_shortlink_for_post( $post_id );
+        if ( $result['success'] ) {
+            wp_send_json_success( $result );
+        }
+        wp_send_json_error( $result );
+    }
+
+    public function ajax_edit_shortlink() {
+        if ( ! isset( $_POST['post_id'], $_POST['new_slug'], $_POST['nonce'] ) ) {
+            wp_send_json_error( [ 'message' => 'Bad request' ], 400 );
+        }
+        $post_id = (int) $_POST['post_id'];
+        $new_slug = sanitize_text_field( wp_unslash( $_POST['new_slug'] ) );
+        if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), self::NONCE_ACTION ) ) {
+            wp_send_json_error( [ 'message' => 'Invalid nonce' ], 403 );
+        }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( [ 'message' => 'Insufficient permissions' ], 403 );
+        }
+
+        $result = $this->edit_shortlink_for_post( $post_id, $new_slug );
         if ( $result['success'] ) {
             wp_send_json_success( $result );
         }
@@ -192,6 +219,49 @@ class DH_Shortlinks {
         }
 
         return [ 'success' => false, 'message' => 'No available slug after disambiguation.' ];
+    }
+
+    public function edit_shortlink_for_post( $post_id, $new_slug ) {
+        $post = get_post( $post_id );
+        if ( ! $post || ! in_array( $post->post_type, [ 'city-listing', 'state-listing' ], true ) ) {
+            return [ 'success' => false, 'message' => 'Unsupported post type.' ];
+        }
+
+        // Get current shortlink
+        $current_slug = (string) get_post_meta( $post_id, self::META_SLUG, true );
+        if ( ! $current_slug ) {
+            return [ 'success' => false, 'message' => 'No existing shortlink to edit.' ];
+        }
+
+        // Sanitize new slug
+        $new_slug = $this->trim_leading_trailing_slash( strtolower( $new_slug ) );
+        if ( empty( $new_slug ) ) {
+            return [ 'success' => false, 'message' => 'Invalid slug provided.' ];
+        }
+
+        // If same slug, no change needed
+        if ( $current_slug === $new_slug ) {
+            return [ 'success' => true, 'status' => 'unchanged', 'slug' => $new_slug, 'url' => $this->shortlink_url( $new_slug ) ];
+        }
+
+        // Check if new slug is available (unless it's already pointing to this post)
+        $exists_id = $this->redirect_exists_for_source( $new_slug );
+        if ( $exists_id ) {
+            $dest = $this->redirect_destination_for_source( $new_slug );
+            $permalink = get_permalink( $post_id );
+            if ( ! $this->urls_match( $permalink, $dest ) ) {
+                return [ 'success' => false, 'message' => 'New slug is already in use by another redirect.' ];
+            }
+        }
+
+        // Update the existing RankMath redirect
+        $updated = $this->update_rank_math_redirect( $current_slug, $new_slug, get_permalink( $post_id ) );
+        if ( $updated ) {
+            update_post_meta( $post_id, self::META_SLUG, $new_slug );
+            return [ 'success' => true, 'status' => 'updated', 'slug' => $new_slug, 'url' => $this->shortlink_url( $new_slug ) ];
+        }
+
+        return [ 'success' => false, 'message' => 'Failed to update redirect.' ];
     }
 
     private function check_or_create_slug( $slug, $permalink, $post_id ) {
@@ -378,6 +448,69 @@ class DH_Shortlinks {
             [ '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s' ]
         );
         return (bool) $inserted;
+    }
+
+    public function update_rank_math_redirect( $old_slug, $new_slug, $destination ) {
+        global $wpdb;
+        $old_slug = $this->trim_leading_trailing_slash( strtolower( $old_slug ) );
+        $new_slug = $this->trim_leading_trailing_slash( strtolower( $new_slug ) );
+        $destination = esc_url_raw( $destination );
+        
+        if ( empty( $old_slug ) || empty( $new_slug ) || empty( $destination ) ) {
+            return false;
+        }
+
+        $table = $this->redirections_table();
+        if ( ! $this->table_exists( $table ) ) {
+            return false;
+        }
+
+        // Find the existing redirect
+        $like = '%"pattern";s:%:"' . $wpdb->esc_like( $old_slug ) . '";%';
+        $rows = $wpdb->get_results( $wpdb->prepare( "SELECT id, sources FROM {$table} WHERE sources LIKE %s ORDER BY id DESC LIMIT 200", $like ) );
+        
+        if ( ! $rows ) {
+            return false;
+        }
+
+        foreach ( $rows as $row ) {
+            $data = @maybe_unserialize( $row->sources );
+            if ( is_array( $data ) ) {
+                $updated = false;
+                foreach ( $data as &$rule ) {
+                    if ( is_array( $rule ) && isset( $rule['pattern'] ) && strtolower( untrailingslashit( ltrim( (string) $rule['pattern'], '/' ) ) ) === $old_slug ) {
+                        $rule['pattern'] = $new_slug;
+                        $updated = true;
+                        break;
+                    }
+                }
+                
+                if ( $updated ) {
+                    $new_sources = serialize( $data );
+                    $result = $wpdb->update(
+                        $table,
+                        [
+                            'sources' => $new_sources,
+                            'url_to' => $destination,
+                            'updated' => current_time( 'mysql' )
+                        ],
+                        [ 'id' => (int) $row->id ],
+                        [ '%s', '%s', '%s' ],
+                        [ '%d' ]
+                    );
+                    
+                    // Clear RankMath cache if it exists
+                    $cache_table = $this->redirections_cache_table();
+                    if ( $this->table_exists( $cache_table ) ) {
+                        $wpdb->delete( $cache_table, [ 'redirection_id' => (int) $row->id ], [ '%d' ] );
+                    }
+                    
+                    return (bool) $result;
+                }
+            }
+        }
+        
+        return false;
     }
 
     /* ---------------------------------- */
