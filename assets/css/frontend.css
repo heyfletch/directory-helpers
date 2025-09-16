@@ -13,12 +13,13 @@
 }
 
 .nc-list .nc-item {
-  margin: 0;
+  margin: 0 0 .4rem 0;
   padding: 0;
 }
 
 .nc-list .nc-link {
   text-decoration: none;
+  font-weight: 400;
 }
 
 /* Inline/Horizontal list variant */
