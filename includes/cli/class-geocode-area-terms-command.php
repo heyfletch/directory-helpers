@@ -53,17 +53,50 @@ class DH_Geocode_Area_Terms_Command extends WP_CLI_Command {
         WP_CLI::line( "Force update: " . ( $force ? 'Yes' : 'No' ) );
         WP_CLI::line( "Source: " . $source );
 
-        // Get area terms
-        $args_query = array(
-            'taxonomy' => 'area',
-            'hide_empty' => false,
-            'number' => $limit > 0 ? $limit : 0,
-            'offset' => $start_from,
-            'orderby' => 'term_id',
-            'order' => 'ASC'
-        );
-
-        $terms = get_terms( $args_query );
+        // Get area terms - if not forcing updates, we need to filter out already verified terms
+        if ( ! $force ) {
+            // First get all terms to check which ones need verification
+            $all_terms_args = array(
+                'taxonomy' => 'area',
+                'hide_empty' => false,
+                'number' => 0, // Get all terms
+                'orderby' => 'term_id',
+                'order' => 'ASC'
+            );
+            
+            $all_terms = get_terms( $all_terms_args );
+            $unverified_terms = array();
+            
+            foreach ( $all_terms as $term ) {
+                $coordinates_updated_date = get_term_meta( $term->term_id, 'coordinates_updated_date', true );
+                if ( empty( $coordinates_updated_date ) ) {
+                    $unverified_terms[] = $term;
+                }
+            }
+            
+            // Apply offset and limit to unverified terms
+            if ( $start_from > 0 ) {
+                $unverified_terms = array_slice( $unverified_terms, $start_from );
+            }
+            
+            if ( $limit > 0 ) {
+                $unverified_terms = array_slice( $unverified_terms, 0, $limit );
+            }
+            
+            $terms = $unverified_terms;
+        } else {
+            // If forcing updates, use original query
+            $args_query = array(
+                'taxonomy' => 'area',
+                'hide_empty' => false,
+                'number' => $limit > 0 ? $limit : 0,
+                'offset' => $start_from,
+                'orderby' => 'term_id',
+                'order' => 'ASC'
+            );
+            
+            $terms = get_terms( $args_query );
+        }
 
         if ( is_wp_error( $terms ) ) {
             WP_CLI::error( "Failed to get area terms: " . $terms->get_error_message() );
@@ -84,14 +117,12 @@ class DH_Geocode_Area_Terms_Command extends WP_CLI_Command {
         foreach ( $terms as $term ) {
             $processed++;
             
-            WP_CLI::line( sprintf( "[%d/%d] Processing: %s (ID: %d)", 
-                $processed, count( $terms ), $term->name, $term->term_id ) );
-
             // Check if already verified (unless force is used)
             if ( ! $force ) {
                 $coordinates_updated_date = get_term_meta( $term->term_id, 'coordinates_updated_date', true );
                 if ( ! empty( $coordinates_updated_date ) ) {
-                    WP_CLI::line( "  → Skipped (already verified on " . $coordinates_updated_date . ")" );
+                    fwrite( STDERR, sprintf( "[%d/%d] %s → SKIPPED (verified %s)\n", 
+                        $processed, count( $terms ), $term->name, $coordinates_updated_date ) );
                     $skipped++;
                     continue;
                 }
@@ -100,24 +131,28 @@ class DH_Geocode_Area_Terms_Command extends WP_CLI_Command {
             // Parse city and state from slug
             $location_data = $this->parse_location_from_slug( $term->slug );
             if ( ! $location_data ) {
-                WP_CLI::warning( "  → Could not parse location from slug: " . $term->slug );
+                fwrite( STDERR, sprintf( "[%d/%d] %s → ERROR (could not parse slug: %s)\n", 
+                    $processed, count( $terms ), $term->name, $term->slug ) );
                 $errors++;
                 continue;
             }
-
-            WP_CLI::line( sprintf( "  → Parsed: %s, %s", $location_data['city'], $location_data['state'] ) );
 
             if ( $source === 'nominatim' ) {
                 // Get coordinates from Nominatim
                 $coordinates = $this->get_coordinates_from_nominatim( $location_data['city'], $location_data['state'] );
                 
                 if ( ! $coordinates ) {
-                    WP_CLI::warning( "  → Failed to get coordinates from Nominatim" );
+                    fwrite( STDERR, sprintf( "[%d/%d] %s → ERROR (API failed)\n", 
+                        $processed, count( $terms ), $term->name ) );
                     $errors++;
                     continue;
                 }
 
-                WP_CLI::line( sprintf( "  → Found coordinates: %s, %s", $coordinates['lat'], $coordinates['lon'] ) );
+                // Show progress on one line
+                fwrite( STDERR, sprintf( "[%d/%d] %s → %s, %s (%s)\n", 
+                    $processed, count( $terms ), $term->name, 
+                    $coordinates['lat'], $coordinates['lon'],
+                    $dry_run ? 'DRY RUN' : 'UPDATED' ) );
 
                 if ( ! $dry_run ) {
                     // Update coordinates and tracking meta
@@ -125,17 +160,12 @@ class DH_Geocode_Area_Terms_Command extends WP_CLI_Command {
                     update_term_meta( $term->term_id, 'longitude', $coordinates['lon'] );
                     update_term_meta( $term->term_id, 'coordinates_updated_date', current_time( 'Y-m-d H:i:s' ) );
                     update_term_meta( $term->term_id, 'coordinates_source', $source );
-                    
-                    WP_CLI::success( "  → Updated coordinates" );
-                } else {
-                    WP_CLI::line( "  → Would update coordinates (dry run)" );
                 }
 
                 $updated++;
 
                 // Rate limiting for Nominatim (1 request per second)
                 if ( $processed < count( $terms ) ) {
-                    WP_CLI::line( "  → Waiting 1 second (rate limiting)..." );
                     sleep( 1 );
                 }
             }
@@ -180,6 +210,19 @@ class DH_Geocode_Area_Terms_Command extends WP_CLI_Command {
         }
         
         return false;
+    }
+
+    /**
+     * Force output buffer flush for real-time display
+     */
+    private function flush_output() {
+        if ( function_exists( 'fastcgi_finish_request' ) ) {
+            fastcgi_finish_request();
+        }
+        if ( ob_get_level() ) {
+            ob_flush();
+        }
+        flush();
     }
 
     /**
