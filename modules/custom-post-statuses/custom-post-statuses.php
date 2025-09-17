@@ -42,7 +42,9 @@ class DH_Custom_Post_Statuses {
         add_filter('admin_body_class', array($this, 'add_custom_status_body_class'));
         
         // Closed status redirect functionality
-        add_action('template_redirect', array($this, 'handle_closed_status_redirect'));
+        add_action('pre_get_posts', array($this, 'handle_closed_status_query'));
+        add_action('template_redirect', array($this, 'handle_closed_status_redirect'), 1);
+        add_action('wp', array($this, 'handle_404_redirect_for_closed_profiles'));
     }
     
     /**
@@ -65,12 +67,11 @@ class DH_Custom_Post_Statuses {
         // Register the "closed" post status
         register_post_status('closed', array(
             'label'                     => _x('Closed', 'post'),
-            'public'                    => false,
+            'public'                    => true,  // Make it public so WordPress can find it
             'exclude_from_search'       => true,
             'show_in_admin_all_list'    => true,
             'show_in_admin_status_list' => true,
             'label_count'               => _n_noop('Closed <span class="count">(%s)</span>', 'Closed <span class="count">(%s)</span>'),
-            'private'                   => true,
             'show_in_rest'              => true,
             'date_floating'             => false,
         ));
@@ -367,37 +368,107 @@ class DH_Custom_Post_Statuses {
         return $classes;
     }
     
+    
+    /**
+     * Handle query for closed status posts to make them findable
+     */
+    public function handle_closed_status_query($query) {
+        // Only handle main query on frontend for single posts
+        if (is_admin() || !$query->is_main_query() || !$query->is_single()) {
+            return;
+        }
+        
+        // Get the post name from the query
+        $post_name = $query->get('name');
+        if (!$post_name) {
+            return;
+        }
+        
+        // Check if there's a closed profile with this slug
+        $closed_post = get_posts(array(
+            'name' => $post_name,
+            'post_type' => 'profile',
+            'post_status' => 'closed',
+            'numberposts' => 1
+        ));
+        
+        if ($closed_post) {
+            // Set the found post in the query
+            $query->set('post_status', array('publish', 'closed'));
+        }
+    }
+    
     /**
      * Handle redirect for closed status posts
      */
     public function handle_closed_status_redirect() {
-        // Only handle single post views
-        if (!is_single()) {
-            return;
+        // Debug logging
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('DH_Custom_Post_Statuses: template_redirect hook fired');
         }
         
-        global $post;
-        
-        // Only handle profile post type with closed status
-        if (!$post || $post->post_type !== 'profile' || $post->post_status !== 'closed') {
-            return;
+        // Check for closed profile by URL parameters first
+        if (isset($_GET['post_type']) && $_GET['post_type'] === 'profile' && isset($_GET['p'])) {
+            $post_id = intval($_GET['p']);
+            $post = get_post($post_id);
+            
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('DH_Custom_Post_Statuses: Found profile URL with ID ' . $post_id);
+                if ($post) {
+                    error_log('DH_Custom_Post_Statuses: Post status: ' . $post->post_status);
+                    error_log('DH_Custom_Post_Statuses: User logged in: ' . (is_user_logged_in() ? 'yes' : 'no'));
+                }
+            }
+            
+            if ($post && $post->post_type === 'profile' && $post->post_status === 'closed' && !is_user_logged_in()) {
+                $city_url = $this->get_city_url_for_profile($post);
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('DH_Custom_Post_Statuses: Redirecting to: ' . ($city_url ?: 'homepage'));
+                }
+                if ($city_url) {
+                    wp_redirect($city_url, 301);
+                    exit;
+                } else {
+                    wp_redirect(home_url(), 301);
+                    exit;
+                }
+            }
         }
         
-        // Allow logged-in users to view closed profiles
-        if (is_user_logged_in()) {
-            return;
+        // Check for closed profile by slug in URL
+        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        if (preg_match('#^/profile/([^/]+)/?$#', $request_uri, $matches)) {
+            $slug = $matches[1];
+            $post = get_page_by_path($slug, OBJECT, 'profile');
+            
+            if ($post && $post->post_status === 'closed' && !is_user_logged_in()) {
+                $city_url = $this->get_city_url_for_profile($post);
+                if ($city_url) {
+                    wp_redirect($city_url, 301);
+                    exit;
+                } else {
+                    wp_redirect(home_url(), 301);
+                    exit;
+                }
+            }
         }
         
-        // Find the city page to redirect to
-        $city_url = $this->get_city_url_for_profile($post);
-        
-        if ($city_url) {
-            wp_redirect($city_url, 301);
-            exit;
-        } else {
-            // Fallback to homepage if city can't be determined
-            wp_redirect(home_url(), 301);
-            exit;
+        // Fallback: check if we're on a single post page
+        if (is_single()) {
+            global $post;
+            
+            // Only handle profile post type with closed status
+            if ($post && $post->post_type === 'profile' && $post->post_status === 'closed' && !is_user_logged_in()) {
+                $city_url = $this->get_city_url_for_profile($post);
+                
+                if ($city_url) {
+                    wp_redirect($city_url, 301);
+                    exit;
+                } else {
+                    wp_redirect(home_url(), 301);
+                    exit;
+                }
+            }
         }
     }
     
@@ -409,18 +480,20 @@ class DH_Custom_Post_Statuses {
             return false;
         }
         
-        // Extract state code from profile slug using existing pattern
-        $slug = $post->post_name;
-        if (!preg_match('/^(.+)-([a-z]{2})-(.+)$/', $slug, $matches)) {
+        // Get area and niche terms from the profile
+        $area_terms = wp_get_post_terms($post->ID, 'area');
+        $niche_terms = wp_get_post_terms($post->ID, 'niche');
+        
+        if (empty($area_terms) || empty($niche_terms) || is_wp_error($area_terms) || is_wp_error($niche_terms)) {
             return false;
         }
         
-        $city_name = $matches[1];
-        $state_code = $matches[2];
-        $niche = $matches[3];
+        $area_slug = $area_terms[0]->slug;
+        $niche_slug = $niche_terms[0]->slug;
         
-        // Build expected city-listing slug pattern
-        $city_slug = $city_name . '-' . $state_code . '-' . $niche . 's'; // pluralize niche
+        // Build expected city-listing slug pattern: area-slug + niche-plural
+        $niche_plural = $niche_slug . 's'; // Simple pluralization
+        $city_slug = $area_slug . '-' . $niche_plural;
         
         // Find the city-listing post
         $city_post = get_page_by_path($city_slug, OBJECT, 'city-listing');
@@ -429,7 +502,75 @@ class DH_Custom_Post_Statuses {
             return get_permalink($city_post);
         }
         
+        // If exact match not found, try to find city-listing with matching area and niche terms
+        $city_posts = get_posts(array(
+            'post_type' => 'city-listing',
+            'post_status' => 'publish',
+            'numberposts' => 1,
+            'tax_query' => array(
+                'relation' => 'AND',
+                array(
+                    'taxonomy' => 'area',
+                    'field' => 'term_id',
+                    'terms' => $area_terms[0]->term_id,
+                ),
+                array(
+                    'taxonomy' => 'niche',
+                    'field' => 'term_id',
+                    'terms' => $niche_terms[0]->term_id,
+                )
+            )
+        ));
+        
+        if (!empty($city_posts)) {
+            return get_permalink($city_posts[0]);
+        }
+        
         return false;
+    }
+    
+    /**
+     * Handle 404 redirects for closed profiles
+     */
+    public function handle_404_redirect_for_closed_profiles() {
+        // Only handle 404 pages
+        if (!is_404()) {
+            return;
+        }
+        
+        // Don't redirect logged-in users
+        if (is_user_logged_in()) {
+            return;
+        }
+        
+        // Get the requested URL
+        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        
+        // Check if this looks like a profile URL
+        if (preg_match('#^/profile/([^/]+)/?$#', $request_uri, $matches)) {
+            $slug = $matches[1];
+            
+            // Look for a closed profile with this slug
+            $posts = get_posts(array(
+                'name' => $slug,
+                'post_type' => 'profile',
+                'post_status' => 'closed',
+                'numberposts' => 1
+            ));
+            
+            if (!empty($posts)) {
+                $post = $posts[0];
+                $city_url = $this->get_city_url_for_profile($post);
+                
+                if ($city_url) {
+                    wp_redirect($city_url, 301);
+                    exit;
+                } else {
+                    wp_redirect(home_url(), 301);
+                    exit;
+                }
+            }
+        }
     }
 }
 
