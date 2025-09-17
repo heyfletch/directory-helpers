@@ -718,6 +718,12 @@ class Directory_Helpers {
                 'description' => __('Adds buttons to post edit screens that open Bing Webmaster Tools URL inspection in a new tab.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/bing-webmaster-tools/bing-webmaster-tools.php',
                 'class' => 'DH_Bing_Webmaster_Tools'
+            ),
+            'custom-post-statuses' => array(
+                'name' => __('Custom Post Statuses', 'directory-helpers'),
+                'description' => __('Registers custom post statuses including "refining" with full admin interface support.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/custom-post-statuses/custom-post-statuses.php',
+                'class' => 'DH_Custom_Post_Statuses'
             )
             // Add more modules here as needed
         );
