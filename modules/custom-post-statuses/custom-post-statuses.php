@@ -20,26 +20,29 @@ class DH_Custom_Post_Statuses {
         add_action('init', array($this, 'register_custom_post_statuses'));
         
         // Classic Editor support
-        add_action('admin_footer-post.php', array($this, 'add_refining_to_post_status_dropdown'));
-        add_action('admin_footer-post-new.php', array($this, 'add_refining_to_post_status_dropdown'));
+        add_action('admin_footer-post.php', array($this, 'add_custom_statuses_to_post_status_dropdown'));
+        add_action('admin_footer-post-new.php', array($this, 'add_custom_statuses_to_post_status_dropdown'));
         
         // Quick Edit and Bulk Edit support
-        add_action('admin_footer-edit.php', array($this, 'add_refining_to_quick_edit_dropdown'));
-        add_action('save_post', array($this, 'save_refining_status_from_quick_edit'), 10, 1);
+        add_action('admin_footer-edit.php', array($this, 'add_custom_statuses_to_quick_edit_dropdown'));
+        add_action('save_post', array($this, 'save_custom_status_from_quick_edit'), 10, 1);
         
         // Display states
-        add_filter('display_post_states', array($this, 'fix_refining_display_state'), 10, 2);
+        add_filter('display_post_states', array($this, 'fix_custom_status_display_state'), 10, 2);
         
         // REST API support
         add_filter('rest_post_valid_statuses', array($this, 'filter_rest_valid_statuses'), 10, 2);
-        add_filter('rest_prepare_post', array($this, 'add_refining_to_rest_response'), 10, 3);
-        add_filter('rest_prepare_page', array($this, 'add_refining_to_rest_response'), 10, 3);
+        add_filter('rest_prepare_post', array($this, 'add_custom_statuses_to_rest_response'), 10, 3);
+        add_filter('rest_prepare_page', array($this, 'add_custom_statuses_to_rest_response'), 10, 3);
         
         // Gutenberg support
-        add_action('admin_footer', array($this, 'fix_gutenberg_refining_button'));
+        add_action('admin_footer', array($this, 'fix_gutenberg_custom_status_button'));
         
         // Body class
-        add_filter('admin_body_class', array($this, 'add_refining_status_body_class'));
+        add_filter('admin_body_class', array($this, 'add_custom_status_body_class'));
+        
+        // Closed status redirect functionality
+        add_action('template_redirect', array($this, 'handle_closed_status_redirect'));
     }
     
     /**
@@ -58,15 +61,33 @@ class DH_Custom_Post_Statuses {
             'show_in_rest'              => true,
             'date_floating'             => false,
         ));
+        
+        // Register the "closed" post status
+        register_post_status('closed', array(
+            'label'                     => _x('Closed', 'post'),
+            'public'                    => false,
+            'exclude_from_search'       => true,
+            'show_in_admin_all_list'    => true,
+            'show_in_admin_status_list' => true,
+            'label_count'               => _n_noop('Closed <span class="count">(%s)</span>', 'Closed <span class="count">(%s)</span>'),
+            'private'                   => true,
+            'show_in_rest'              => true,
+            'date_floating'             => false,
+        ));
     }
     
     /**
-     * Add Refining status to Classic Editor dropdown
+     * Add custom statuses to Classic Editor dropdown
      */
-    public function add_refining_to_post_status_dropdown() {
+    public function add_custom_statuses_to_post_status_dropdown() {
         global $post;
         
-        if (!is_object($post) || !property_exists($post, 'post_type') || $post->post_type !== 'post') {
+        if (!is_object($post) || !property_exists($post, 'post_type')) {
+            return;
+        }
+        
+        // Only add to post and profile post types
+        if (!in_array($post->post_type, array('post', 'profile'), true)) {
             return;
         }
         
@@ -77,10 +98,17 @@ class DH_Custom_Post_Statuses {
         ?>
         <script type="text/javascript">
         jQuery(document).ready(function($) {
-            // Add to status dropdown if not already present
+            // Add refining status to dropdown if not already present
             if ($("select#post_status").length && $("select#post_status option[value='refining']").length === 0) {
                 $("select#post_status").append('<option value="refining"<?php echo selected($post->post_status, 'refining', false); ?>>Refining</option>');
             }
+            
+            // Add closed status to dropdown if not already present (profiles only)
+            <?php if ($post->post_type === 'profile'): ?>
+            if ($("select#post_status").length && $("select#post_status option[value='closed']").length === 0) {
+                $("select#post_status").append('<option value="closed"<?php echo selected($post->post_status, 'closed', false); ?>>Closed</option>');
+            }
+            <?php endif; ?>
             
             // Update display if current status is refining
             if ("<?php echo $post->post_status; ?>" === "refining") {
@@ -89,19 +117,30 @@ class DH_Custom_Post_Statuses {
                     $("select#post_status").val("refining");
                 }
             }
+            
+            // Update display if current status is closed
+            if ("<?php echo $post->post_status; ?>" === "closed") {
+                $("#post-status-display").text("Closed");
+                if ($("select#post_status").length) {
+                    $("select#post_status").val("closed");
+                }
+            }
         });
         </script>
         <?php
     }
     
     /**
-     * Add Refining status to Quick Edit and Bulk Edit dropdowns
+     * Add custom statuses to Quick Edit and Bulk Edit dropdowns
      */
-    public function add_refining_to_quick_edit_dropdown() {
+    public function add_custom_statuses_to_quick_edit_dropdown() {
         // Skip for block editor
         if (function_exists('get_current_screen') && get_current_screen() && get_current_screen()->is_block_editor()) {
             return;
         }
+        
+        $screen = get_current_screen();
+        $is_profile_screen = ($screen && $screen->post_type === 'profile');
         ?>
         <script type="text/javascript">
         jQuery(document).ready(function($) {
@@ -117,11 +156,20 @@ class DH_Custom_Post_Statuses {
                         $select.append('<option value="refining">Refining</option>');
                     }
                     
+                    <?php if ($is_profile_screen): ?>
+                    // Add closed status for profiles
+                    if ($select.length && $select.find('option[value="closed"]').length === 0) {
+                        $select.append('<option value="closed">Closed</option>');
+                    }
+                    <?php endif; ?>
+                    
                     // Set selected if current status is refining
                     const postRow = $('#post-' + id);
                     const currentStatus = postRow.find('.column-title .post-state').text().trim();
                     if (currentStatus === 'Refining') {
                         $select.val('refining');
+                    } else if (currentStatus === 'Closed') {
+                        $select.val('closed');
                     }
                 };
             }
@@ -131,6 +179,11 @@ class DH_Custom_Post_Statuses {
                 if ($(this).find('option[value="refining"]').length === 0) {
                     $(this).append('<option value="refining">Refining</option>');
                 }
+                <?php if ($is_profile_screen): ?>
+                if ($(this).find('option[value="closed"]').length === 0) {
+                    $(this).append('<option value="closed">Closed</option>');
+                }
+                <?php endif; ?>
             });
         });
         </script>
@@ -140,7 +193,7 @@ class DH_Custom_Post_Statuses {
     /**
      * Handle saving from Quick Edit
      */
-    public function save_refining_status_from_quick_edit($post_id) {
+    public function save_custom_status_from_quick_edit($post_id) {
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
             return $post_id;
         }
@@ -151,60 +204,72 @@ class DH_Custom_Post_Statuses {
         
         // Check if this is a Quick Edit request
         if (isset($_REQUEST['action']) && $_REQUEST['action'] == 'inline-save' && 
-            isset($_REQUEST['_status']) && $_REQUEST['_status'] == 'refining') {
+            isset($_REQUEST['_status']) && in_array($_REQUEST['_status'], array('refining', 'closed'), true)) {
+            
+            $new_status = sanitize_key($_REQUEST['_status']);
             
             // Unhook to prevent infinite loops
-            remove_action('save_post', array($this, 'save_refining_status_from_quick_edit'), 10);
+            remove_action('save_post', array($this, 'save_custom_status_from_quick_edit'), 10);
             
             wp_update_post(array(
                 'ID'          => $post_id,
-                'post_status' => 'refining'
+                'post_status' => $new_status
             ));
             
             // Re-hook
-            add_action('save_post', array($this, 'save_refining_status_from_quick_edit'), 10, 1);
+            add_action('save_post', array($this, 'save_custom_status_from_quick_edit'), 10, 1);
         }
         
         return $post_id;
     }
     
     /**
-     * Display "Refining" state in post list
+     * Display custom status states in post list
      */
-    public function fix_refining_display_state($states, $post) {
+    public function fix_custom_status_display_state($states, $post) {
         if ($post->post_status == 'refining') {
             $current_screen = get_current_screen();
-            if ($current_screen && $current_screen->id === 'edit-post') {
+            if ($current_screen && in_array($current_screen->id, array('edit-post', 'edit-profile'), true)) {
                 return array('Refining');
+            }
+        } elseif ($post->post_status == 'closed') {
+            $current_screen = get_current_screen();
+            if ($current_screen && $current_screen->id === 'edit-profile') {
+                return array('Closed');
             }
         }
         return $states;
     }
     
     /**
-     * REST API: Add refining to valid statuses
+     * REST API: Add custom statuses to valid statuses
      */
     public function filter_rest_valid_statuses($valid_statuses, $request) {
         if (!in_array('refining', $valid_statuses, true)) {
             $valid_statuses[] = 'refining';
         }
+        if (!in_array('closed', $valid_statuses, true)) {
+            $valid_statuses[] = 'closed';
+        }
         return $valid_statuses;
     }
     
     /**
-     * REST API: Ensure refining status in responses
+     * REST API: Ensure custom statuses in responses
      */
-    public function add_refining_to_rest_response($response, $post, $request) {
+    public function add_custom_statuses_to_rest_response($response, $post, $request) {
         if ($post->post_status === 'refining') {
             $response->data['status'] = 'refining';
+        } elseif ($post->post_status === 'closed') {
+            $response->data['status'] = 'closed';
         }
         return $response;
     }
     
     /**
-     * Simple Gutenberg fix: Just make sure the button shows "Refining" text
+     * Simple Gutenberg fix: Just make sure the button shows correct status text
      */
-    public function fix_gutenberg_refining_button() {
+    public function fix_gutenberg_custom_status_button() {
         $screen = get_current_screen();
         if (!$screen || !$screen->is_block_editor()) {
             return;
@@ -212,16 +277,25 @@ class DH_Custom_Post_Statuses {
         
         global $post;
         $is_refining = ($post && $post->post_status === 'refining') ? 'true' : 'false';
+        $is_closed = ($post && $post->post_status === 'closed') ? 'true' : 'false';
+        $status_text = '';
+        if ($post && $post->post_status === 'refining') {
+            $status_text = 'Refining';
+        } elseif ($post && $post->post_status === 'closed') {
+            $status_text = 'Closed';
+        }
         
-        ?>
+        if ($status_text): ?>
         <script type="text/javascript">
         (function() {
+            const statusText = '<?php echo esc_js($status_text); ?>';
+            
             // Simple function to set button text
-            function setRefiningButtonText() {
+            function setCustomStatusButtonText() {
                 const buttons = document.querySelectorAll('.editor-post-status__toggle');
                 buttons.forEach(button => {
                     if (button && button.textContent.trim() === '') {
-                        button.textContent = 'Refining';
+                        button.textContent = statusText;
                     }
                 });
             }
@@ -229,61 +303,55 @@ class DH_Custom_Post_Statuses {
             // Run when page loads
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', function() {
-                    if (<?php echo $is_refining; ?>) {
-                        setTimeout(setRefiningButtonText, 100);
-                    }
+                    setTimeout(setCustomStatusButtonText, 100);
                 });
             } else {
-                if (<?php echo $is_refining; ?>) {
-                    setTimeout(setRefiningButtonText, 100);
-                }
+                setTimeout(setCustomStatusButtonText, 100);
             }
             
             // Watch for changes with MutationObserver
-            if (<?php echo $is_refining; ?>) {
-                const observer = new MutationObserver(function(mutations) {
-                    mutations.forEach(function(mutation) {
-                        if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                            const buttons = document.querySelectorAll('.editor-post-status__toggle');
-                            buttons.forEach(button => {
-                                if (button && button.textContent.trim() === '') {
-                                    button.textContent = 'Refining';
-                                }
-                            });
-                        }
-                    });
-                });
-                
-                // Start observing when DOM is ready
-                setTimeout(function() {
-                    const targetNode = document.querySelector('.editor-layout__content, .edit-post-layout__content, .editor, body');
-                    if (targetNode) {
-                        observer.observe(targetNode, {
-                            childList: true,
-                            subtree: true,
-                            characterData: true
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                        const buttons = document.querySelectorAll('.editor-post-status__toggle');
+                        buttons.forEach(button => {
+                            if (button && button.textContent.trim() === '') {
+                                button.textContent = statusText;
+                            }
                         });
                     }
-                    setRefiningButtonText();
-                }, 500);
-            }
+                });
+            });
+            
+            // Start observing when DOM is ready
+            setTimeout(function() {
+                const targetNode = document.querySelector('.editor-layout__content, .edit-post-layout__content, .editor, body');
+                if (targetNode) {
+                    observer.observe(targetNode, {
+                        childList: true,
+                        subtree: true,
+                        characterData: true
+                    });
+                }
+                setCustomStatusButtonText();
+            }, 500);
         })();
         </script>
         
         <style>
-        /* CSS fallback for empty refining status button */
+        /* CSS fallback for empty custom status button */
         .editor-post-status__toggle:empty::after {
-            content: 'Refining';
+            content: '<?php echo esc_attr($status_text); ?>';
         }
         </style>
-        <?php
+        <?php endif;
     }
     
     /**
-     * Add 'status-refining' body class to the post editor.
+     * Add custom status body classes to the post editor.
      * Works for both Classic and Block editors.
      */
-    public function add_refining_status_body_class($classes) {
+    public function add_custom_status_body_class($classes) {
         global $post;
         $screen = get_current_screen();
 
@@ -291,10 +359,77 @@ class DH_Custom_Post_Statuses {
         if (isset($screen->base) && $screen->base == 'post' && is_object($post)) {
             if ($post->post_status == 'refining') {
                 $classes .= ' status-refining';
+            } elseif ($post->post_status == 'closed') {
+                $classes .= ' status-closed';
             }
         }
         
         return $classes;
+    }
+    
+    /**
+     * Handle redirect for closed status posts
+     */
+    public function handle_closed_status_redirect() {
+        // Only handle single post views
+        if (!is_single()) {
+            return;
+        }
+        
+        global $post;
+        
+        // Only handle profile post type with closed status
+        if (!$post || $post->post_type !== 'profile' || $post->post_status !== 'closed') {
+            return;
+        }
+        
+        // Allow logged-in users to view closed profiles
+        if (is_user_logged_in()) {
+            return;
+        }
+        
+        // Find the city page to redirect to
+        $city_url = $this->get_city_url_for_profile($post);
+        
+        if ($city_url) {
+            wp_redirect($city_url, 301);
+            exit;
+        } else {
+            // Fallback to homepage if city can't be determined
+            wp_redirect(home_url(), 301);
+            exit;
+        }
+    }
+    
+    /**
+     * Get the city URL for a profile post
+     */
+    private function get_city_url_for_profile($post) {
+        if (!$post || $post->post_type !== 'profile') {
+            return false;
+        }
+        
+        // Extract state code from profile slug using existing pattern
+        $slug = $post->post_name;
+        if (!preg_match('/^(.+)-([a-z]{2})-(.+)$/', $slug, $matches)) {
+            return false;
+        }
+        
+        $city_name = $matches[1];
+        $state_code = $matches[2];
+        $niche = $matches[3];
+        
+        // Build expected city-listing slug pattern
+        $city_slug = $city_name . '-' . $state_code . '-' . $niche . 's'; // pluralize niche
+        
+        // Find the city-listing post
+        $city_post = get_page_by_path($city_slug, OBJECT, 'city-listing');
+        
+        if ($city_post && $city_post->post_status === 'publish') {
+            return get_permalink($city_post);
+        }
+        
+        return false;
     }
 }
 
