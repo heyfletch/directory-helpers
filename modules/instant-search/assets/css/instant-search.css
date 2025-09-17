@@ -119,7 +119,8 @@
   border-top: 1px solid #f0f0f0;
   line-height: 1.25;
   text-decoration: none;
-  color: inherit;
+  color: var(--primary, #000);
+  font-weight: 400;
   touch-action: manipulation;
   transition: background-color .12s ease;
 }
@@ -127,12 +128,14 @@
 .dhis-item:hover,
 .dhis-item.is-active {
   background: #f0f6ff;
+  color: var(--primary, #000);
 }
 
 /* Pressed state feedback on tap */
 .dhis-item:active,
 .dhis-item.is-tapping {
   background: #e7f1ff;
+  color: var(--primary, #000);
 }
 
 @media (max-width: 640px) {
