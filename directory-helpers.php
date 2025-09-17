@@ -712,6 +712,12 @@ class Directory_Helpers {
                 'description' => __('Shortcode to list the 5 closest city pages based on area lat/lng. Use [dh_nearest_cities limit="5"].', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/nearest-cities/nearest-cities.php',
                 'class' => 'DH_Nearest_Cities'
+            ),
+            'bing-webmaster-tools' => array(
+                'name' => __('Bing Webmaster Tools', 'directory-helpers'),
+                'description' => __('Adds buttons to post edit screens that open Bing Webmaster Tools URL inspection in a new tab.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/bing-webmaster-tools/bing-webmaster-tools.php',
+                'class' => 'DH_Bing_Webmaster_Tools'
             )
             // Add more modules here as needed
         );
