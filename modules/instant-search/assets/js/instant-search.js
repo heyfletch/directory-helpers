@@ -99,7 +99,7 @@
     });
 
     var ordered = [];
-    ['c','p','s'].forEach(function(y){
+    ['c','s','p'].forEach(function(y){
       var cap = caps[y] || 0;
       for(var i=0;i<groups[y].length && ordered.length<limit && i<cap;i++){
         var id = groups[y][i].it.i; used.add(id); ordered.push(groups[y][i]);
@@ -128,7 +128,7 @@
     results.forEach(function(it){ if(!byType[it.y]) byType[it.y]=[]; byType[it.y].push(it); });
 
     var idx = 0;
-    ['c','p','s'].forEach(function(y){
+    ['c','s','p'].forEach(function(y){
       var arr = byType[y]; if(!arr || !arr.length) return;
       var labels = state.labels || cfg.labels || {};
       var h = document.createElement('div'); h.className='dhis-heading'; h.textContent = labels[y] || y;
