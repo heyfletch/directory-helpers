@@ -402,36 +402,24 @@ class DH_Custom_Post_Statuses {
      * Handle redirect for closed status posts
      */
     public function handle_closed_status_redirect() {
-        // Debug logging
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('DH_Custom_Post_Statuses: template_redirect hook fired');
-        }
         
         // Check for closed profile by URL parameters first
         if (isset($_GET['post_type']) && $_GET['post_type'] === 'profile' && isset($_GET['p'])) {
             $post_id = intval($_GET['p']);
             $post = get_post($post_id);
             
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('DH_Custom_Post_Statuses: Found profile URL with ID ' . $post_id);
-                if ($post) {
-                    error_log('DH_Custom_Post_Statuses: Post status: ' . $post->post_status);
-                    error_log('DH_Custom_Post_Statuses: User logged in: ' . (is_user_logged_in() ? 'yes' : 'no'));
-                }
-            }
             
             if ($post && $post->post_type === 'profile' && $post->post_status === 'closed' && !is_user_logged_in()) {
                 $city_url = $this->get_city_url_for_profile($post);
+                $redirect_to = $city_url ?: home_url();
+                
+                // Log suspicious closed profile access
                 if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('DH_Custom_Post_Statuses: Redirecting to: ' . ($city_url ?: 'homepage'));
+                    error_log('CLOSED PROFILE REDIRECT: Profile "' . $post->post_title . '" (ID: ' . $post->ID . ', URL: ' . get_permalink($post) . ') -> ' . $redirect_to . ' | Referrer: ' . ($_SERVER['HTTP_REFERER'] ?? 'none') . ' | User-Agent: ' . ($_SERVER['HTTP_USER_AGENT'] ?? 'none'));
                 }
-                if ($city_url) {
-                    wp_redirect($city_url, 301);
-                    exit;
-                } else {
-                    wp_redirect(home_url(), 301);
-                    exit;
-                }
+                
+                wp_redirect($redirect_to, 301);
+                exit;
             }
         }
         
@@ -443,13 +431,15 @@ class DH_Custom_Post_Statuses {
             
             if ($post && $post->post_status === 'closed' && !is_user_logged_in()) {
                 $city_url = $this->get_city_url_for_profile($post);
-                if ($city_url) {
-                    wp_redirect($city_url, 301);
-                    exit;
-                } else {
-                    wp_redirect(home_url(), 301);
-                    exit;
+                $redirect_to = $city_url ?: home_url();
+                
+                // Log suspicious closed profile access
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('CLOSED PROFILE REDIRECT: Profile "' . $post->post_title . '" (ID: ' . $post->ID . ', URL: ' . get_permalink($post) . ') -> ' . $redirect_to . ' | Referrer: ' . ($_SERVER['HTTP_REFERER'] ?? 'none') . ' | User-Agent: ' . ($_SERVER['HTTP_USER_AGENT'] ?? 'none'));
                 }
+                
+                wp_redirect($redirect_to, 301);
+                exit;
             }
         }
         
@@ -460,14 +450,15 @@ class DH_Custom_Post_Statuses {
             // Only handle profile post type with closed status
             if ($post && $post->post_type === 'profile' && $post->post_status === 'closed' && !is_user_logged_in()) {
                 $city_url = $this->get_city_url_for_profile($post);
+                $redirect_to = $city_url ?: home_url();
                 
-                if ($city_url) {
-                    wp_redirect($city_url, 301);
-                    exit;
-                } else {
-                    wp_redirect(home_url(), 301);
-                    exit;
+                // Log suspicious closed profile access
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('CLOSED PROFILE REDIRECT: Profile "' . $post->post_title . '" (ID: ' . $post->ID . ', URL: ' . get_permalink($post) . ') -> ' . $redirect_to . ' | Referrer: ' . ($_SERVER['HTTP_REFERER'] ?? 'none') . ' | User-Agent: ' . ($_SERVER['HTTP_USER_AGENT'] ?? 'none'));
                 }
+                
+                wp_redirect($redirect_to, 301);
+                exit;
             }
         }
     }
@@ -561,14 +552,15 @@ class DH_Custom_Post_Statuses {
             if (!empty($posts)) {
                 $post = $posts[0];
                 $city_url = $this->get_city_url_for_profile($post);
+                $redirect_to = $city_url ?: home_url();
                 
-                if ($city_url) {
-                    wp_redirect($city_url, 301);
-                    exit;
-                } else {
-                    wp_redirect(home_url(), 301);
-                    exit;
+                // Log suspicious closed profile access
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('CLOSED PROFILE REDIRECT (404): Profile "' . $post->post_title . '" (ID: ' . $post->ID . ', URL: ' . get_permalink($post) . ') -> ' . $redirect_to . ' | Referrer: ' . ($_SERVER['HTTP_REFERER'] ?? 'none') . ' | User-Agent: ' . ($_SERVER['HTTP_USER_AGENT'] ?? 'none'));
                 }
+                
+                wp_redirect($redirect_to, 301);
+                exit;
             }
         }
     }

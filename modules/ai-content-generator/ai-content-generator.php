@@ -412,12 +412,6 @@ class DH_AI_Content_Generator {
             }
         }
         
-        // Debug logging (remove after testing)
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            $d1 = is_scalar($img1_id_raw) ? (string)$img1_id_raw : json_encode($img1_id_raw);
-            $d2 = is_scalar($img2_id_raw) ? (string)$img2_id_raw : json_encode($img2_id_raw);
-            error_log("DH Image Injection Debug - Post {$post->ID} raw1={$d1} raw2={$d2} norm1={$img1_id} norm2={$img2_id}");
-        }
 
         if (!$img1_id && !$img2_id && empty($img1_url) && empty($img2_url)) {
             return $content;
