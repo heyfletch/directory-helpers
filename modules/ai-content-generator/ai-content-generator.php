@@ -74,19 +74,7 @@ class DH_AI_Content_Generator {
                     <?php esc_html_e('Create Notebook', 'directory-helpers'); ?>
                 </button>
             </p>
-            <?php
-            $last_ai_ts = 0;
-            if (!empty($post) && isset($post->ID)) {
-                $last_ai_ts = (int) get_option('dh_ai_last_update_' . (int) $post->ID, 0);
-            }
-            $status_html = '';
-            if ($last_ai_ts) {
-                $disp = esc_html(wp_date('Y-m-d g:ia', $last_ai_ts));
-                $status_html = '<span class="dashicons dashicons-yes-alt" style="color:#46b450;vertical-align:middle;margin-right:6px;"></span>'
-                    . '<strong style="vertical-align:middle;">' . esc_html__('AI Content', 'directory-helpers') . ' - ' . $disp . '</strong>';
-            }
-            ?>
-            <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"><?php echo $status_html; ?></div>
+            <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"></div>
         </div>
         <?php
     }
@@ -343,10 +331,7 @@ class DH_AI_Content_Generator {
             $response['image_2_saved'] = (bool) $image_2_id;
         }
 
-        // Mark last update time for this post (used by Heartbeat to notify editors)
-        if ($post_id) {
-            update_option('dh_ai_last_update_' . $post_id, time());
-        }
+        // Timestamp tracking removed - no longer needed
 
         // Fire an action so other modules (e.g., External Link Management) can react to new AI content
         do_action('directory_helpers/ai_content_updated', $post_id, $content);
