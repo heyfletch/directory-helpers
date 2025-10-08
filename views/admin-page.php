@@ -29,15 +29,6 @@
                                 </td>
                             </tr>
                         <?php endforeach; ?>
-                        <tr>
-                            <th scope="row">
-                                <strong><?php esc_html_e( 'City Listing Generator', 'directory-helpers' ); ?></strong>
-                            </th>
-                            <td>
-                                <p><?php esc_html_e( 'Bulk-create city listing pages from a list of cities.', 'directory-helpers' ); ?></p>
-                                <p><a href="<?php echo esc_url( admin_url( 'admin.php?page=dh-city-listing-generator' ) ); ?>"><?php esc_html_e( 'Go to Generator', 'directory-helpers' ); ?></a></p>
-                            </td>
-                        </tr>
                     </tbody>
                 </table>
             </div>

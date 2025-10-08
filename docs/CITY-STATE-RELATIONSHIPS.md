@@ -111,4 +111,4 @@ When building features that need city-state relationships:
 ## Related Files
 - `/modules/breadcrumbs/breadcrumbs.php` - Breadcrumb implementation
 - `/test-bricks-queries.php` - Query examples
-- `/modules/city-listing-generator/city-listing-generator.php` - How cities are created
+- `/modules/prep-profiles-by-state/prep-profiles-by-state.php` - How cities are created (one-click workflow)
