@@ -121,12 +121,6 @@ jQuery(document).ready(function ($) {
                 return;
             }
 
-            if (!window.confirm('Create Notebook?')) {
-                statusDiv.textContent = 'Cancelled.';
-                statusDiv.style.color = 'inherit';
-                return;
-            }
-
             statusDiv.textContent = 'Sending request...';
             statusDiv.style.color = 'inherit';
 
