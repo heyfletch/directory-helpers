@@ -23,8 +23,6 @@ class DH_AI_Content_Generator {
         add_action('rest_api_init', array($this, 'register_trigger_route'));
         // Inject body images at view time so images remain editable via ACF/meta
         add_filter('the_content', array($this, 'inject_images_into_content'), 20);
-        // Heartbeat server receiver for live notifications
-        add_filter('heartbeat_received', array($this, 'heartbeat_received'), 10, 2);
     }
 
     /**
@@ -120,8 +118,6 @@ class DH_AI_Content_Generator {
             return;
         }
 
-        // Ensure Heartbeat API is available for live notifications
-        wp_enqueue_script('heartbeat');
         // Ensure Dashicons are available for status icons
         wp_enqueue_style('dashicons');
 
@@ -909,30 +905,4 @@ class DH_AI_Content_Generator {
         return '<img class="alignnone size-full" src="' . esc_url($url) . '"' . $alt_attr . ' />';
     }
 
-    /**
-     * Heartbeat receiver to notify the post editor when AI content has landed.
-     *
-     * @param array $response
-     * @param array $data
-     * @return array
-     */
-    public function heartbeat_received($response, $data) {
-        if (!is_array($data) || empty($data['dh_ai_check'])) {
-            return $response;
-        }
-        $payload = $data['dh_ai_check'];
-        $post_id = isset($payload['postId']) ? absint($payload['postId']) : 0;
-        $last_seen = isset($payload['lastSeen']) ? (int) $payload['lastSeen'] : 0;
-        if (!$post_id) {
-            return $response;
-        }
-        $last = (int) get_option('dh_ai_last_update_' . $post_id, 0);
-        if ($last > $last_seen) {
-            $response['dh_ai'] = array(
-                'updated' => true,
-                'timestamp' => $last,
-            );
-        }
-        return $response;
-    }
 }
