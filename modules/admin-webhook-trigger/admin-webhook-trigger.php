@@ -77,8 +77,7 @@ class DH_Admin_Webhook_Trigger {
             data-nonce="<?php echo esc_attr($nonce); ?>"
             title="<?php esc_attr_e('Create Notebook for this post', 'directory-helpers'); ?>"
         >
-            <span class="dashicons dashicons-book" style="vertical-align: middle; margin-top: 3px;"></span>
-            <?php esc_html_e('Create', 'directory-helpers'); ?>
+            <?php esc_html_e('Make Video', 'directory-helpers'); ?>
         </button>
         <?php
     }
