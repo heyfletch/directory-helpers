@@ -282,6 +282,12 @@ class DH_Admin_Webhook_Trigger {
             ));
         } else {
             $message = wp_remote_retrieve_response_message($response);
+            
+            // Add helpful context for common errors
+            if ($code === 424) {
+                $message .= ' - Make sure Zerowork is active.';
+            }
+            
             wp_send_json_error(array('message' => sprintf(__('Webhook returned error: %s (code: %d)', 'directory-helpers'), $message, $code)));
         }
     }
