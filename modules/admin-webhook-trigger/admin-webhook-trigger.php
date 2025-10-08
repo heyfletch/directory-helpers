@@ -176,6 +176,22 @@ class DH_Admin_Webhook_Trigger {
             return;
         }
         
+        // If post is not published, publish it first
+        if ($post->post_status !== 'publish') {
+            $update_result = wp_update_post(array(
+                'ID' => $post_id,
+                'post_status' => 'publish'
+            ), true);
+            
+            if (is_wp_error($update_result)) {
+                wp_send_json_error(array('message' => __('Failed to publish post: ', 'directory-helpers') . $update_result->get_error_message()));
+                return;
+            }
+            
+            // Refresh post object after publishing
+            $post = get_post($post_id);
+        }
+        
         // Get webhook URL from settings
         $options = get_option('directory_helpers_options');
         $webhook_url = $options['notebook_webhook_url'] ?? '';
