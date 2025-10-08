@@ -724,6 +724,12 @@ class Directory_Helpers {
                 'description' => __('Registers custom post statuses including "refining" with full admin interface support.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/custom-post-statuses/custom-post-statuses.php',
                 'class' => 'DH_Custom_Post_Statuses'
+            ),
+            'admin-webhook-trigger' => array(
+                'name' => __('Admin Webhook Trigger', 'directory-helpers'),
+                'description' => __('Adds a "Notebook" column and row action to city-listing and state-listing admin pages to trigger the Notebook webhook for individual posts.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/admin-webhook-trigger/admin-webhook-trigger.php',
+                'class' => 'DH_Admin_Webhook_Trigger'
             )
             // Add more modules here as needed
         );
