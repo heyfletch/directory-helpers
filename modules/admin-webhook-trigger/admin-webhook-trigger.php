@@ -68,6 +68,14 @@ class DH_Admin_Webhook_Trigger {
             return;
         }
         
+        // Check if post already has a video
+        $video_url = get_field('video_overview', $post_id);
+        if (!empty($video_url)) {
+            // Post already has a video, show checkmark and "done"
+            echo '<span style="color: #46b450;">✓ Done</span>';
+            return;
+        }
+        
         $nonce = wp_create_nonce('dh_trigger_notebook_' . $post_id);
         ?>
         <button 
