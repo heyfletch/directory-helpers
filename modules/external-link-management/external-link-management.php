@@ -127,6 +127,8 @@ class DH_External_Link_Management {
         /* Actions and ID columns: minimal width and no wrapping */
         .dh-elm-table th.dh-col-actions, .dh-elm-table td.dh-elm-manage { width:1%; white-space:nowrap; }
         .dh-elm-table th.dh-col-id, .dh-elm-table td.dh-cell-id { width:1%; white-space:nowrap; }
+        /* URL column: minimum width */
+        .dh-elm-table .dh-cell-url { min-width:100px; }
         /* Color rows: include URL cell text now that it is not a hyperlink */
         tr.dh-status-ok .dh-elm-status, tr.dh-status-ok .dh-cell-url, tr.dh-status-ok .dh-cell-anchor a { color:#1f8a3b; font-weight:600; }
         tr.dh-status-4xx .dh-elm-status, tr.dh-status-4xx .dh-cell-url, tr.dh-status-4xx .dh-cell-anchor a { color:#d63638; font-weight:600; }
@@ -165,7 +167,7 @@ class DH_External_Link_Management {
             $last_checked = '—';
             if ($r->last_checked) {
                 $ts = strtotime($r->last_checked);
-                if ($ts) { $last_checked = esc_html(wp_date('Y-m-d g:ia', $ts)); }
+                if ($ts) { $last_checked = esc_html(wp_date('Y-m-d', $ts)); }
             }
             $anchor_disp = esc_html(mb_strimwidth((string)$r->anchor_text, 0, 80, '…'));
             $post_title_for_search = get_the_title($post);
@@ -183,16 +185,16 @@ class DH_External_Link_Management {
             echo '<tr class="' . esc_attr($row_class) . '" data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '" data-override="' . (int)$data_ovr . '" data-override-expires="' . (int)$data_ovrexp . '">';
             echo '<td class="dh-cell-id">' . (int)$r->id . '</td>';
             echo '<td class="dh-elm-manage">'
-                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '">Delete</button> '
-                . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '">Edit</button>'
-                . ' <button type="button" class="button button-small dh-elm-ai-suggest" data-nonce-ai="' . esc_attr($ai_nonce) . '">AI Suggest</button>'
+                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '" title="Delete"><span class="dashicons dashicons-no" style="font-size:16px;width:16px;height:16px;line-height:1;"></span></button> '
+                . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '" title="Edit"><span class="dashicons dashicons-edit" style="font-size:16px;width:16px;height:16px;line-height:1;"></span></button>'
+                . ' <button type="button" class="button button-small dh-elm-ai-suggest" data-nonce-ai="' . esc_attr($ai_nonce) . '">Suggest</button>'
                 . '</td>';
             echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
             echo '<td class="dh-cell-url" style="word-break:break-all; cursor:pointer;">' . $url_disp . '</td>';
             echo '<td class="dh-elm-status"' . $status_title . '><span class="dh-status-code">' . esc_html($status_disp) . '</span> '
-                . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Re-check</button> '
+                . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Check</button> '
                 . ($ovr_active
-                    ? '<button type="button" class="button button-small dh-elm-override-clear" data-nonce="' . esc_attr($manage_nonce) . '">Clear OK</button>'
+                    ? '<button type="button" class="button button-small dh-elm-override-clear" data-nonce="' . esc_attr($manage_nonce) . '">Clear</button>'
                     : '<button type="button" class="button button-small dh-elm-override-ok" data-nonce="' . esc_attr($manage_nonce) . '">Mark OK</button>'
                   )
                 . '</td>';
@@ -280,12 +282,12 @@ class DH_External_Link_Management {
                                 var statusCell = tr.querySelector('.dh-elm-status');
                                 if(statusCell){
                                     var btn = statusCell.querySelector('.dh-elm-override-ok');
-                                    if(btn){ btn.classList.remove('dh-elm-override-ok'); btn.classList.add('dh-elm-override-clear'); btn.textContent = 'Clear verified'; }
+                                    if(btn){ btn.classList.remove('dh-elm-override-ok'); btn.classList.add('dh-elm-override-clear'); btn.textContent = 'Clear'; }
                                     else {
                                         var newBtn = document.createElement('button');
                                         newBtn.type = 'button'; newBtn.className = 'button button-small dh-elm-override-clear';
                                         newBtn.setAttribute('data-nonce', ovrSetBtn.getAttribute('data-nonce'));
-                                        newBtn.textContent = 'Clear verified';
+                                        newBtn.textContent = 'Clear';
                                         statusCell.appendChild(document.createTextNode(' '));
                                         statusCell.appendChild(newBtn);
                                     }
@@ -314,7 +316,7 @@ class DH_External_Link_Management {
                     var xhr = new XMLHttpRequest();
                     xhr.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
                     xhr.onload = function(){
-                        ovrClrBtn.disabled = false; ovrClrBtn.textContent = 'Clear verified';
+                        ovrClrBtn.disabled = false; ovrClrBtn.textContent = 'Clear';
                         try {
                             var res = JSON.parse(xhr.responseText);
                             if(res && res.success && res.data){
@@ -340,7 +342,7 @@ class DH_External_Link_Management {
                             } else { alert('Clear override failed'); }
                         } catch(err){ alert('Clear override failed'); }
                     };
-                    xhr.onerror = function(){ ovrClrBtn.disabled = false; ovrClrBtn.textContent = 'Clear verified'; alert('Network error'); };
+                    xhr.onerror = function(){ ovrClrBtn.disabled = false; ovrClrBtn.textContent = 'Clear'; alert('Network error'); };
                     xhr.send(fd);
                     return;
                 }
@@ -362,7 +364,7 @@ class DH_External_Link_Management {
                     var xhr = new XMLHttpRequest();
                     xhr.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
                     xhr.onload = function(){
-                        reBtn.disabled = false; reBtn.textContent = 'Re-check';
+                        reBtn.disabled = false; reBtn.textContent = 'Check';
                         try {
                             var res = JSON.parse(xhr.responseText);
                             if(res && res.success && res.data){
@@ -386,9 +388,9 @@ class DH_External_Link_Management {
                                     var hasOk = statusCell.querySelector('.dh-elm-override-ok');
                                     if(ovActive){
                                         if(!hasClear){
-                                            if(hasOk){ hasOk.classList.remove('dh-elm-override-ok'); hasOk.classList.add('dh-elm-override-clear'); hasOk.textContent = 'Clear verified'; }
+                                            if(hasOk){ hasOk.classList.remove('dh-elm-override-ok'); hasOk.classList.add('dh-elm-override-clear'); hasOk.textContent = 'Clear'; }
                                             else {
-                                                var b = document.createElement('button'); b.type='button'; b.className='button button-small dh-elm-override-clear'; b.setAttribute('data-nonce', reBtn.getAttribute('data-nonce')); b.textContent='Clear verified'; statusCell.appendChild(document.createTextNode(' ')); statusCell.appendChild(b);
+                                                var b = document.createElement('button'); b.type='button'; b.className='button button-small dh-elm-override-clear'; b.setAttribute('data-nonce', reBtn.getAttribute('data-nonce')); b.textContent='Clear'; statusCell.appendChild(document.createTextNode(' ')); statusCell.appendChild(b);
                                             }
                                         }
                                     } else {
@@ -405,7 +407,7 @@ class DH_External_Link_Management {
                             }
                         } catch(err){ alert('Check failed'); }
                     };
-                    xhr.onerror = function(){ reBtn.disabled = false; reBtn.textContent = 'Re-check'; alert('Network error'); };
+                    xhr.onerror = function(){ reBtn.disabled = false; reBtn.textContent = 'Check'; alert('Network error'); };
                     xhr.send(fd);
                     return;
                 }
@@ -451,11 +453,11 @@ class DH_External_Link_Management {
                     var tr = aiBtn.closest('tr');
                     if(!tr){ return; }
                     var id = tr.getAttribute('data-link-id'); if(!id){ return; }
-                    aiBtn.disabled = true; var oldTxt = aiBtn.textContent; aiBtn.textContent = 'AI suggesting…';
+                    aiBtn.disabled = true; var oldTxt = aiBtn.textContent; aiBtn.textContent = 'Suggesting…';
                     var actionsCell = tr.querySelector('.dh-elm-manage');
                     var msg = actionsCell ? actionsCell.querySelector('.dh-ai-msg') : null;
-                    if(!msg && actionsCell){ msg = document.createElement('span'); msg.className = 'dh-ai-msg dh-ai-loading'; msg.textContent = 'AI suggesting…'; actionsCell.appendChild(document.createTextNode(' ')); actionsCell.appendChild(msg); }
-                    else if(msg){ msg.className = 'dh-ai-msg dh-ai-loading'; msg.textContent = 'AI suggesting…'; }
+                    if(!msg && actionsCell){ msg = document.createElement('span'); msg.className = 'dh-ai-msg dh-ai-loading'; msg.textContent = 'Suggesting…'; actionsCell.appendChild(document.createTextNode(' ')); actionsCell.appendChild(msg); }
+                    else if(msg){ msg.className = 'dh-ai-msg dh-ai-loading'; msg.textContent = 'Suggesting…'; }
                     var fdA = new FormData();
                     fdA.append('action','dh_elm_ai_suggest_link');
                     fdA.append('id', id);
@@ -730,7 +732,7 @@ class DH_External_Link_Management {
                     var tr = delBtn.closest('tr');
                     if(!tr){ return; }
                     if(!window.confirm('Delete this link record? This cannot be undone.')){ return; }
-                    delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+                    delBtn.disabled = true;
                     var fd4 = new FormData();
                     fd4.append('action','dh_elm_delete_link');
                     fd4.append('id', tr.getAttribute('data-link-id'));
@@ -739,14 +741,14 @@ class DH_External_Link_Management {
                     var xhr4 = new XMLHttpRequest();
                     xhr4.open('POST', (window.ajaxurl || '<?php echo admin_url('admin-ajax.php'); ?>'));
                     xhr4.onload = function(){
-                        delBtn.disabled = false; delBtn.textContent = 'Delete';
+                        delBtn.disabled = false;
                         var txt = xhr4.responseText || '';
                         if(txt === '-1'){ alert('Security check failed (nonce).'); return; }
                         var res = null; try { res = JSON.parse(txt); } catch(e){}
                         if(res && res.success){ tr.parentNode.removeChild(tr); }
                         else { var msg = (res && res.data && res.data.message) ? res.data.message : 'Delete failed.'; alert(msg); }
                     };
-                    xhr4.onerror = function(){ delBtn.disabled = false; delBtn.textContent = 'Delete'; alert('Network error'); };
+                    xhr4.onerror = function(){ delBtn.disabled = false; alert('Network error'); };
                     xhr4.send(fd4);
                 }
             }
