@@ -35,7 +35,8 @@ class DH_Admin_Webhook_Trigger {
         // Enqueue admin scripts
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         
-        // AJAX handler for triggering webhook
+        // AJAX handlers for triggering webhooks
+        add_action('wp_ajax_dh_trigger_ai_webhook', array($this, 'ajax_trigger_ai_webhook'));
         add_action('wp_ajax_dh_trigger_notebook_webhook', array($this, 'ajax_trigger_webhook'));
     }
     
@@ -76,13 +77,24 @@ class DH_Admin_Webhook_Trigger {
             return;
         }
         
-        $nonce = wp_create_nonce('dh_trigger_notebook_' . $post_id);
+        $nonce_ai = wp_create_nonce('dh_trigger_ai_' . $post_id);
+        $nonce_notebook = wp_create_nonce('dh_trigger_notebook_' . $post_id);
         ?>
+        <button 
+            type="button" 
+            class="button button-small dh-trigger-ai-btn" 
+            data-post-id="<?php echo esc_attr($post_id); ?>"
+            data-nonce="<?php echo esc_attr($nonce_ai); ?>"
+            title="<?php esc_attr_e('Generate AI content for this post', 'directory-helpers'); ?>"
+            style="display: block; margin-bottom: 4px;"
+        >
+            <?php esc_html_e('Do Content', 'directory-helpers'); ?>
+        </button>
         <button 
             type="button" 
             class="button button-small dh-trigger-notebook-btn" 
             data-post-id="<?php echo esc_attr($post_id); ?>"
-            data-nonce="<?php echo esc_attr($nonce); ?>"
+            data-nonce="<?php echo esc_attr($nonce_notebook); ?>"
             title="<?php esc_attr_e('Create Notebook for this post', 'directory-helpers'); ?>"
         >
             <?php esc_html_e('Make Video', 'directory-helpers'); ?>
@@ -144,10 +156,89 @@ class DH_Admin_Webhook_Trigger {
         
         wp_localize_script('dh-admin-webhook-trigger', 'dhWebhookTrigger', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
-            'confirmMessage' => __('Are you sure you want to create a Notebook for this post?', 'directory-helpers'),
-            'successMessage' => __('✅ Notebook creation triggered!', 'directory-helpers'),
+            'confirmMessageNotebook' => __('Are you sure you want to create a Notebook for this post?', 'directory-helpers'),
+            'confirmMessageAI' => __('Are you sure you want to generate AI content for this post?', 'directory-helpers'),
+            'successMessageNotebook' => __('✅ Notebook creation triggered!', 'directory-helpers'),
+            'successMessageAI' => __('✅ AI content generation triggered!', 'directory-helpers'),
             'errorMessage' => __('Error triggering webhook. Please try again.', 'directory-helpers'),
         ));
+    }
+    
+    /**
+     * AJAX handler for triggering the AI content webhook
+     */
+    public function ajax_trigger_ai_webhook() {
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field($_POST['nonce']) : '';
+        
+        // Verify nonce
+        if (!wp_verify_nonce($nonce, 'dh_trigger_ai_' . $post_id)) {
+            wp_send_json_error(array('message' => __('Invalid security token.', 'directory-helpers')));
+            return;
+        }
+        
+        // Check permissions
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_send_json_error(array('message' => __('Insufficient permissions.', 'directory-helpers')));
+            return;
+        }
+        
+        // Get post
+        $post = get_post($post_id);
+        if (!$post || !in_array($post->post_type, array('city-listing', 'state-listing'), true)) {
+            wp_send_json_error(array('message' => __('Invalid post.', 'directory-helpers')));
+            return;
+        }
+        
+        // Get webhook URL from settings
+        $options = get_option('directory_helpers_options');
+        $webhook_url = $options['n8n_webhook_url'] ?? '';
+        
+        if (empty($webhook_url)) {
+            wp_send_json_error(array('message' => __('AI webhook URL not configured.', 'directory-helpers')));
+            return;
+        }
+        
+        // Build keyword from post title (same logic as AI Content Generator)
+        $raw_title = wp_strip_all_tags(get_the_title($post));
+        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
+        $clean_title = preg_replace('/\s+/', ' ', $clean_title);
+        $keyword = 'dog training in ' . $clean_title;
+        
+        // Get post URL
+        $post_url = get_permalink($post_id);
+        $post_title = wp_strip_all_tags(get_the_title($post_id));
+        
+        // Build payload
+        $payload = array(
+            'postId' => $post_id,
+            'postUrl' => $post_url,
+            'postTitle' => $post_title,
+            'keyword' => $keyword,
+        );
+        
+        // Send webhook request
+        $response = wp_remote_post($webhook_url, array(
+            'headers' => array('Content-Type' => 'application/json'),
+            'body' => wp_json_encode($payload),
+            'timeout' => 20,
+        ));
+        
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+        
+        $code = (int) wp_remote_retrieve_response_code($response);
+        
+        if ($code >= 200 && $code < 300) {
+            wp_send_json_success(array(
+                'message' => __('AI content generation triggered successfully!', 'directory-helpers'),
+            ));
+        } else {
+            $message = wp_remote_retrieve_response_message($response);
+            wp_send_json_error(array('message' => sprintf(__('Webhook returned error: %s (code: %d)', 'directory-helpers'), $message, $code)));
+        }
     }
     
     /**

@@ -1,7 +1,65 @@
 jQuery(document).ready(function($) {
     
     /**
-     * Handle click on column button
+     * Handle click on AI content button
+     */
+    $(document).on('click', '.dh-trigger-ai-btn', function(e) {
+        e.preventDefault();
+        
+        const button = $(this);
+        const postId = button.data('post-id');
+        const nonce = button.data('nonce');
+        
+        if (!confirm(dhWebhookTrigger.confirmMessageAI)) {
+            return;
+        }
+        
+        // Disable button and show loading state
+        button.prop('disabled', true);
+        const originalText = button.html();
+        button.html('<span class="dashicons dashicons-update dashicons-spin" style="vertical-align: middle; margin-top: 3px;"></span> Sending...');
+        
+        // Send AJAX request
+        $.ajax({
+            url: dhWebhookTrigger.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'dh_trigger_ai_webhook',
+                post_id: postId,
+                nonce: nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    button.html('<span class="dashicons dashicons-yes" style="vertical-align: middle; margin-top: 3px; color: #46b450;"></span> Done');
+                    
+                    // Show success notice
+                    showNotice(dhWebhookTrigger.successMessageAI, 'success');
+                    
+                    // Re-enable button after 3 seconds
+                    setTimeout(function() {
+                        button.prop('disabled', false);
+                        button.html(originalText);
+                    }, 3000);
+                } else {
+                    button.prop('disabled', false);
+                    button.html(originalText);
+                    
+                    const errorMsg = response.data && response.data.message 
+                        ? response.data.message 
+                        : dhWebhookTrigger.errorMessage;
+                    showNotice(errorMsg, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                button.prop('disabled', false);
+                button.html(originalText);
+                showNotice(dhWebhookTrigger.errorMessage + ' (' + error + ')', 'error');
+            }
+        });
+    });
+    
+    /**
+     * Handle click on notebook button
      */
     $(document).on('click', '.dh-trigger-notebook-btn', function(e) {
         e.preventDefault();
@@ -10,7 +68,7 @@ jQuery(document).ready(function($) {
         const postId = button.data('post-id');
         const nonce = button.data('nonce');
         
-        if (!confirm(dhWebhookTrigger.confirmMessage)) {
+        if (!confirm(dhWebhookTrigger.confirmMessageNotebook)) {
             return;
         }
         
@@ -33,7 +91,7 @@ jQuery(document).ready(function($) {
                     button.html('<span class="dashicons dashicons-yes" style="vertical-align: middle; margin-top: 3px; color: #46b450;"></span> Done');
                     
                     // Show success notice
-                    showNotice(dhWebhookTrigger.successMessage, 'success');
+                    showNotice(dhWebhookTrigger.successMessageNotebook, 'success');
                     
                     // Re-enable button after 3 seconds
                     setTimeout(function() {
