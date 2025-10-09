@@ -68,10 +68,6 @@ jQuery(document).ready(function($) {
         const postId = button.data('post-id');
         const nonce = button.data('nonce');
         
-        if (!confirm(dhWebhookTrigger.confirmMessageNotebook)) {
-            return;
-        }
-        
         // Disable button and show loading state
         button.prop('disabled', true);
         const originalText = button.html();
