@@ -362,6 +362,7 @@ class Directory_Helpers {
             $options['n8n_webhook_url'] = isset($submitted_options['n8n_webhook_url']) ? esc_url_raw($submitted_options['n8n_webhook_url']) : '';
             $options['notebook_webhook_url'] = isset($submitted_options['notebook_webhook_url']) ? esc_url_raw($submitted_options['notebook_webhook_url']) : '';
             $options['shared_secret_key'] = isset($submitted_options['shared_secret_key']) ? sanitize_text_field($submitted_options['shared_secret_key']) : '';
+            $options['video_queue_max_retries'] = isset($submitted_options['video_queue_max_retries']) ? absint($submitted_options['video_queue_max_retries']) : 0;
             // DataForSEO credentials (Basic Auth)
             $options['dataforseo_login'] = isset($submitted_options['dataforseo_login']) ? sanitize_text_field($submitted_options['dataforseo_login']) : '';
             $options['dataforseo_password'] = isset($submitted_options['dataforseo_password']) ? sanitize_text_field($submitted_options['dataforseo_password']) : '';
@@ -727,6 +728,12 @@ class Directory_Helpers {
                 'description' => __('Adds a "Notebook" column and row action to city-listing and state-listing admin pages to trigger the Notebook webhook for individual posts.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/admin-webhook-trigger/admin-webhook-trigger.php',
                 'class' => 'DH_Admin_Webhook_Trigger'
+            ),
+            'video-production-queue' => array(
+                'name' => __('Video Production Queue', 'directory-helpers'),
+                'description' => __('Automated video production queue for city and state listings. Manages sequential video creation via Zero Work webhook with auto-continuation.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/video-production-queue/video-production-queue.php',
+                'class' => 'DH_Video_Production_Queue'
             )
             // Add more modules here as needed
         );

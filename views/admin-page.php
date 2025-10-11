@@ -81,6 +81,20 @@
                                 <p class="description"><?php esc_html_e('Used by the Create Notebook button in the editor.', 'directory-helpers'); ?></p>
                             </td>
                         </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="video_queue_max_retries"><?php esc_html_e('Video Queue Max Retries', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <?php $max_retries = isset($options['video_queue_max_retries']) ? (int) $options['video_queue_max_retries'] : 0; ?>
+                                <select id="video_queue_max_retries" name="directory_helpers_options[video_queue_max_retries]">
+                                    <?php for ($i = 0; $i <= 5; $i++): ?>
+                                        <option value="<?php echo (int)$i; ?>" <?php selected($max_retries, $i); ?>><?php echo (int)$i; ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                                <p class="description"><?php esc_html_e('Number of times to retry failed video production for a post. 0 = skip failed posts immediately.', 'directory-helpers'); ?></p>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
