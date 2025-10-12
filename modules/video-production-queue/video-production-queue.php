@@ -92,12 +92,20 @@ class DH_Video_Production_Queue {
     }
     
     /**
-     * Register REST API callback endpoint
+     * Register REST API callback endpoints
      */
     public function register_callback_endpoint() {
+        // Endpoint for Zero Work to notify video completion (triggers next in queue)
         register_rest_route('directory-helpers/v1', '/video-completed', array(
             'methods' => 'POST',
             'callback' => array($this, 'handle_video_completed'),
+            'permission_callback' => '__return_true', // We'll validate with secret key
+        ));
+        
+        // Endpoint for Zero Work to update video_overview ACF field
+        register_rest_route('directory-helpers/v1', '/update-video', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'handle_update_video'),
             'permission_callback' => '__return_true', // We'll validate with secret key
         ));
     }
@@ -697,6 +705,53 @@ class DH_Video_Production_Queue {
             update_option(self::OPTION_LAST_ERROR, sprintf('Zero Work failed for post %d: %s', $post_id, $error_msg));
             
             return new WP_REST_Response(array('message' => 'Queue stopped due to failure'), 200);
+        }
+    }
+    
+    /**
+     * Handle update video URL from Zero Work
+     */
+    public function handle_update_video(WP_REST_Request $request) {
+        $params = $request->get_json_params();
+        
+        // Validate secret key
+        $options = get_option('directory_helpers_options');
+        $secret_key = $options['shared_secret_key'] ?? '';
+        $received_secret = isset($params['secretKey']) ? sanitize_text_field($params['secretKey']) : '';
+        
+        if (empty($secret_key) || $received_secret !== $secret_key) {
+            return new WP_Error('rest_forbidden', 'Invalid secret key', array('status' => 403));
+        }
+        
+        $post_id = isset($params['postId']) ? absint($params['postId']) : 0;
+        $video_url = isset($params['videoUrl']) ? esc_url_raw($params['videoUrl']) : '';
+        
+        if (!$post_id) {
+            return new WP_Error('missing_parameters', 'Missing postId', array('status' => 400));
+        }
+        
+        if (empty($video_url)) {
+            return new WP_Error('missing_parameters', 'Missing videoUrl', array('status' => 400));
+        }
+        
+        // Verify post exists
+        $post = get_post($post_id);
+        if (!$post) {
+            return new WP_Error('invalid_post', 'Post not found', array('status' => 404));
+        }
+        
+        // Update ACF field
+        $updated = update_field('video_overview', $video_url, $post_id);
+        
+        if ($updated) {
+            return new WP_REST_Response(array(
+                'success' => true,
+                'message' => 'Video URL updated successfully',
+                'postId' => $post_id,
+                'videoUrl' => $video_url
+            ), 200);
+        } else {
+            return new WP_Error('update_failed', 'Failed to update video URL', array('status' => 500));
         }
     }
 }
