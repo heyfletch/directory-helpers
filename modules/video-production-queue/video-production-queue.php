@@ -322,51 +322,46 @@ class DH_Video_Production_Queue {
      * @return WP_Post|null
      */
     private function get_next_eligible_post() {
-        // Get attempt map to check retry limits
         $attempt_map = get_option(self::OPTION_ATTEMPT_MAP, array());
         $options = get_option('directory_helpers_options', array());
         $max_retries = isset($options['video_queue_max_retries']) ? (int) $options['video_queue_max_retries'] : 0;
         
-        // Try state listings first
-        $state_args = array(
+        // Get all state listings first (oldest first)
+        $state_posts = get_posts(array(
             'post_type' => 'state-listing',
             'post_status' => 'publish',
-            'posts_per_page' => 50,
+            'posts_per_page' => -1,
             'orderby' => 'date',
             'order' => 'ASC',
-            'fields' => 'ids',
-        );
+        ));
         
-        $state_ids = get_posts($state_args);
-        foreach ($state_ids as $post_id) {
-            $video_url = get_field('video_overview', $post_id);
-            if (empty($video_url)) {
-                // Check if this post has exceeded retry limit
-                $attempts = isset($attempt_map[$post_id]) ? (int) $attempt_map[$post_id] : 0;
+        // Check state listings
+        foreach ($state_posts as $post) {
+            $video = get_field('video_overview', $post->ID);
+            if (empty($video)) {
+                $attempts = isset($attempt_map[$post->ID]) ? (int) $attempt_map[$post->ID] : 0;
                 if ($attempts <= $max_retries) {
-                    return get_post($post_id);
+                    return $post;
                 }
             }
         }
         
-        // Then try city listings
-        $city_args = array(
+        // Get all city listings (oldest first)
+        $city_posts = get_posts(array(
             'post_type' => 'city-listing',
             'post_status' => 'publish',
-            'posts_per_page' => 50,
+            'posts_per_page' => -1,
             'orderby' => 'date',
             'order' => 'ASC',
-            'fields' => 'ids',
-        );
+        ));
         
-        $city_ids = get_posts($city_args);
-        foreach ($city_ids as $post_id) {
-            $video_url = get_field('video_overview', $post_id);
-            if (empty($video_url)) {
-                // Check if this post has exceeded retry limit
-                $attempts = isset($attempt_map[$post_id]) ? (int) $attempt_map[$post_id] : 0;
+        // Check city listings
+        foreach ($city_posts as $post) {
+            $video = get_field('video_overview', $post->ID);
+            if (empty($video)) {
+                $attempts = isset($attempt_map[$post->ID]) ? (int) $attempt_map[$post->ID] : 0;
                 if ($attempts <= $max_retries) {
-                    return get_post($post_id);
+                    return $post;
                 }
             }
         }
@@ -614,12 +609,16 @@ class DH_Video_Production_Queue {
     public function handle_video_completed(WP_REST_Request $request) {
         $params = $request->get_json_params();
         
+        // Log the callback for debugging
+        error_log('Video Queue Callback Received: ' . print_r($params, true));
+        
         // Validate secret key
         $options = get_option('directory_helpers_options');
         $secret_key = $options['shared_secret_key'] ?? '';
         $received_secret = isset($params['secretKey']) ? sanitize_text_field($params['secretKey']) : '';
         
         if (empty($secret_key) || $received_secret !== $secret_key) {
+            error_log('Video Queue Callback: Invalid secret key');
             return new WP_Error('rest_forbidden', 'Invalid secret key', array('status' => 403));
         }
         
@@ -641,12 +640,15 @@ class DH_Video_Production_Queue {
         }
         
         if ($status === 'success') {
+            error_log('Video Queue Callback: Success status, getting next post');
+            
             // Success: Get next post and send it
             sleep(self::RATE_LIMIT_SECONDS);
             
             $next_post = $this->get_next_eligible_post();
             
             if ($next_post) {
+                error_log('Video Queue Callback: Next post found - ID: ' . $next_post->ID . ', Title: ' . get_the_title($next_post->ID));
                 // Update attempt count
                 $attempt_map = get_option(self::OPTION_ATTEMPT_MAP, array());
                 $next_id = $next_post->ID;
@@ -678,11 +680,13 @@ class DH_Video_Production_Queue {
                 return new WP_REST_Response(array('message' => 'Next post sent', 'nextPost' => $next_id), 200);
             } else {
                 // No more posts, stop queue
+                error_log('Video Queue Callback: No more posts in queue, stopping');
                 update_option(self::OPTION_QUEUE_ACTIVE, false);
                 return new WP_REST_Response(array('message' => 'Queue completed - no more posts'), 200);
             }
         } else {
             // Failure: Stop queue and log error
+            error_log('Video Queue Callback: Failure status received');
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             $error_msg = isset($params['error']) ? sanitize_text_field($params['error']) : 'Unknown error';
             update_option(self::OPTION_LAST_ERROR, sprintf('Zero Work failed for post %d: %s', $post_id, $error_msg));
