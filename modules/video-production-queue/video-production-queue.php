@@ -45,6 +45,8 @@ class DH_Video_Production_Queue {
         // AJAX handlers
         add_action('wp_ajax_dh_start_video_queue', array($this, 'ajax_start_queue'));
         add_action('wp_ajax_dh_stop_video_queue', array($this, 'ajax_stop_queue'));
+        add_action('wp_ajax_dh_clear_video_error', array($this, 'ajax_clear_error'));
+        add_action('wp_ajax_dh_reset_video_queue', array($this, 'ajax_reset_queue'));
         
         // REST API endpoint for Zero Work callback
         add_action('rest_api_init', array($this, 'register_callback_endpoint'));
@@ -123,11 +125,20 @@ class DH_Video_Production_Queue {
             <h1><?php esc_html_e('Video Production Queue', 'directory-helpers'); ?></h1>
             
             <?php if ($last_error): ?>
-                <div class="notice notice-error is-dismissible">
+                <div class="notice notice-error is-dismissible" id="dh-video-error-notice">
                     <p><strong><?php esc_html_e('Zero Work Taskbot Workflow Failed:', 'directory-helpers'); ?></strong></p>
                     <p><?php echo esc_html($last_error); ?></p>
-                    <button type="button" class="notice-dismiss" onclick="jQuery(this).closest('.notice').fadeOut();"></button>
+                    <button type="button" class="notice-dismiss" onclick="dhDismissError();"></button>
                 </div>
+                <script>
+                function dhDismissError() {
+                    jQuery.post(ajaxurl, {
+                        action: 'dh_clear_video_error',
+                        nonce: '<?php echo wp_create_nonce('dh_video_queue'); ?>'
+                    });
+                    jQuery('#dh-video-error-notice').fadeOut();
+                }
+                </script>
             <?php endif; ?>
             
             <div class="dh-video-queue-controls" style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
@@ -182,6 +193,10 @@ class DH_Video_Production_Queue {
                         </button>
                         <p class="description"><?php esc_html_e('No posts available in queue', 'directory-helpers'); ?></p>
                     <?php endif; ?>
+                    
+                    <button type="button" id="dh-reset-queue-btn" class="button" style="margin-left: 10px;">
+                        <?php esc_html_e('Reset Queue Counters', 'directory-helpers'); ?>
+                    </button>
                 </div>
             </div>
             
@@ -309,7 +324,8 @@ class DH_Video_Production_Queue {
     private function get_next_eligible_post() {
         // Get attempt map to check retry limits
         $attempt_map = get_option(self::OPTION_ATTEMPT_MAP, array());
-        $max_retries = (int) get_option('directory_helpers_options')['video_queue_max_retries'] ?? 0;
+        $options = get_option('directory_helpers_options', array());
+        $max_retries = isset($options['video_queue_max_retries']) ? (int) $options['video_queue_max_retries'] : 0;
         
         // Try state listings first
         $state_args = array(
@@ -435,6 +451,7 @@ class DH_Video_Production_Queue {
             'videoTitle' => $video_title,
             'youtubeDescription' => $youtube_description,
             'featuredImage' => $featured_image_url,
+            'source' => 'queue',
         );
         
         // Send webhook request
@@ -454,6 +471,12 @@ class DH_Video_Production_Queue {
             return array('success' => true, 'message' => 'Webhook sent successfully');
         } else {
             $message = wp_remote_retrieve_response_message($response);
+            
+            // Add helpful context for common errors
+            if ($code === 405) {
+                $message .= ' - Make sure ZeroWork Webhook is Active in its settings.';
+            }
+            
             return array('success' => false, 'message' => sprintf('Webhook error: %s (code: %d)', $message, $code));
         }
     }
@@ -496,7 +519,8 @@ class DH_Video_Production_Queue {
         update_option(self::OPTION_ATTEMPT_MAP, $attempt_map);
         
         // Check if exceeded max retries
-        $max_retries = (int) get_option('directory_helpers_options')['video_queue_max_retries'] ?? 0;
+        $options = get_option('directory_helpers_options', array());
+        $max_retries = isset($options['video_queue_max_retries']) ? (int) $options['video_queue_max_retries'] : 0;
         if ($attempts > ($max_retries + 1)) {
             // Stop queue
             update_option(self::OPTION_QUEUE_ACTIVE, false);
@@ -549,6 +573,42 @@ class DH_Video_Production_Queue {
     }
     
     /**
+     * AJAX handler: Clear error message
+     */
+    public function ajax_clear_error() {
+        check_ajax_referer('dh_video_queue', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Insufficient permissions'));
+            return;
+        }
+        
+        delete_option(self::OPTION_LAST_ERROR);
+        
+        wp_send_json_success(array('message' => 'Error cleared'));
+    }
+    
+    /**
+     * AJAX handler: Reset queue counters
+     */
+    public function ajax_reset_queue() {
+        check_ajax_referer('dh_video_queue', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Insufficient permissions'));
+            return;
+        }
+        
+        // Clear all queue state
+        delete_option(self::OPTION_ATTEMPT_MAP);
+        delete_option(self::OPTION_LAST_ERROR);
+        update_option(self::OPTION_QUEUE_ACTIVE, false);
+        update_option(self::OPTION_CURRENT_POST, 0);
+        
+        wp_send_json_success(array('message' => 'Queue counters reset. Page will reload.'));
+    }
+    
+    /**
      * Handle video completion callback from Zero Work
      */
     public function handle_video_completed(WP_REST_Request $request) {
@@ -596,7 +656,8 @@ class DH_Video_Production_Queue {
                 update_option(self::OPTION_ATTEMPT_MAP, $attempt_map);
                 
                 // Check retry limit
-                $max_retries = (int) get_option('directory_helpers_options')['video_queue_max_retries'] ?? 0;
+                $options = get_option('directory_helpers_options', array());
+                $max_retries = isset($options['video_queue_max_retries']) ? (int) $options['video_queue_max_retries'] : 0;
                 if ($attempts > ($max_retries + 1)) {
                     update_option(self::OPTION_QUEUE_ACTIVE, false);
                     update_option(self::OPTION_LAST_ERROR, sprintf('Post "%s" exceeded maximum retry attempts (%d)', get_the_title($next_id), $max_retries + 1));

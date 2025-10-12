@@ -97,6 +97,54 @@ jQuery(document).ready(function($) {
     });
     
     /**
+     * Handle Reset Queue button
+     */
+    $(document).on('click', '#dh-reset-queue-btn', function(e) {
+        e.preventDefault();
+        
+        const button = $(this);
+        
+        if (!confirm('Reset all queue counters? This will clear attempt counts and allow all posts to be processed again.')) {
+            return;
+        }
+        
+        button.prop('disabled', true);
+        button.text('Resetting...');
+        
+        $.ajax({
+            url: dhVideoQueue.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'dh_reset_video_queue',
+                nonce: dhVideoQueue.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    showNotice(response.data.message, 'success');
+                    
+                    // Reload page after 1 second
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    button.prop('disabled', false);
+                    button.text('Reset Queue Counters');
+                    
+                    const errorMsg = response.data && response.data.message 
+                        ? response.data.message 
+                        : 'Failed to reset queue';
+                    showNotice(errorMsg, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                button.prop('disabled', false);
+                button.text('Reset Queue Counters');
+                showNotice('Error: ' + error, 'error');
+            }
+        });
+    });
+    
+    /**
      * Show admin notice
      */
     function showNotice(message, type) {

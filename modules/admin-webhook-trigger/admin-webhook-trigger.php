@@ -351,6 +351,7 @@ class DH_Admin_Webhook_Trigger {
             'videoTitle' => $video_title,
             'youtubeDescription' => $youtube_description,
             'featuredImage' => $featured_image_url,
+            'source' => 'post',
         );
         
         // Send webhook request

@@ -230,6 +230,7 @@ class DH_AI_Content_Generator {
             'videoTitle' => $video_title,
             'youtubeDescription' => $youtube_description,
             'featuredImage' => $featured_image_url,
+            'source'     => 'post',
         ));
 
         $response = wp_remote_post($url, array(
