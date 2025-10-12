@@ -30,7 +30,7 @@ class DH_Video_Production_Queue {
     /**
      * Rate limit in seconds
      */
-    const RATE_LIMIT_SECONDS = 30;
+    const RATE_LIMIT_SECONDS = 10;
     
     /**
      * Constructor
@@ -640,9 +640,14 @@ class DH_Video_Production_Queue {
         }
         
         if ($status === 'success') {
-            error_log('Video Queue Callback: Success status, getting next post');
+            error_log('Video Queue Callback: Success status, waiting for TaskBot to complete');
             
-            // Success: Get next post and send it
+            // Wait 10 seconds for current TaskBot to fully complete and avoid duplicate run error
+            sleep(10);
+            
+            error_log('Video Queue Callback: Getting next post');
+            
+            // Additional rate limit wait (10 seconds total between posts)
             sleep(self::RATE_LIMIT_SECONDS);
             
             $next_post = $this->get_next_eligible_post();
