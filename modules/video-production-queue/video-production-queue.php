@@ -50,6 +50,9 @@ class DH_Video_Production_Queue {
         
         // REST API endpoint for Zero Work callback
         add_action('rest_api_init', array($this, 'register_callback_endpoint'));
+        
+        // Hook for scheduled event to send next post
+        add_action('dh_video_queue_send_next', array($this, 'process_next_in_queue'));
     }
     
     /**
@@ -648,55 +651,13 @@ class DH_Video_Production_Queue {
         }
         
         if ($status === 'success') {
-            error_log('Video Queue Callback: Success status, waiting for TaskBot to complete');
+            error_log('Video Queue Callback: Success status received');
             
-            // Wait 10 seconds for current TaskBot to fully complete and avoid duplicate run error
-            sleep(10);
+            // Schedule the next post to be sent after a delay (non-blocking)
+            wp_schedule_single_event(time() + 15, 'dh_video_queue_send_next', array($post_id));
             
-            error_log('Video Queue Callback: Getting next post');
-            
-            // Additional rate limit wait (10 seconds total between posts)
-            sleep(self::RATE_LIMIT_SECONDS);
-            
-            $next_post = $this->get_next_eligible_post();
-            
-            if ($next_post) {
-                error_log('Video Queue Callback: Next post found - ID: ' . $next_post->ID . ', Title: ' . get_the_title($next_post->ID));
-                // Update attempt count
-                $attempt_map = get_option(self::OPTION_ATTEMPT_MAP, array());
-                $next_id = $next_post->ID;
-                $attempts = isset($attempt_map[$next_id]) ? (int) $attempt_map[$next_id] : 0;
-                $attempts++;
-                $attempt_map[$next_id] = $attempts;
-                update_option(self::OPTION_ATTEMPT_MAP, $attempt_map);
-                
-                // Check retry limit
-                $options = get_option('directory_helpers_options', array());
-                $max_retries = isset($options['video_queue_max_retries']) ? (int) $options['video_queue_max_retries'] : 0;
-                if ($attempts > ($max_retries + 1)) {
-                    update_option(self::OPTION_QUEUE_ACTIVE, false);
-                    update_option(self::OPTION_LAST_ERROR, sprintf('Post "%s" exceeded maximum retry attempts (%d)', get_the_title($next_id), $max_retries + 1));
-                    return new WP_REST_Response(array('message' => 'Max retries exceeded, queue stopped'), 200);
-                }
-                
-                update_option(self::OPTION_CURRENT_POST, $next_id);
-                update_option(self::OPTION_LAST_SENT, time());
-                
-                $result = $this->send_to_zerowork($next_id);
-                
-                if (!$result['success']) {
-                    update_option(self::OPTION_QUEUE_ACTIVE, false);
-                    update_option(self::OPTION_CURRENT_POST, 0);
-                    update_option(self::OPTION_LAST_ERROR, $result['message']);
-                }
-                
-                return new WP_REST_Response(array('message' => 'Next post sent', 'nextPost' => $next_id), 200);
-            } else {
-                // No more posts, stop queue
-                error_log('Video Queue Callback: No more posts in queue, stopping');
-                update_option(self::OPTION_QUEUE_ACTIVE, false);
-                return new WP_REST_Response(array('message' => 'Queue completed - no more posts'), 200);
-            }
+            // Return response immediately so TaskBot can complete
+            return new WP_REST_Response(array('message' => 'Callback received, next post will be sent in 15 seconds'), 200);
         } else {
             // Failure: Stop queue and log error
             error_log('Video Queue Callback: Failure status received');
@@ -709,49 +670,59 @@ class DH_Video_Production_Queue {
     }
     
     /**
-     * Handle update video URL from Zero Work
+     * Process next post in queue (called by scheduled event)
      */
-    public function handle_update_video(WP_REST_Request $request) {
-        $params = $request->get_json_params();
+    public function process_next_in_queue() {
+        error_log('Video Queue: Processing next post after delay');
         
-        // Validate secret key
-        $options = get_option('directory_helpers_options');
-        $secret_key = $options['shared_secret_key'] ?? '';
-        $received_secret = isset($params['secretKey']) ? sanitize_text_field($params['secretKey']) : '';
+        // Check if queue is still active
+        $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
         
-        if (empty($secret_key) || $received_secret !== $secret_key) {
-            return new WP_Error('rest_forbidden', 'Invalid secret key', array('status' => 403));
+        if (!$is_active) {
+            error_log('Video Queue: Queue is not active, stopping');
+            return;
         }
         
-        $post_id = isset($params['postId']) ? absint($params['postId']) : 0;
-        $video_url = isset($params['videoUrl']) ? esc_url_raw($params['videoUrl']) : '';
+        $next_post = $this->get_next_eligible_post();
         
-        if (!$post_id) {
-            return new WP_Error('missing_parameters', 'Missing postId', array('status' => 400));
-        }
-        
-        if (empty($video_url)) {
-            return new WP_Error('missing_parameters', 'Missing videoUrl', array('status' => 400));
-        }
-        
-        // Verify post exists
-        $post = get_post($post_id);
-        if (!$post) {
-            return new WP_Error('invalid_post', 'Post not found', array('status' => 404));
-        }
-        
-        // Update ACF field
-        $updated = update_field('video_overview', $video_url, $post_id);
-        
-        if ($updated) {
-            return new WP_REST_Response(array(
-                'success' => true,
-                'message' => 'Video URL updated successfully',
-                'postId' => $post_id,
-                'videoUrl' => $video_url
-            ), 200);
+        if ($next_post) {
+            error_log('Video Queue: Next post found - ID: ' . $next_post->ID . ', Title: ' . get_the_title($next_post->ID));
+            
+            // Update attempt count
+            $attempt_map = get_option(self::OPTION_ATTEMPT_MAP, array());
+            $next_id = $next_post->ID;
+            $attempts = isset($attempt_map[$next_id]) ? (int) $attempt_map[$next_id] : 0;
+            $attempts++;
+            $attempt_map[$next_id] = $attempts;
+            update_option(self::OPTION_ATTEMPT_MAP, $attempt_map);
+            
+            // Check retry limit
+            $options = get_option('directory_helpers_options', array());
+            $max_retries = isset($options['video_queue_max_retries']) ? (int) $options['video_queue_max_retries'] : 0;
+            if ($attempts > ($max_retries + 1)) {
+                update_option(self::OPTION_QUEUE_ACTIVE, false);
+                update_option(self::OPTION_LAST_ERROR, sprintf('Post "%s" exceeded maximum retry attempts (%d)', get_the_title($next_id), $max_retries + 1));
+                error_log('Video Queue: Max retries exceeded for post ' . $next_id);
+                return;
+            }
+            
+            update_option(self::OPTION_CURRENT_POST, $next_id);
+            update_option(self::OPTION_LAST_SENT, time());
+            
+            $result = $this->send_to_zerowork($next_id);
+            
+            if (!$result['success']) {
+                update_option(self::OPTION_QUEUE_ACTIVE, false);
+                update_option(self::OPTION_CURRENT_POST, 0);
+                update_option(self::OPTION_LAST_ERROR, $result['message']);
+                error_log('Video Queue: Failed to send next post - ' . $result['message']);
+            } else {
+                error_log('Video Queue: Successfully sent next post to Zero Work');
+            }
         } else {
-            return new WP_Error('update_failed', 'Failed to update video URL', array('status' => 500));
+            // No more posts, stop queue
+            error_log('Video Queue: No more posts in queue, stopping');
+            update_option(self::OPTION_QUEUE_ACTIVE, false);
         }
     }
 }
