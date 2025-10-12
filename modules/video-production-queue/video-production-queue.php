@@ -256,15 +256,30 @@ class DH_Video_Production_Queue {
      * @return array Array of WP_Post objects
      */
     private function get_filtered_posts($filter) {
-        $args = array(
-            'post_type' => array('city-listing', 'state-listing'),
+        // Get state listings first
+        $state_args = array(
+            'post_type' => 'state-listing',
             'post_status' => 'publish',
-            'posts_per_page' => 100,
+            'posts_per_page' => -1,
             'orderby' => 'date',
             'order' => 'ASC',
         );
         
-        $posts = get_posts($args);
+        $state_posts = get_posts($state_args);
+        
+        // Get city listings
+        $city_args = array(
+            'post_type' => 'city-listing',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'orderby' => 'date',
+            'order' => 'ASC',
+        );
+        
+        $city_posts = get_posts($city_args);
+        
+        // Combine: states first, then cities
+        $posts = array_merge($state_posts, $city_posts);
         
         if ($filter === 'all') {
             return $posts;
