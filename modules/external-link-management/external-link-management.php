@@ -765,7 +765,10 @@ class DH_External_Link_Management {
                         var txt = xhr4.responseText || '';
                         if(txt === '-1'){ alert('Security check failed (nonce).'); return; }
                         var res = null; try { res = JSON.parse(txt); } catch(e){}
-                        if(res && res.success){ tr.parentNode.removeChild(tr); }
+                        if(res && res.success){ 
+                            // Reload page to show updated content with shortcode converted to plain text
+                            location.reload();
+                        }
                         else { var msg = (res && res.data && res.data.message) ? res.data.message : 'Delete failed.'; alert(msg); }
                     };
                     xhr4.onerror = function(){ delBtn.disabled = false; alert('Network error'); };
@@ -822,7 +825,13 @@ class DH_External_Link_Management {
         global $wpdb;
         $table = $this->table_name();
         $row = $wpdb->get_row($wpdb->prepare("SELECT current_url, anchor_text, is_duplicate, status_code, status_override_code, status_override_expires FROM {$table} WHERE id=%d", $id));
-        if (!$row) { return ''; }
+        
+        // If link was deleted, return the anchor text from the shortcode attribute
+        if (!$row) {
+            $t_decoded = html_entity_decode((string)($atts['t'] ?? ''), ENT_QUOTES | ENT_HTML5);
+            return $t_decoded ? esc_html($t_decoded) : '';
+        }
+        
         $t_decoded = html_entity_decode((string)($atts['t'] ?? ''), ENT_QUOTES | ENT_HTML5);
         $anchor_source = ($row->anchor_text !== null && $row->anchor_text !== '') ? $row->anchor_text : $t_decoded;
         $anchor = esc_html((string)$anchor_source);
@@ -1793,11 +1802,38 @@ class DH_External_Link_Management {
         if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
         global $wpdb;
         $table = $this->table_name();
-        $row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, anchor_text FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
         if (!$row) { wp_send_json_error(array('message' => 'not found')); }
+        
+        // Get post content and convert shortcode to plain text
+        $post = get_post($post_id);
+        if ($post && $post->post_content) {
+            $content = $post->post_content;
+            $anchor_text = isset($row->anchor_text) ? $row->anchor_text : '';
+            
+            // Replace all instances of this shortcode with plain anchor text
+            // Pattern matches: [link id="123" t="..."] or [link id="123"]
+            $pattern = '/\[link\s+id=["\']?' . $id . '["\']?(?:\s+t=["\']([^"\']*)["\'])?\]/i';
+            
+            $content = preg_replace_callback($pattern, function($matches) use ($anchor_text) {
+                // Use the 't' attribute if present, otherwise use anchor_text from DB
+                $text = !empty($matches[1]) ? $matches[1] : $anchor_text;
+                return esc_html($text);
+            }, $content);
+            
+            // Update post content
+            wp_update_post(array(
+                'ID' => $post_id,
+                'post_content' => $content
+            ));
+        }
+        
+        // Delete the database row
         $wpdb->delete($table, array('id' => $id), array('%d'));
+        
         // Recalculate duplicates after removal
         $this->recalc_duplicates_for_post($post_id);
+        
         wp_send_json_success();
     }
 }
