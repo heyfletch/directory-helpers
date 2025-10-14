@@ -110,6 +110,7 @@ class DH_Profile_Production_Queue {
     
     /**
      * Query profiles by state and status with filters
+     * Only returns profiles from cities that have at least min_count profiles
      */
     private function query_profiles_by_state_and_status($state_slug, $post_status, $min_count = 2, $city_slug = '', $niche_slug = 'dog-trainer', $city_search = '') {
         global $wpdb;
@@ -118,6 +119,8 @@ class DH_Profile_Production_Queue {
         }
         $min_count = max(1, min(5, (int) $min_count));
         $prefix = $wpdb->prefix;
+        
+        // Subquery to find cities with at least min_count profiles
         $sql = "
             SELECT p.*, t2.name AS area_name, t2.slug AS area_slug, t2.term_id AS area_id
             FROM {$prefix}posts p
@@ -135,9 +138,38 @@ class DH_Profile_Production_Queue {
               AND t1.slug = %s
               AND tt2.taxonomy = 'area'
               AND tt5.taxonomy = 'niche'
-              AND t5.slug = %s";
+              AND t5.slug = %s
+              AND t2.term_id IN (
+                  SELECT area_term_id FROM (
+                      SELECT tt_area.term_id AS area_term_id, COUNT(DISTINCT p_count.ID) AS profile_count
+                      FROM {$prefix}posts p_count
+                      JOIN {$prefix}term_relationships tr_count ON p_count.ID = tr_count.object_id
+                      JOIN {$prefix}term_taxonomy tt_area ON tr_count.term_taxonomy_id = tt_area.term_taxonomy_id
+                      JOIN {$prefix}term_relationships tr_state ON p_count.ID = tr_state.object_id
+                      JOIN {$prefix}term_taxonomy tt_state ON tr_state.term_taxonomy_id = tt_state.term_taxonomy_id
+                      JOIN {$prefix}terms t_state ON tt_state.term_id = t_state.term_id
+                      JOIN {$prefix}term_relationships tr_niche ON p_count.ID = tr_niche.object_id
+                      JOIN {$prefix}term_taxonomy tt_niche ON tr_niche.term_taxonomy_id = tt_niche.term_taxonomy_id
+                      JOIN {$prefix}terms t_niche ON tt_niche.term_id = t_niche.term_id
+                      WHERE p_count.post_type = 'profile'
+                        AND tt_area.taxonomy = 'area'
+                        AND tt_state.taxonomy = 'state'
+                        AND t_state.slug = %s
+                        AND tt_niche.taxonomy = 'niche'
+                        AND t_niche.slug = %s";
 
-        $params = array($state_slug, $niche_slug);
+        $params = array($state_slug, $niche_slug, $state_slug, $niche_slug);
+
+        if ($post_status !== 'all') {
+            $sql .= "\n                        AND p_count.post_status = %s";
+            $params[] = $post_status;
+        }
+
+        $sql .= "\n                      GROUP BY tt_area.term_id
+                      HAVING profile_count >= %d
+                  ) AS city_counts
+              )";
+        $params[] = $min_count;
 
         if ($post_status !== 'all') {
             $sql .= "\n              AND p.post_status = %s";
@@ -152,10 +184,7 @@ class DH_Profile_Production_Queue {
             $params[] = '%' . $wpdb->esc_like($city_search) . '%';
         }
 
-        $sql .= "\n            GROUP BY p.ID
-            HAVING COUNT(DISTINCT tr2.term_taxonomy_id) >= %d
-            ORDER BY t2.name ASC, p.post_title ASC";
-        $params[] = $min_count;
+        $sql .= "\n            ORDER BY t2.name ASC, p.post_title ASC";
 
         $query = $wpdb->prepare($sql, $params);
         $results = $wpdb->get_results($query);
@@ -207,9 +236,8 @@ class DH_Profile_Production_Queue {
             <?php endif; ?>
             
             <!-- Filter Form -->
-            <form method="get" action="" style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
-                <input type="hidden" name="post_type" value="state-listing" />
-                <input type="hidden" name="page" value="dh-profile-production-queue" />
+            <form method="get" action="admin.php" style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
+                <input type="hidden" name="page" value="dh-profile-production" />
                 
                 <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
                     <!-- State selector -->
@@ -281,7 +309,7 @@ class DH_Profile_Production_Queue {
                     <button type="button" id="dh-reset-ppq-btn" class="button"><?php esc_html_e('Reset Queue', 'directory-helpers'); ?></button>
                 </p>
                 <p style="margin: 10px 0 0 0;">
-                    <a href="<?php echo esc_url(admin_url('edit.php?post_type=state-listing&page=dh-content-production-queue')); ?>"><?php esc_html_e('→ Go to Content Production Queue', 'directory-helpers'); ?></a>
+                    <a href="<?php echo esc_url(admin_url('admin.php?page=dh-content-production')); ?>"><?php esc_html_e('→ Go to Content Production Queue', 'directory-helpers'); ?></a>
                 </p>
             </div>
             
