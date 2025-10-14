@@ -187,7 +187,7 @@ jQuery(document).ready(function($) {
                     // Update UI
                     $('#dh-cpq-eligible-count').text(data.total_eligible);
                     $('#dh-cpq-published-count').text(data.published_count);
-                    $('#dh-cpq-published-total').text(' / ' + data.total_eligible);
+                    $('#dh-cpq-queue-count').text(data.total_eligible);
                     
                     if (data.current_post_title) {
                         $('#dh-cpq-current-post').text(data.current_post_title);

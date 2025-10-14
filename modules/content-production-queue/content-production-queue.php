@@ -137,7 +137,8 @@ class DH_Content_Production_Queue {
                     <p>
                         <strong><?php esc_html_e('Published:', 'directory-helpers'); ?></strong>
                         <span id="dh-cpq-published-count"><?php echo esc_html($published_count); ?></span>
-                        <span id="dh-cpq-published-total"> / <?php echo esc_html($total_eligible); ?></span>
+                        <strong style="margin-left: 20px;"><?php esc_html_e('In Queue:', 'directory-helpers'); ?></strong>
+                        <span id="dh-cpq-queue-count"><?php echo esc_html($total_eligible); ?></span>
                     </p>
                     
                     <?php if ($is_active && $current_post_title): ?>
