@@ -286,10 +286,12 @@ class DH_Profile_Production_Queue {
             </form>
             
             <!-- Add to Pipeline Button -->
-            <div style="margin: 20px 0;">
+            <div style="margin: 20px 0; display: flex; gap: 15px; align-items: center;">
                 <button type="button" id="dh-add-to-pipeline-btn" class="button button-primary" <?php echo $profile_count === 0 ? 'disabled' : ''; ?>>
                     <?php echo sprintf(esc_html__('Add Profiles to Production Pipeline (%d profiles)', 'directory-helpers'), $profile_count); ?>
                 </button>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=dh-content-production')); ?>"><?php esc_html_e('→ Go to Content Production Queue', 'directory-helpers'); ?></a>
+                <span class="dashicons dashicons-info" style="color: #2271b1; cursor: help;" title="<?php esc_attr_e('How it works: 1) Use filters to select profiles by state, city, status, and niche. 2) Click Add Profiles to Production Pipeline to queue the filtered profiles. 3) The queue will automatically process profiles in batches. 4) Each batch: creates city pages, publishes profiles, reranks, and triggers AI content generation.', 'directory-helpers'); ?>"></span>
             </div>
             
             <!-- Status Line -->
@@ -307,9 +309,6 @@ class DH_Profile_Production_Queue {
                     <span><strong><?php esc_html_e('Processed:', 'directory-helpers'); ?></strong> <span id="dh-ppq-processed"><?php echo esc_html($processed_count); ?></span></span>
                     <span><strong><?php esc_html_e('Remaining:', 'directory-helpers'); ?></strong> <span id="dh-ppq-remaining"><?php echo esc_html($remaining); ?></span></span>
                     <button type="button" id="dh-reset-ppq-btn" class="button"><?php esc_html_e('Reset Queue', 'directory-helpers'); ?></button>
-                </p>
-                <p style="margin: 10px 0 0 0;">
-                    <a href="<?php echo esc_url(admin_url('admin.php?page=dh-content-production')); ?>"><?php esc_html_e('→ Go to Content Production Queue', 'directory-helpers'); ?></a>
                 </p>
             </div>
             
@@ -342,17 +341,6 @@ class DH_Profile_Production_Queue {
             <?php else: ?>
                 <p><?php esc_html_e('No profiles found with the selected filters.', 'directory-helpers'); ?></p>
             <?php endif; ?>
-            
-            <!-- Instructions -->
-            <div class="card" style="margin-top: 20px;">
-                <h2><?php esc_html_e('How It Works', 'directory-helpers'); ?></h2>
-                <ol>
-                    <li><?php esc_html_e('Use the filters to select profiles by state, city, status, and niche', 'directory-helpers'); ?></li>
-                    <li><?php esc_html_e('Click "Add Profiles to Production Pipeline" to queue the filtered profiles', 'directory-helpers'); ?></li>
-                    <li><?php esc_html_e('The queue will automatically process profiles in batches', 'directory-helpers'); ?></li>
-                    <li><?php esc_html_e('Each batch: creates city pages, publishes profiles, reranks, and triggers AI content generation', 'directory-helpers'); ?></li>
-                </ol>
-            </div>
         </div>
         <?php
     }
