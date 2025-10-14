@@ -31,16 +31,15 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     showNotice(response.data.message, 'success');
                     
-                    // Start polling for status updates
-                    startStatusPolling();
+                    // Update button states
+                    $('#dh-start-cpq-healthy-btn, #dh-start-cpq-all-btn').hide();
                     
-                    // Reload page after 2 seconds
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 2000);
+                    // Start batch processing
+                    startBatchProcessing();
                 } else {
                     button.prop('disabled', false);
-                    button.text('Start Publishing Queue');
+                    const originalText = mode === 'healthy' ? 'Publish Healthy Cities' : 'Publish All Cities';
+                    button.text(originalText);
                     
                     const errorMsg = response.data && response.data.message 
                         ? response.data.message 
@@ -82,8 +81,8 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     showNotice(response.data.message, 'success');
                     
-                    // Stop polling
-                    stopStatusPolling();
+                    // Stop batch processing
+                    stopBatchProcessing();
                     
                     // Reload page after 1 second
                     setTimeout(function() {
@@ -156,33 +155,36 @@ jQuery(document).ready(function($) {
     });
     
     /**
-     * Status polling
+     * Batch processing and status polling
      */
-    let statusPollInterval = null;
+    let processingInterval = null;
     
-    function startStatusPolling() {
-        if (statusPollInterval) {
+    function startBatchProcessing() {
+        if (processingInterval) {
             return;
         }
         
-        statusPollInterval = setInterval(function() {
-            updateQueueStatus();
-        }, 3000); // Poll every 3 seconds
+        // Process immediately, then every 3 seconds
+        processBatch();
+        
+        processingInterval = setInterval(function() {
+            processBatch();
+        }, 3000); // Process batch every 3 seconds
     }
     
-    function stopStatusPolling() {
-        if (statusPollInterval) {
-            clearInterval(statusPollInterval);
-            statusPollInterval = null;
+    function stopBatchProcessing() {
+        if (processingInterval) {
+            clearInterval(processingInterval);
+            processingInterval = null;
         }
     }
     
-    function updateQueueStatus() {
+    function processBatch() {
         $.ajax({
             url: dhContentQueue.ajaxUrl,
             type: 'POST',
             data: {
-                action: 'dh_get_content_queue_status',
+                action: 'dh_process_content_batch',
                 nonce: dhContentQueue.nonce
             },
             success: function(response) {
@@ -194,22 +196,30 @@ jQuery(document).ready(function($) {
                         $('#dh-cpq-current-post').text(data.current_post_title);
                     }
                     
-                    // If queue is no longer active, stop polling and reload
+                    // Update published count if element exists
+                    if (data.published_count !== undefined && $('#dh-cpq-published-count').length) {
+                        $('#dh-cpq-published-count').text(data.published_count);
+                    }
+                    
+                    // If queue is no longer active, stop processing and reload
                     if (!data.is_active) {
-                        stopStatusPolling();
-                        showNotice('Queue completed!', 'success');
+                        stopBatchProcessing();
+                        showNotice('Queue completed! Published ' + data.published_count + ' posts.', 'success');
                         setTimeout(function() {
                             window.location.reload();
                         }, 2000);
                     }
                 }
+            },
+            error: function() {
+                // On error, just continue - cron will pick it up
             }
         });
     }
     
-    // Start polling if queue is active on page load
+    // Start batch processing if queue is active on page load
     if (dhContentQueue.isActive) {
-        startStatusPolling();
+        startBatchProcessing();
     }
     
     /**

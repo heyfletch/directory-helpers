@@ -39,6 +39,9 @@ class DH_Content_Production_Queue {
      * Constructor
      */
     public function __construct() {
+        // Add custom cron schedule
+        add_filter('cron_schedules', array($this, 'add_cron_schedules'));
+        
         // Add admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
@@ -50,9 +53,30 @@ class DH_Content_Production_Queue {
         add_action('wp_ajax_dh_stop_content_queue', array($this, 'ajax_stop_queue'));
         add_action('wp_ajax_dh_get_content_queue_status', array($this, 'ajax_get_queue_status'));
         add_action('wp_ajax_dh_reset_content_queue', array($this, 'ajax_reset_queue'));
+        add_action('wp_ajax_dh_process_content_batch', array($this, 'ajax_process_batch'));
         
-        // Hook for scheduled event to publish next post
-        add_action('dh_content_queue_publish_next', array($this, 'process_next_in_queue'));
+        // Hook for recurring cron event (runs every 5 minutes via xCloud-Cron)
+        add_action('dh_content_queue_process', array($this, 'process_next_in_queue'));
+        
+        // Register activation/deactivation hooks to manage cron
+        register_activation_hook(__FILE__, array($this, 'activate_cron'));
+        register_deactivation_hook(__FILE__, array($this, 'deactivate_cron'));
+        
+        // Ensure cron is scheduled
+        add_action('init', array($this, 'ensure_cron_scheduled'));
+    }
+    
+    /**
+     * Add custom cron schedules
+     */
+    public function add_cron_schedules($schedules) {
+        if (!isset($schedules['five_minutes'])) {
+            $schedules['five_minutes'] = array(
+                'interval' => 300, // 5 minutes in seconds
+                'display' => __('Every 5 Minutes', 'directory-helpers'),
+            );
+        }
+        return $schedules;
     }
     
     /**
@@ -378,6 +402,31 @@ class DH_Content_Production_Queue {
     }
     
     /**
+     * Ensure cron is scheduled on init
+     */
+    public function ensure_cron_scheduled() {
+        if (!wp_next_scheduled('dh_content_queue_process')) {
+            wp_schedule_event(time(), 'five_minutes', 'dh_content_queue_process');
+        }
+    }
+    
+    /**
+     * Activate cron on plugin activation
+     */
+    public function activate_cron() {
+        if (!wp_next_scheduled('dh_content_queue_process')) {
+            wp_schedule_event(time(), 'five_minutes', 'dh_content_queue_process');
+        }
+    }
+    
+    /**
+     * Deactivate cron on plugin deactivation
+     */
+    public function deactivate_cron() {
+        wp_clear_scheduled_hook('dh_content_queue_process');
+    }
+    
+    /**
      * AJAX: Start the queue
      */
     public function ajax_start_queue() {
@@ -403,11 +452,11 @@ class DH_Content_Production_Queue {
         update_option(self::OPTION_CURRENT_POST, 0);
         update_option(self::OPTION_QUEUE_MODE, $mode);
         
-        // Schedule first post immediately
-        wp_schedule_single_event(time(), 'dh_content_queue_publish_next');
+        // Process first batch immediately
+        $this->process_next_in_queue();
         
         wp_send_json_success(array(
-            'message' => 'Queue started',
+            'message' => 'Queue started - processing will continue every 5 minutes',
             'total' => count($posts),
         ));
     }
@@ -425,10 +474,49 @@ class DH_Content_Production_Queue {
         update_option(self::OPTION_QUEUE_ACTIVE, false);
         update_option(self::OPTION_CURRENT_POST, 0);
         
-        // Clear any scheduled events
-        wp_clear_scheduled_hook('dh_content_queue_publish_next');
-        
         wp_send_json_success(array('message' => 'Queue stopped'));
+    }
+    
+    /**
+     * AJAX: Process next batch (called by frontend polling)
+     */
+    public function ajax_process_batch() {
+        check_ajax_referer('dh_content_queue', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Insufficient permissions'));
+        }
+        
+        // Check if queue is active
+        $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
+        
+        if (!$is_active) {
+            wp_send_json_success(array(
+                'is_active' => false,
+                'message' => 'Queue is not active',
+            ));
+            return;
+        }
+        
+        // Process the next batch
+        $this->process_next_in_queue();
+        
+        // Get updated status
+        $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
+        $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
+        $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
+        
+        $current_post_title = '';
+        if ($current_post_id) {
+            $current_post_title = get_the_title($current_post_id);
+        }
+        
+        wp_send_json_success(array(
+            'is_active' => $is_active,
+            'current_post_title' => $current_post_title,
+            'published_count' => $published_count,
+            'message' => $is_active ? 'Batch processed' : 'Queue completed',
+        ));
     }
     
     /**
@@ -439,6 +527,7 @@ class DH_Content_Production_Queue {
         
         $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
         $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
+        $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
         
         $current_post_title = '';
         if ($current_post_id) {
@@ -448,6 +537,7 @@ class DH_Content_Production_Queue {
         wp_send_json_success(array(
             'is_active' => $is_active,
             'current_post_title' => $current_post_title,
+            'published_count' => $published_count,
         ));
     }
     
@@ -517,15 +607,13 @@ class DH_Content_Production_Queue {
         }
         
         // Check if there are more posts to process
-        $remaining_posts = $this->get_eligible_posts();
+        $remaining_posts = $this->get_eligible_posts($mode);
         
-        if (!empty($remaining_posts)) {
-            // Schedule next batch with rate limit
-            wp_schedule_single_event(time() + self::RATE_LIMIT_SECONDS, 'dh_content_queue_publish_next');
-        } else {
+        if (empty($remaining_posts)) {
             // All done, stop queue
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
         }
+        // If there are more posts, they will be processed on the next cron run (every 5 minutes)
     }
 }
