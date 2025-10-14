@@ -233,8 +233,8 @@ class DH_Listing_Counts {
         // Count published profiles in this area
         $profile_count = $this->count_profiles_by_area($area_term_id);
         
-        // Update meta
-        update_post_meta($city_id, '_profile_count', $profile_count);
+        // Update meta (cast to int for proper sorting in admin columns)
+        update_post_meta($city_id, '_profile_count', (int) $profile_count);
     }
     
     /**
@@ -270,9 +270,9 @@ class DH_Listing_Counts {
         // Count published profiles in this state
         $profile_count = $this->count_profiles_by_state($state_slug);
         
-        // Update meta
-        update_post_meta($state_id, '_city_count', $city_count);
-        update_post_meta($state_id, '_profile_count', $profile_count);
+        // Update meta (cast to int for proper sorting in admin columns)
+        update_post_meta($state_id, '_city_count', (int) $city_count);
+        update_post_meta($state_id, '_profile_count', (int) $profile_count);
     }
     
     /**
@@ -413,11 +413,26 @@ class DH_Listing_Counts {
      * Show success notice after bulk update
      */
     public function show_success_notice() {
+        // Prevent duplicate notices
+        static $notice_shown = false;
+        if ($notice_shown) {
+            return;
+        }
+        $notice_shown = true;
+        
         if (isset($_GET['dh_counts_updated']) && $_GET['dh_counts_updated'] === '1') {
             ?>
             <div class="notice notice-success is-dismissible">
                 <p><strong>Listing counts updated successfully!</strong> All city and state listing counts have been recalculated.</p>
             </div>
+            <script>
+            // Remove the query parameter from URL to prevent message from persisting
+            if (window.history.replaceState) {
+                var url = new URL(window.location);
+                url.searchParams.delete('dh_counts_updated');
+                window.history.replaceState({}, document.title, url);
+            }
+            </script>
             <?php
         }
     }
