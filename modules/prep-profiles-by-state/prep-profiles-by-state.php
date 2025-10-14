@@ -58,7 +58,7 @@ class DH_Prep_Profiles_By_State {
         return $terms;
     }
 
-    private function query_profiles_by_state_and_status($state_slug, $post_status, $min_count = 2, $city_slug = '', $niche_slug = 'dog-trainer') {
+    private function query_profiles_by_state_and_status($state_slug, $post_status, $min_count = 2, $city_slug = '', $niche_slug = 'dog-trainer', $city_search = '') {
         global $wpdb;
         if (empty($state_slug)) {
             return array();
@@ -93,6 +93,10 @@ class DH_Prep_Profiles_By_State {
         if (!empty($city_slug)) {
             $sql .= "\n              AND t2.slug = %s";
             $params[] = $city_slug;
+        }
+        if (!empty($city_search)) {
+            $sql .= "\n              AND t2.name LIKE %s";
+            $params[] = '%' . $wpdb->esc_like($city_search) . '%';
         }
 
         $sql .= "\n              AND t2.term_id IN (
@@ -505,6 +509,7 @@ class DH_Prep_Profiles_By_State {
         $min_count = isset($_REQUEST['min_count']) ? max(1, min(5, (int) $_REQUEST['min_count'])) : 5;
         $city_slug = isset($_REQUEST['city']) ? sanitize_title(wp_unslash($_REQUEST['city'])) : '';
         $niche_slug = isset($_REQUEST['niche']) ? sanitize_title(wp_unslash($_REQUEST['niche'])) : 'dog-trainer';
+        $city_search = isset($_REQUEST['city_search']) ? sanitize_text_field(wp_unslash($_REQUEST['city_search'])) : '';
         if (!in_array($post_status, array('refining', 'publish', 'private', 'all'), true)) {
             $post_status = 'refining';
         }
@@ -515,7 +520,7 @@ class DH_Prep_Profiles_By_State {
         if (isset($_POST['dh_action']) && isset($_POST['_wpnonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'dh_prepprofiles')) {
             $action = sanitize_text_field(wp_unslash($_POST['dh_action']));
             if ($action === 'publish_all' && !empty($state_slug)) {
-                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug);
+                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug, $city_search);
                 $ids = wp_list_pluck($posts, 'ID');
                 $published_now_ids = $this->publish_posts($ids);
                 if (!empty($published_now_ids)) {
@@ -525,13 +530,13 @@ class DH_Prep_Profiles_By_State {
                 $action_message = __('Published all filtered profiles.', 'directory-helpers');
             } elseif ($action === 'rerank' && !empty($state_slug)) {
                 // For re-ranking, use published profiles only
-                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug);
+                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug, $city_search);
                 $ids = wp_list_pluck($published, 'ID');
                 $this->rerank_posts($ids, $state_slug);
                 $action_message = __('Re-ranked profiles for selected cities and state.', 'directory-helpers');
             } elseif ($action === 'one_click_flow' && !empty($state_slug)) {
                 // Step 1: Determine cities from current filters
-                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug);
+                $posts = $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug, $city_search);
                 $unique_cities = array(); // slug => name
                 foreach ($posts as $p) {
                     if (!empty($p->area_slug) && !empty($p->area_name)) {
@@ -562,7 +567,7 @@ class DH_Prep_Profiles_By_State {
                 $post_status = 'publish';
 
                 // Step 4: Rerank (use published only)
-                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug);
+                $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug, $city_search);
                 $pub_ids = wp_list_pluck($published, 'ID');
                 $this->rerank_posts($pub_ids, $state_slug);
 
@@ -618,7 +623,7 @@ class DH_Prep_Profiles_By_State {
         if (empty($state_slug) && !empty($states)) {
             $state_slug = $states[0]->slug; // default to first
         }
-        $profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug) : array();
+        $profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug, $city_search) : array();
         // Build unique city names and slugs from query results to match ordering and selection
         $unique_cities = array(); // slug => name
         foreach ($profiles as $p) {
@@ -639,7 +644,7 @@ class DH_Prep_Profiles_By_State {
         echo '<input type="hidden" name="post_type" value="state-listing" />';
         echo '<input type="hidden" name="page" value="dh-prep-profiles" />';
 
-        echo '<div style="display:flex; gap:12px; align-items:center; margin:12px 0;">';
+        echo '<div style="display:flex; gap:12px; align-items:center; margin:12px 0; flex-wrap:wrap;">';
         // State selector
         echo '<label><strong>' . esc_html__('State:', 'directory-helpers') . '</strong> ';
         echo '<select name="state">';
@@ -648,6 +653,11 @@ class DH_Prep_Profiles_By_State {
             printf('<option value="%s" %s>%s</option>', esc_attr($term->slug), selected($state_slug, $term->slug, false), esc_html($label));
         }
         echo '</select></label>';
+
+        // City search input
+        echo '<label><strong>' . esc_html__('City Search:', 'directory-helpers') . '</strong> ';
+        echo '<input type="text" name="city_search" value="' . esc_attr($city_search) . '" placeholder="' . esc_attr__('Search city name...', 'directory-helpers') . '" style="width:150px;" />';
+        echo '</label>';
 
         // City selector
         echo '<label><strong>' . esc_html__('City:', 'directory-helpers') . '</strong> ';
@@ -700,10 +710,11 @@ class DH_Prep_Profiles_By_State {
         // Action buttons
 
         if ($post_status === 'publish') {
-            echo '<form method="post" style="display:inline-block;" onsubmit="return confirm(\'Are you sure you want to re-rank these profiles?\')">';
+            echo '<form method="post" style="display:inline-block;" onsubmit="return confirm(\'Are you sure you want to re-rank these profiles?\')">'; 
             wp_nonce_field('dh_prepprofiles');
             echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
             echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
+            echo '<input type="hidden" name="city_search" value="' . esc_attr($city_search) . '" />';
             echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
             echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
             echo '<input type="hidden" name="dh_action" value="rerank" />';
@@ -712,42 +723,18 @@ class DH_Prep_Profiles_By_State {
         }
 
         // One-click flow button (always available for current filters)
-        echo '<form method="post" style="display:inline-block; margin-left:8px;" onsubmit="return confirm(\'Run one-click flow? This will create city pages (if missing), publish profiles, re-rank, and trigger AI generation.\')">';
+        echo '<form method="post" style="display:inline-block; margin-left:8px;" onsubmit="return confirm(\'Run one-click flow? This will create city pages (if missing), publish profiles, re-rank, and trigger AI generation.\')">'; 
         wp_nonce_field('dh_prepprofiles');
         echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
         echo '<input type="hidden" name="post_status" value="' . esc_attr($post_status) . '" />';
         echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
+        echo '<input type="hidden" name="city_search" value="' . esc_attr($city_search) . '" />';
         echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
         echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
         echo '<input type="hidden" name="dh_action" value="one_click_flow" />';
         submit_button(__('Create Cities, Publish, Rerank, and Generate AI', 'directory-helpers'), 'primary', 'submit', false);
         echo '</form>';
 
-        // Unique cities list
-        echo '<h2 style="margin-top:24px;">' . esc_html__('Cities in Results', 'directory-helpers') . '</h2>';
-        if (!empty($unique_cities)) {
-            echo '<p>';
-            // Sort by name while keeping slug => name mapping
-            $cities = $unique_cities; // slug => name
-            asort($cities, SORT_FLAG_CASE | SORT_STRING);
-            $links = array();
-            $nonce = wp_create_nonce('dh_create_city_listing');
-            foreach ($cities as $slug => $name) {
-                $url = add_query_arg(array(
-                    'action'   => 'dh_create_city_listing',
-                    'area'     => $slug,
-                    'state'    => $state_slug,
-                    'niche'    => $niche_slug,
-                    '_wpnonce' => $nonce,
-                ), admin_url('admin-post.php'));
-                $links[] = '<a href="' . esc_url($url) . '" class="dh-city-create-link" target="_blank" rel="noopener">' . esc_html($name) . '</a>';
-            }
-            echo implode(', ', $links);
-            echo '</p>';
-            echo '<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest(".dh-city-create-link");if(!a){return;}if(!confirm("Are you sure you want to create a new city listing page?")){e.preventDefault();}});})();</script>';
-        } else {
-            echo '<p>' . esc_html__('No cities found for current filters.', 'directory-helpers') . '</p>';
-        }
 
         // Results table
         echo '<h2 style="margin-top:12px;">' . esc_html__('Profiles', 'directory-helpers') . '</h2>';
