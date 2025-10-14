@@ -1248,6 +1248,84 @@ class DH_External_Link_Management {
                 }
             }
         }
+        
+        // Update Link Health after checking all links
+        $this->update_post_link_health($post_id);
+    }
+    
+    /**
+     * Calculate and store Link Health status for a post based on its external links.
+     * 
+     * Link Health Logic:
+     * - "all_ok": All links are 200 OR verified (override active) OR no external links
+     * - "warning": All links are 200, 403, or verified
+     * - "red_alert": Any link has a code other than 200/403 and is not verified
+     * 
+     * @param int $post_id Post ID
+     */
+    private function update_post_link_health($post_id) {
+        global $wpdb;
+        $table = $this->table_name();
+        
+        // Get all links for this post with their status
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT status_code, status_override_code, status_override_expires FROM {$table} WHERE post_id=%d",
+            $post_id
+        ));
+        
+        // If no links, treat as "all_ok"
+        if (empty($rows)) {
+            update_post_meta($post_id, '_dh_link_health', 'all_ok');
+            update_post_meta($post_id, '_dh_link_health_counts', wp_json_encode(array()));
+            update_post_meta($post_id, '_dh_link_health_updated', current_time('mysql'));
+            return;
+        }
+        
+        // Count status codes (considering overrides/verified status)
+        $counts = array();
+        $has_red_alert = false;
+        $has_warning = false;
+        
+        foreach ($rows as $row) {
+            // Check if override/verified is active
+            $ovr_exp = isset($row->status_override_expires) && $row->status_override_expires ? strtotime((string)$row->status_override_expires) : 0;
+            $ovr_code = isset($row->status_override_code) ? (int)$row->status_override_code : 0;
+            $is_verified = ($ovr_code && $ovr_exp && $ovr_exp > time());
+            
+            if ($is_verified) {
+                // Verified links count as 200 for health purposes
+                $effective_code = 200;
+            } else {
+                $effective_code = isset($row->status_code) ? (int)$row->status_code : 0;
+            }
+            
+            // Count this status code
+            if (!isset($counts[$effective_code])) {
+                $counts[$effective_code] = 0;
+            }
+            $counts[$effective_code]++;
+            
+            // Determine health level
+            if ($effective_code !== 200 && $effective_code !== 403) {
+                $has_red_alert = true;
+            } elseif ($effective_code === 403) {
+                $has_warning = true;
+            }
+        }
+        
+        // Determine overall health status
+        if ($has_red_alert) {
+            $health = 'red_alert';
+        } elseif ($has_warning) {
+            $health = 'warning';
+        } else {
+            $health = 'all_ok';
+        }
+        
+        // Store in post meta
+        update_post_meta($post_id, '_dh_link_health', $health);
+        update_post_meta($post_id, '_dh_link_health_counts', wp_json_encode($counts));
+        update_post_meta($post_id, '_dh_link_health_updated', current_time('mysql'));
     }
 
     public function ajax_recheck_link() {
@@ -1273,6 +1351,10 @@ class DH_External_Link_Management {
             array('%d','%s','%s','%s'),
             array('%d')
         );
+        
+        // Update Link Health after recheck
+        $this->update_post_link_health($post_id);
+        
         $last_display = date_i18n('Y-m-d g:ia');
         wp_send_json_success(array(
             'status_code' => (int)$code,
@@ -1414,6 +1496,10 @@ class DH_External_Link_Management {
                 'status_override_expires' => null,
                 'updated_at' => current_time('mysql'),
             ), array('id' => $id), array('%s','%s','%s'), array('%d'));
+            
+            // Update Link Health after clearing override
+            $this->update_post_link_health($post_id);
+            
             $status_title = $row->status_text ? (string)$row->status_text : '';
             wp_send_json_success(array(
                 'status_code_disp' => is_null($row->status_code) ? '—' : (int)$row->status_code,
@@ -1434,6 +1520,10 @@ class DH_External_Link_Management {
             'last_checked' => $now,
             'updated_at' => $now,
         ), array('id' => $id), array('%d','%s','%d','%s','%s','%s'), array('%d'));
+        
+        // Update Link Health after setting override
+        $this->update_post_link_health($post_id);
+        
         $status_title = 'Manually verified';
         wp_send_json_success(array(
             'status_code' => $code,

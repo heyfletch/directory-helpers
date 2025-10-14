@@ -734,6 +734,12 @@ class Directory_Helpers {
                 'description' => __('Automated video production queue for city and state listings. Manages sequential video creation via Zero Work webhook with auto-continuation.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/video-production-queue/video-production-queue.php',
                 'class' => 'DH_Video_Production_Queue'
+            ),
+            'content-production-queue' => array(
+                'name' => __('Content Production Queue', 'directory-helpers'),
+                'description' => __('Automated content publishing queue for city and state listings. Publishes draft posts that meet all content requirements (images, link health) sequentially.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/content-production-queue/content-production-queue.php',
+                'class' => 'DH_Content_Production_Queue'
             )
             // Add more modules here as needed
         );
