@@ -105,7 +105,7 @@ class DH_External_Link_Management {
     public function render_meta_box($post) {
         global $wpdb;
         $table = $this->table_name();
-        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, anchor_text, current_url, status_code, status_text, last_checked, is_duplicate, status_override_code, status_override_expires FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post->ID));
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, anchor_text, current_url, status_code, status_text, last_checked, is_duplicate, status_override_code, status_override_expires, ai_suggestion_url FROM {$table} WHERE post_id=%d ORDER BY id ASC", $post->ID));
         if (!$rows) {
             echo '<p>' . esc_html__('No external links captured yet. Use the AI generator or click Scan to populate.', 'directory-helpers') . '</p>';
         }
@@ -124,15 +124,21 @@ class DH_External_Link_Management {
         // Inline styles for status coloring
         echo '<style>
         .dh-elm-table .dh-elm-status{ white-space: nowrap; }
-        /* Actions and ID columns: minimal width and no wrapping */
-        .dh-elm-table th.dh-col-actions, .dh-elm-table td.dh-elm-manage { width:1%; white-space:nowrap; }
+        /* Actions column: fixed max-width */
+        .dh-elm-table th.dh-col-actions, .dh-elm-table td.dh-elm-manage { max-width:400px; word-wrap:break-word; }
+        /* ID column: minimal width and no wrapping */
         .dh-elm-table th.dh-col-id, .dh-elm-table td.dh-cell-id { width:1%; white-space:nowrap; }
-        /* URL column: minimum width */
-        .dh-elm-table .dh-cell-url { min-width:100px; }
-        /* Color rows: include URL cell text now that it is not a hyperlink */
+        /* URL column: minimum width, allow wrapping */
+        .dh-elm-table .dh-cell-url { min-width:100px; word-break:break-all; }
+        .dh-elm-table .dh-cell-url a { color:inherit; text-decoration:none; }
+        .dh-elm-table .dh-cell-url a:hover { text-decoration:underline; }
+        /* Color rows */
         tr.dh-status-ok .dh-elm-status, tr.dh-status-ok .dh-cell-url, tr.dh-status-ok .dh-cell-anchor a { color:#1f8a3b; font-weight:600; }
         tr.dh-status-4xx .dh-elm-status, tr.dh-status-4xx .dh-cell-url, tr.dh-status-4xx .dh-cell-anchor a { color:#d63638; font-weight:600; }
         tr.dh-status-0 .dh-elm-status, tr.dh-status-0 .dh-cell-url, tr.dh-status-0 .dh-cell-anchor a { color:#555; font-weight:600; }
+        /* Remove button borders for delete/edit icons */
+        .dh-elm-delete, .dh-elm-edit { border:none; background:none; padding:0; cursor:pointer; }
+        .dh-elm-delete .dashicons, .dh-elm-edit .dashicons { vertical-align:middle; }
         .dh-ai-msg{ display:inline-block; margin-left:6px; font-size:12px; color:#444; }
         .dh-ai-msg.dh-ai-loading{ color:#3c434a; }
         .dh-ai-msg.dh-ai-error{ color:#b32d2e; }
@@ -184,13 +190,23 @@ class DH_External_Link_Management {
             $data_ovrexp = $ovr_active ? $ovr_exp : 0;
             echo '<tr class="' . esc_attr($row_class) . '" data-link-id="' . (int)$r->id . '" data-anchor="' . $data_anchor . '" data-url="' . $data_url . '" data-status="' . (int)$data_status . '" data-checked="' . (int)$data_checked . '" data-override="' . (int)$data_ovr . '" data-override-expires="' . (int)$data_ovrexp . '">';
             echo '<td class="dh-cell-id">' . (int)$r->id . '</td>';
+            // Check if AI suggestion already exists (cached)
+            $ai_suggestion = isset($r->ai_suggestion_url) && $r->ai_suggestion_url ? $r->ai_suggestion_url : '';
+            
             echo '<td class="dh-elm-manage">'
-                . '<button type="button" class="button button-small dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '" title="Delete"><span class="dashicons dashicons-no" style="font-size:16px;width:16px;height:16px;line-height:1;"></span></button> '
-                . '<button type="button" class="button button-small dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '" title="Edit"><span class="dashicons dashicons-edit" style="font-size:16px;width:16px;height:16px;line-height:1;"></span></button>'
-                . ' <button type="button" class="button button-small dh-elm-ai-suggest" data-nonce-ai="' . esc_attr($ai_nonce) . '">Suggest</button>'
-                . '</td>';
+                . '<button type="button" class="dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '" title="Delete"><span class="dashicons dashicons-no" style="font-size:16px;width:16px;height:16px;"></span></button> '
+                . '<button type="button" class="dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '" title="Edit"><span class="dashicons dashicons-edit" style="font-size:16px;width:16px;height:16px;"></span></button>'
+                . ' <button type="button" class="button button-small dh-elm-ai-suggest" data-nonce-ai="' . esc_attr($ai_nonce) . '">Suggest</button>';
+            
+            // Show cached AI suggestion if exists - Replace button right after Suggest
+            if ($ai_suggestion) {
+                echo ' <button type="button" class="button button-small dh-elm-ai-apply" data-nonce-ai="' . esc_attr($ai_nonce) . '" data-suggested-url="' . esc_attr($ai_suggestion) . '">Replace</button>';
+                echo ' <span class="dh-ai-msg"><a href="' . esc_url($ai_suggestion) . '" target="_blank" rel="noopener">' . esc_html($ai_suggestion) . '</a></span>';
+            }
+            
+            echo '</td>';
             echo '<td class="dh-cell-anchor">' . $anchor_link . '</td>';
-            echo '<td class="dh-cell-url" style="word-break:break-all; cursor:pointer;">' . $url_disp . '</td>';
+            echo '<td class="dh-cell-url"><a href="' . esc_url($r->current_url) . '" target="_blank" rel="noopener">' . $url_disp . '</a></td>';
             echo '<td class="dh-elm-status"' . $status_title . '><span class="dh-status-code">' . esc_html($status_disp) . '</span> '
                 . '<button type="button" class="button button-small dh-elm-recheck" data-nonce="' . esc_attr($nonce) . '">Check</button> '
                 . ($ovr_active
@@ -475,7 +491,7 @@ class DH_External_Link_Management {
                             if(msg){
                                 if(sUrl){
                                     msg.className = 'dh-ai-msg';
-                                    msg.innerHTML = 'Suggested: <a href="'+ sUrl.replace(/"/g,'&quot;') +'" target="_blank" rel="noopener">'+ sUrl.replace(/&/g,'&amp;').replace(/</g,'&lt;') +'</a>';
+                                    msg.innerHTML = '<a href="'+ sUrl.replace(/"/g,'&quot;') +'" target="_blank" rel="noopener">'+ sUrl.replace(/&/g,'&amp;').replace(/</g,'&lt;') +'</a>';
                                 } else {
                                     msg.className = 'dh-ai-msg dh-ai-error';
                                     msg.textContent = 'No suggestion returned';
@@ -542,7 +558,15 @@ class DH_External_Link_Management {
                                 a.href = 'https://www.google.com/search?q=' + encodeURIComponent((updatedAnchor ? (updatedAnchor + ' ') : '') + dhPostTitle);
                                 a.target = '_blank'; a.rel = 'noopener'; a.textContent = updatedAnchor; anchorCell.appendChild(a);
                             }
-                            if(urlCell && updatedUrl){ urlCell.textContent = updatedUrl; }
+                            if(urlCell && updatedUrl){ 
+                                urlCell.innerHTML = '';
+                                var urlLink = document.createElement('a');
+                                urlLink.href = updatedUrl;
+                                urlLink.target = '_blank';
+                                urlLink.rel = 'noopener';
+                                urlLink.textContent = updatedUrl;
+                                urlCell.appendChild(urlLink);
+                            }
                             var statusCell = tr.querySelector('.dh-elm-status');
                             var newCode = (res.data.status_code != null ? parseInt(res.data.status_code,10) : 0) || 0;
                             setStatusCell(tr, newCode, res.data.status_title || '');
@@ -562,25 +586,7 @@ class DH_External_Link_Management {
                     return;
                 }
 
-                // Click URL cell -> enter edit and select URL input
-                var urlCellClick = e.target && e.target.closest && e.target.closest('.dh-cell-url');
-                if(urlCellClick){
-                    var tr = urlCellClick.closest('tr');
-                    if(!tr){ return; }
-                    // If already editing, do not block default behavior so inputs can be focused/selected
-                    if(tr.classList.contains('editing')){ return; }
-                    // Only prevent default when we are transitioning into edit mode
-                    e.preventDefault();
-                    var btn = tr.querySelector('.dh-elm-edit');
-                    if(btn){
-                        btn.click();
-                        setTimeout(function(){
-                            var inp = tr.querySelector('.dh-cell-url input');
-                            if(inp){ inp.focus(); inp.select(); }
-                        }, 0);
-                    }
-                    return;
-                }
+                // URL cell click removed - now it's a hyperlink that opens in new tab
 
                 // Edit button
                 var editBtn = e.target && e.target.closest && e.target.closest('.dh-elm-edit');
@@ -650,7 +656,14 @@ class DH_External_Link_Management {
                             anchorCell.innerHTML = ''; anchorCell.appendChild(a);
                         }
                         urlCell.innerHTML = '';
-                        urlCell.textContent = currentUrl;
+                        if(currentUrl){
+                            var urlLink = document.createElement('a');
+                            urlLink.href = currentUrl;
+                            urlLink.target = '_blank';
+                            urlLink.rel = 'noopener';
+                            urlLink.textContent = currentUrl;
+                            urlCell.appendChild(urlLink);
+                        }
                         actionsCell.innerHTML = actionsCell.getAttribute('data-orig') || '';
                     });
 
@@ -684,7 +697,14 @@ class DH_External_Link_Management {
                                     var a = document.createElement('a'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent((updatedAnchor ? (updatedAnchor + ' ') : '') + dhPostTitle); a.target = '_blank'; a.rel = 'noopener'; a.textContent = updatedAnchor; anchorCell.appendChild(a);
                                 }
                                 urlCell.innerHTML = '';
-                                if(updatedUrl){ urlCell.textContent = updatedUrl; }
+                                if(updatedUrl){ 
+                                    var urlLink = document.createElement('a');
+                                    urlLink.href = updatedUrl;
+                                    urlLink.target = '_blank';
+                                    urlLink.rel = 'noopener';
+                                    urlLink.textContent = updatedUrl;
+                                    urlCell.appendChild(urlLink);
+                                }
                                 // Update Status and Last checked cells
                                 var statusCell = tr.querySelector('.dh-elm-status');
                                 var newCode = (res.data.status_code != null ? parseInt(res.data.status_code,10) : 0) || 0;
@@ -754,29 +774,8 @@ class DH_External_Link_Management {
             }
             document.addEventListener('click', onClick, false);
 
-            // Auto-run AI Suggest on page load for non-200 rows without a suggestion
-            function autoSuggestNon200(){
-                var rows = Array.prototype.slice.call(document.querySelectorAll('.dh-elm-table tbody tr'));
-                var queue = rows.filter(function(tr){
-                    var status = parseInt(tr.getAttribute('data-status')||'0',10);
-                    var ovr = tr.getAttribute('data-override') === '1';
-                    if(ovr) return false; // skip overrides
-                    if(status === 200) return false;
-                    var msg = tr.querySelector('.dh-ai-msg');
-                    if(!msg) return true;
-                    var txt = (msg.textContent || '').trim().toLowerCase();
-                    return !txt || txt === 'no suggestion';
-                });
-                var i = 0;
-                function next(){
-                    if(i >= queue.length) return;
-                    var tr = queue[i++];
-                    var btn = tr.querySelector('.dh-elm-ai-suggest');
-                    if(btn){ btn.click(); }
-                    setTimeout(next, 600); // stagger requests to be friendly to API
-                }
-                if(queue.length){ next(); }
-            }
+            // Auto-suggest disabled - AI suggestions are now cached in database
+            // Users can manually click "Suggest" button when needed
 
             // Sorting
             var currentSortKey = 'id';
@@ -811,8 +810,6 @@ class DH_External_Link_Management {
             });
             // Initial sort by ID asc (already default), but ensure dataset present
             sortRows(currentSortKey);
-            // After initial render, auto-run AI suggestions for non-200 rows
-            autoSuggestNon200();
         })();
         </script>
         <?php
