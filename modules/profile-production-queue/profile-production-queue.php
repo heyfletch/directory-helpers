@@ -206,6 +206,9 @@ class DH_Profile_Production_Queue {
         $profile_ids = isset($_POST['profile_ids']) ? array_map('intval', $_POST['profile_ids']) : array();
         $state_slug = isset($_POST['state_slug']) ? sanitize_text_field($_POST['state_slug']) : '';
         $niche_slug = isset($_POST['niche_slug']) ? sanitize_text_field($_POST['niche_slug']) : '';
+        $min_count = isset($_POST['min_count']) ? (int)$_POST['min_count'] : 2;
+        $city_slug = isset($_POST['city_slug']) ? sanitize_text_field($_POST['city_slug']) : '';
+        $city_search = isset($_POST['city_search']) ? sanitize_text_field($_POST['city_search']) : '';
         
         if (empty($profile_ids)) {
             wp_send_json_error(array('message' => 'No profiles selected'));
@@ -220,6 +223,9 @@ class DH_Profile_Production_Queue {
             'profile_ids' => $profile_ids,
             'state_slug' => $state_slug,
             'niche_slug' => $niche_slug,
+            'min_count' => $min_count,
+            'city_slug' => $city_slug,
+            'city_search' => $city_search,
             'created_city_ids' => array(),
         );
         
@@ -451,18 +457,100 @@ class DH_Profile_Production_Queue {
     private function run_final_steps($queue_data) {
         $state_slug = $queue_data['state_slug'];
         $niche_slug = $queue_data['niche_slug'];
+        $min_count = isset($queue_data['min_count']) ? $queue_data['min_count'] : 2;
+        $city_slug = isset($queue_data['city_slug']) ? $queue_data['city_slug'] : '';
+        $city_search = isset($queue_data['city_search']) ? $queue_data['city_search'] : '';
         $created_city_ids = isset($queue_data['created_city_ids']) ? $queue_data['created_city_ids'] : array();
-        $profile_ids = $queue_data['profile_ids'];
         
-        // Rerank all published profiles
-        if (!empty($profile_ids)) {
-            $this->rerank_posts($profile_ids, $state_slug);
-        }
+        // Step 4: Rerank (use published only) - EXACTLY like one-click button
+        $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug, $city_search);
+        $pub_ids = wp_list_pluck($published, 'ID');
+        $this->rerank_posts($pub_ids, $state_slug);
         
-        // Trigger AI for new city pages
+        // Step 5: Trigger AI for new city pages
         if (!empty($created_city_ids)) {
             $this->trigger_ai_for_cities($created_city_ids);
         }
+    }
+    
+    /**
+     * Query profiles by state and status - COPIED from prep-profiles-by-state
+     */
+    private function query_profiles_by_state_and_status($state_slug, $post_status, $min_count = 2, $city_slug = '', $niche_slug = 'dog-trainer', $city_search = '') {
+        global $wpdb;
+        if (empty($state_slug)) {
+            return array();
+        }
+        $min_count = max(1, min(5, (int) $min_count));
+        $prefix = $wpdb->prefix;
+        $sql = "
+            SELECT p.*, t2.name AS area_name, t2.slug AS area_slug, t2.term_id AS area_id
+            FROM {$prefix}posts p
+            JOIN {$prefix}term_relationships tr1 ON p.ID = tr1.object_id
+            JOIN {$prefix}term_taxonomy tt1 ON tr1.term_taxonomy_id = tt1.term_taxonomy_id
+            JOIN {$prefix}terms t1 ON tt1.term_id = t1.term_id
+            JOIN {$prefix}term_relationships tr2 ON p.ID = tr2.object_id
+            JOIN {$prefix}term_taxonomy tt2 ON tr2.term_taxonomy_id = tt2.term_taxonomy_id
+            JOIN {$prefix}terms t2 ON tt2.term_id = t2.term_id
+            JOIN {$prefix}term_relationships tr5 ON p.ID = tr5.object_id
+            JOIN {$prefix}term_taxonomy tt5 ON tr5.term_taxonomy_id = tt5.term_taxonomy_id
+            JOIN {$prefix}terms t5 ON tt5.term_id = t5.term_id
+            WHERE p.post_type = 'profile'
+              AND tt1.taxonomy = 'state'
+              AND t1.slug = %s
+              AND tt2.taxonomy = 'area'
+              AND tt5.taxonomy = 'niche'
+              AND t5.slug = %s";
+
+        $params = array($state_slug, $niche_slug);
+
+        if ($post_status !== 'all') {
+            $sql .= "\n              AND p.post_status = %s";
+            $params[] = $post_status;
+        }
+        if (!empty($city_slug)) {
+            $sql .= "\n              AND t2.slug = %s";
+            $params[] = $city_slug;
+        }
+        if (!empty($city_search)) {
+            $sql .= "\n              AND t2.name LIKE %s";
+            $params[] = '%' . $wpdb->esc_like($city_search) . '%';
+        }
+
+        $sql .= "\n              AND t2.term_id IN (
+                SELECT t3.term_id
+                FROM {$prefix}posts p3
+                JOIN {$prefix}term_relationships tr3 ON p3.ID = tr3.object_id
+                JOIN {$prefix}term_taxonomy tt3 ON tr3.term_taxonomy_id = tt3.term_taxonomy_id
+                JOIN {$prefix}terms t3 ON tt3.term_id = t3.term_id
+                JOIN {$prefix}term_relationships tr4 ON p3.ID = tr4.object_id
+                JOIN {$prefix}term_taxonomy tt4 ON tr4.term_taxonomy_id = tt4.term_taxonomy_id
+                JOIN {$prefix}terms t4 ON tt4.term_id = t4.term_id
+                JOIN {$prefix}term_relationships tr5b ON p3.ID = tr5b.object_id
+                JOIN {$prefix}term_taxonomy tt5b ON tr5b.term_taxonomy_id = tt5b.term_taxonomy_id
+                JOIN {$prefix}terms t5b ON tt5b.term_id = t5b.term_id
+                WHERE p3.post_type = 'profile'
+                  AND tt4.taxonomy = 'state'
+                  AND t4.slug = %s\n";
+        $params[] = $state_slug;
+
+        if ($post_status !== 'all') {
+            $sql .= "                  AND p3.post_status = %s\n";
+            $params[] = $post_status;
+        }
+
+        $sql .= "                  AND tt3.taxonomy = 'area'
+                  AND tt5b.taxonomy = 'niche'
+                  AND t5b.slug = %s
+                GROUP BY t3.term_id
+                HAVING COUNT(DISTINCT p3.ID) >= %d
+              )
+            ORDER BY t2.name ASC, p.post_title ASC";
+        $params[] = $niche_slug;
+        $params[] = $min_count;
+
+        $prepared = $wpdb->prepare($sql, $params);
+        return $wpdb->get_results($prepared);
     }
     
     /**

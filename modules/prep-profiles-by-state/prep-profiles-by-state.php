@@ -754,6 +754,9 @@ class DH_Prep_Profiles_By_State {
                     echo '<input type="hidden" name="profile_ids" value="' . esc_attr(implode(',', $profile_ids)) . '" />';
                     echo '<input type="hidden" name="state_slug" value="' . esc_attr($state_slug) . '" />';
                     echo '<input type="hidden" name="niche_slug" value="' . esc_attr($niche_slug) . '" />';
+                    echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
+                    echo '<input type="hidden" name="city_slug" value="' . esc_attr($city_slug) . '" />';
+                    echo '<input type="hidden" name="city_search" value="' . esc_attr($city_search) . '" />';
                     echo '<button type="button" id="dh-add-to-pipeline-btn" class="button button-secondary">';
                     echo esc_html__('Add Profiles to Production Pipeline', 'directory-helpers');
                     echo ' (' . count($profile_ids) . ' profiles)';
@@ -780,10 +783,13 @@ class DH_Prep_Profiles_By_State {
                             button.prop('disabled', true);
                             button.text('Adding to pipeline...');
                             
-                            var profileIds = form.find('input[name="profile_ids"]').val().split(',').map(Number);
-                            var stateSlug = form.find('input[name="state_slug"]').val();
-                            var nicheSlug = form.find('input[name="niche_slug"]').val();
-                            var nonce = form.find('input[name="dh_ppq_nonce"]').val();
+                            const profileIds = form.find('input[name="profile_ids"]').val().split(',').map(Number);
+                            const stateSlug = form.find('input[name="state_slug"]').val();
+                            const nicheSlug = form.find('input[name="niche_slug"]').val();
+                            const minCount = form.find('input[name="min_count"]').val();
+                            const citySlug = form.find('input[name="city_slug"]').val();
+                            const citySearch = form.find('input[name="city_search"]').val();
+                            const nonce = form.find('input[name="dh_ppq_nonce"]').val();
                             
                             $.ajax({
                                 url: ajaxurl,
@@ -793,7 +799,10 @@ class DH_Prep_Profiles_By_State {
                                     nonce: nonce,
                                     profile_ids: profileIds,
                                     state_slug: stateSlug,
-                                    niche_slug: nicheSlug
+                                    niche_slug: nicheSlug,
+                                    min_count: minCount,
+                                    city_slug: citySlug,
+                                    city_search: citySearch
                                 },
                                 success: function(response) {
                                     if (response.success) {
