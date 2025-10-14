@@ -23,6 +23,7 @@ class DH_Content_Production_Queue {
     const OPTION_QUEUE_ACTIVE = 'dh_content_queue_active';
     const OPTION_CURRENT_POST = 'dh_content_queue_current_post';
     const OPTION_PUBLISHED_COUNT = 'dh_content_queue_published_count';
+    const OPTION_QUEUE_MODE = 'dh_content_queue_mode';
     
     /**
      * Rate limit in seconds between batch cycles
@@ -115,8 +116,6 @@ class DH_Content_Production_Queue {
             <h1><?php esc_html_e('Content Production Queue', 'directory-helpers'); ?></h1>
             
             <div class="dh-cpq-status-box" style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin: 20px 0;">
-                <h2 style="margin-top: 0;"><?php esc_html_e('Queue Status', 'directory-helpers'); ?></h2>
-                
                 <div class="dh-cpq-status-info">
                     <p>
                         <strong><?php esc_html_e('Status:', 'directory-helpers'); ?></strong>
@@ -151,8 +150,11 @@ class DH_Content_Production_Queue {
                 
                 <div class="dh-cpq-controls" style="margin-top: 20px;">
                     <?php if (!$is_active && $total_eligible > 0): ?>
-                        <button type="button" id="dh-start-cpq-btn" class="button button-primary">
-                            <?php esc_html_e('Start Publishing Queue', 'directory-helpers'); ?>
+                        <button type="button" id="dh-start-cpq-healthy-btn" class="button button-primary" data-mode="healthy">
+                            <?php esc_html_e('Publish Healthy Cities', 'directory-helpers'); ?>
+                        </button>
+                        <button type="button" id="dh-start-cpq-all-btn" class="button button-secondary" data-mode="all" title="<?php esc_attr_e('Publish Cities including Link Health Warnings or Unchecked', 'directory-helpers'); ?>" style="margin-left: 10px;">
+                            <?php esc_html_e('Publish All Cities', 'directory-helpers'); ?>
                         </button>
                     <?php elseif ($is_active): ?>
                         <button type="button" id="dh-stop-cpq-btn" class="button">
@@ -160,7 +162,10 @@ class DH_Content_Production_Queue {
                         </button>
                     <?php else: ?>
                         <button type="button" class="button button-primary" disabled>
-                            <?php esc_html_e('Start Publishing Queue', 'directory-helpers'); ?>
+                            <?php esc_html_e('Publish Healthy Cities', 'directory-helpers'); ?>
+                        </button>
+                        <button type="button" class="button button-secondary" disabled style="margin-left: 10px;">
+                            <?php esc_html_e('Publish All Cities', 'directory-helpers'); ?>
                         </button>
                         <p class="description"><?php esc_html_e('No eligible posts to publish', 'directory-helpers'); ?></p>
                     <?php endif; ?>
@@ -235,10 +240,11 @@ class DH_Content_Production_Queue {
     /**
      * Get eligible posts for publishing
      *
+     * @param string $mode 'healthy' = only all_ok/not_exists, 'all' = include warnings
      * @return array Array of WP_Post objects
      */
-    private function get_eligible_posts() {
-        $args = array(
+    private function get_eligible_posts($mode = 'all') {
+        $base_args = array(
             'post_type' => array('city-listing', 'state-listing'),
             'post_status' => 'draft',
             'posts_per_page' => -1,
@@ -261,28 +267,67 @@ class DH_Content_Production_Queue {
                     'key' => 'body_image_2',
                     'compare' => 'EXISTS',
                 ),
-                // Link Health must be all_ok, warning, or not exist (no links)
-                array(
-                    'relation' => 'OR',
-                    array(
-                        'key' => '_dh_link_health',
-                        'value' => 'all_ok',
-                        'compare' => '=',
-                    ),
-                    array(
-                        'key' => '_dh_link_health',
-                        'value' => 'warning',
-                        'compare' => '=',
-                    ),
-                    array(
-                        'key' => '_dh_link_health',
-                        'compare' => 'NOT EXISTS',
-                    ),
-                ),
             ),
         );
         
-        return get_posts($args);
+        // Add link health filter based on mode
+        if ($mode === 'healthy') {
+            // Only all_ok or not exists (no warnings)
+            $base_args['meta_query'][] = array(
+                'relation' => 'OR',
+                array(
+                    'key' => '_dh_link_health',
+                    'value' => 'all_ok',
+                    'compare' => '=',
+                ),
+                array(
+                    'key' => '_dh_link_health',
+                    'compare' => 'NOT EXISTS',
+                ),
+            );
+        } else {
+            // Include warnings
+            $base_args['meta_query'][] = array(
+                'relation' => 'OR',
+                array(
+                    'key' => '_dh_link_health',
+                    'value' => 'all_ok',
+                    'compare' => '=',
+                ),
+                array(
+                    'key' => '_dh_link_health',
+                    'value' => 'warning',
+                    'compare' => '=',
+                ),
+                array(
+                    'key' => '_dh_link_health',
+                    'compare' => 'NOT EXISTS',
+                ),
+            );
+        }
+        
+        $posts = get_posts($base_args);
+        
+        // Sort: all_ok and not_exists first, warnings last
+        if ($mode === 'all') {
+            usort($posts, function($a, $b) {
+                $health_a = get_post_meta($a->ID, '_dh_link_health', true);
+                $health_b = get_post_meta($b->ID, '_dh_link_health', true);
+                
+                // Warning posts go to end
+                $priority_a = ($health_a === 'warning') ? 1 : 0;
+                $priority_b = ($health_b === 'warning') ? 1 : 0;
+                
+                if ($priority_a !== $priority_b) {
+                    return $priority_a - $priority_b;
+                }
+                
+                // Within same priority, maintain date order
+                return strtotime($a->post_date) - strtotime($b->post_date);
+            });
+        }
+        
+        return $posts;
     }
     
     /**
@@ -295,8 +340,11 @@ class DH_Content_Production_Queue {
             wp_send_json_error(array('message' => 'Insufficient permissions'));
         }
         
-        // Get eligible posts
-        $posts = $this->get_eligible_posts();
+        // Get mode from request (healthy or all)
+        $mode = isset($_POST['mode']) && $_POST['mode'] === 'healthy' ? 'healthy' : 'all';
+        
+        // Get eligible posts based on mode
+        $posts = $this->get_eligible_posts($mode);
         
         if (empty($posts)) {
             wp_send_json_error(array('message' => 'No eligible posts to publish'));
@@ -306,6 +354,7 @@ class DH_Content_Production_Queue {
         update_option(self::OPTION_QUEUE_ACTIVE, true);
         update_option(self::OPTION_PUBLISHED_COUNT, 0);
         update_option(self::OPTION_CURRENT_POST, 0);
+        update_option(self::OPTION_QUEUE_MODE, $mode);
         
         // Schedule first post immediately
         wp_schedule_single_event(time(), 'dh_content_queue_publish_next');
@@ -386,8 +435,11 @@ class DH_Content_Production_Queue {
             return;
         }
         
-        // Get eligible posts
-        $posts = $this->get_eligible_posts();
+        // Get mode from stored option
+        $mode = get_option(self::OPTION_QUEUE_MODE, 'all');
+        
+        // Get eligible posts based on stored mode
+        $posts = $this->get_eligible_posts($mode);
         
         if (empty($posts)) {
             // No more posts, stop queue

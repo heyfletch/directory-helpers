@@ -1,14 +1,18 @@
 jQuery(document).ready(function($) {
     
     /**
-     * Handle Start Queue button
+     * Handle Start Queue buttons (Healthy and All)
      */
-    $(document).on('click', '#dh-start-cpq-btn', function(e) {
+    $(document).on('click', '#dh-start-cpq-healthy-btn, #dh-start-cpq-all-btn', function(e) {
         e.preventDefault();
         
         const button = $(this);
+        const mode = button.data('mode'); // 'healthy' or 'all'
+        const confirmMsg = mode === 'healthy' 
+            ? 'Start publishing healthy cities only? This will publish posts with "All Ok" link health.'
+            : 'Start publishing all cities? This will include posts with link health warnings.';
         
-        if (!confirm('Start content publishing queue? This will begin publishing eligible draft posts automatically.')) {
+        if (!confirm(confirmMsg)) {
             return;
         }
         
@@ -20,7 +24,8 @@ jQuery(document).ready(function($) {
             type: 'POST',
             data: {
                 action: 'dh_start_content_queue',
-                nonce: dhContentQueue.nonce
+                nonce: dhContentQueue.nonce,
+                mode: mode
             },
             success: function(response) {
                 if (response.success) {
