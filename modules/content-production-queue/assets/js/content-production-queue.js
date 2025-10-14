@@ -169,7 +169,7 @@ jQuery(document).ready(function($) {
         
         processingInterval = setInterval(function() {
             processBatch();
-        }, 3000); // Process batch every 3 seconds
+        }, 5000); // Process batch every 5 seconds
     }
     
     function stopBatchProcessing() {

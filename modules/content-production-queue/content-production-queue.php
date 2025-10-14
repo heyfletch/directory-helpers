@@ -33,7 +33,7 @@ class DH_Content_Production_Queue {
     /**
      * Number of posts to process per batch cycle
      */
-    const BATCH_SIZE = 4;
+    const BATCH_SIZE = 5;
     
     /**
      * Constructor
