@@ -870,13 +870,16 @@ class DH_External_Link_Management {
         $this->delete_links_for_post($post_id);
 
         // Convert external links to shortcodes and persist
-        $updated = $this->scan_convert_and_save($post_id, $content);
-        if ($updated !== false) {
+        $result = $this->scan_convert_and_save($post_id, $content);
+        if ($result !== false && is_array($result)) {
+            $updated_html = $result['html'];
             // Save updated HTML back to post content
-            wp_update_post(array('ID' => $post_id, 'post_content' => $updated));
+            if ($updated_html !== false) {
+                wp_update_post(array('ID' => $post_id, 'post_content' => $updated_html));
+            }
+            // Check all links since this is new AI content (all links are new)
+            $this->check_links_for_post($post_id);
         }
-        // Initial link status check (batched) — AI replacement to be implemented in a later phase
-        $this->check_links_for_post($post_id);
     }
 
     /**
@@ -945,6 +948,7 @@ class DH_External_Link_Management {
         foreach ($anchors as $a) { $toProcess[] = $a; }
 
         $seenUrls = array();
+        $newLinkIds = array(); // Track IDs of newly created links
         global $wpdb;
         $table = $this->table_name();
         // Build map of existing URLs to their record IDs (do not mark as seen yet)
@@ -1026,6 +1030,7 @@ class DH_External_Link_Management {
             ));
             if ($ok === false) { continue; }
             $new_id = (int) $wpdb->insert_id;
+            $newLinkIds[] = $new_id; // Track this new link
 
             $t_attr = esc_attr($anchor_text);
             $short = $doc->createTextNode('[link id="' . $new_id . '" t="' . $t_attr . '"]');
@@ -1041,7 +1046,8 @@ class DH_External_Link_Management {
             foreach ($body->childNodes as $child) {
                 $out .= $doc->saveHTML($child);
             }
-            return $out;
+            // Return array with updated HTML and new link IDs
+            return array('html' => $out, 'new_link_ids' => $newLinkIds);
         }
         return false;
     }
@@ -1171,10 +1177,28 @@ class DH_External_Link_Management {
         return false; // not blocked
     }
 
-    private function check_links_for_post($post_id) {
+    /**
+     * Check HTTP status for specific link IDs only
+     * 
+     * @param int $post_id Post ID
+     * @param array $link_ids Array of link IDs to check (optional, checks all if empty)
+     */
+    private function check_links_for_post($post_id, $link_ids = array()) {
         global $wpdb;
         $table = $this->table_name();
-        $rows = $wpdb->get_results($wpdb->prepare("SELECT id, current_url, status_override_code, status_override_expires FROM {$table} WHERE post_id=%d", $post_id));
+        
+        // Build query based on whether we're checking specific IDs or all
+        if (!empty($link_ids)) {
+            $placeholders = implode(',', array_fill(0, count($link_ids), '%d'));
+            $query = $wpdb->prepare(
+                "SELECT id, current_url, status_override_code, status_override_expires FROM {$table} WHERE post_id=%d AND id IN ($placeholders)",
+                array_merge(array($post_id), $link_ids)
+            );
+            $rows = $wpdb->get_results($query);
+        } else {
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, current_url, status_override_code, status_override_expires FROM {$table} WHERE post_id=%d", $post_id));
+        }
+        
         if (!$rows) { return; }
         $timeout = 10; // per request
         
@@ -1572,7 +1596,7 @@ class DH_External_Link_Management {
             wp_send_json_error(array('message' => 'PHP DOM extension is not available on this server. Unable to scan.' ));
         }
         try {
-            $updated = $this->scan_convert_and_save($post_id, (string)$post->post_content);
+            $result = $this->scan_convert_and_save($post_id, (string)$post->post_content);
         } catch (Throwable $e) {
             wp_send_json_error(array('message' => 'Scan exception: ' . $e->getMessage()));
             return;
@@ -1580,19 +1604,36 @@ class DH_External_Link_Management {
             wp_send_json_error(array('message' => 'Scan exception: ' . $e->getMessage()));
             return;
         }
-        if ($updated !== false) {
+        
+        $updated_html = false;
+        $new_link_ids = array();
+        
+        if ($result !== false && is_array($result)) {
+            $updated_html = $result['html'];
+            $new_link_ids = isset($result['new_link_ids']) ? $result['new_link_ids'] : array();
+            
             // Save updated content if changes were made
-            wp_update_post(array('ID' => $post_id, 'post_content' => $updated));
+            if ($updated_html !== false) {
+                wp_update_post(array('ID' => $post_id, 'post_content' => $updated_html));
+            }
         }
 
-        // After scanning, recalc duplicates and perform HTTP status checks
-        // plus AI suggestions for non-200 links server-side, so the full workflow
-        // runs from this single action.
+        // After scanning, recalc duplicates
         $this->recalc_duplicates_for_post($post_id);
-        $this->check_links_for_post($post_id);
+        
+        // Only check HTTP status for NEW links (not pre-existing ones)
+        if (!empty($new_link_ids)) {
+            $this->check_links_for_post($post_id, $new_link_ids);
+        }
+        
+        // Update Link Health after checking new links
+        $this->update_post_link_health($post_id);
 
-        // Report whether content was updated
-        wp_send_json_success(array('updated' => $updated !== false));
+        // Report whether content was updated and how many new links were found
+        wp_send_json_success(array(
+            'updated' => $updated_html !== false,
+            'new_links' => count($new_link_ids)
+        ));
     }
 
     private function recalc_duplicates_for_post($post_id) {
