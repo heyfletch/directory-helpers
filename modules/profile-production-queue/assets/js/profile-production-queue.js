@@ -1,6 +1,71 @@
 jQuery(document).ready(function($) {
     
     /**
+     * Handle Add to Pipeline button
+     */
+    $(document).on('click', '#dh-add-to-pipeline-btn', function(e) {
+        e.preventDefault();
+        
+        const button = $(this);
+        
+        if (button.prop('disabled')) {
+            return;
+        }
+        
+        if (!confirm('Add filtered profiles to production pipeline?')) {
+            return;
+        }
+        
+        button.prop('disabled', true);
+        button.text('Adding...');
+        
+        // Get filter values from form
+        const formData = {
+            action: 'dh_add_to_pipeline',
+            nonce: dhProfileQueue.nonce,
+            state: $('select[name="state"]').val(),
+            city_search: $('input[name="city_search"]').val(),
+            post_status: $('select[name="post_status"]').val(),
+            niche: $('select[name="niche"]').val(),
+            min_count: $('input[name="min_count"]').val()
+        };
+        
+        $.ajax({
+            url: dhProfileQueue.ajaxUrl,
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    showNotice(response.data.message, 'success');
+                    
+                    // Update counters
+                    $('#dh-ppq-total').text(response.data.total);
+                    $('#dh-ppq-processed').text('0');
+                    $('#dh-ppq-remaining').text(response.data.total);
+                    
+                    // Reload page after 1 second
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    button.prop('disabled', false);
+                    button.text('Add Profiles to Production Pipeline');
+                    
+                    const errorMsg = response.data && response.data.message 
+                        ? response.data.message 
+                        : 'Failed to add profiles';
+                    showNotice(errorMsg, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                button.prop('disabled', false);
+                button.text('Add Profiles to Production Pipeline');
+                showNotice('Error: ' + error, 'error');
+            }
+        });
+    });
+    
+    /**
      * Handle Stop Queue button
      */
     $(document).on('click', '#dh-stop-ppq-btn', function(e) {

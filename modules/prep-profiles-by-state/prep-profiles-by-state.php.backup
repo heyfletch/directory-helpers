@@ -503,16 +503,6 @@ class DH_Prep_Profiles_By_State {
         if (!current_user_can('manage_options')) {
             return;
         }
-        
-        // SHOW DEPRECATION NOTICE IMMEDIATELY
-        ?>
-        <div class="wrap">
-            <div style="background: #dc3232; color: white; padding: 30px; margin: 20px 0; border-left: 4px solid #a00;">
-                <h1 style="margin: 0 0 15px 0; font-size: 32px; color: white;">⚠️ DEPRECATED - USE PROFILE PRODUCTION INSTEAD</h1>
-                <p style="font-size: 18px; margin: 0;"><strong><a href="<?php echo esc_url(admin_url('admin.php?page=dh-profile-production')); ?>" style="font-size: 20px; color: white; text-decoration: underline;">→ GO TO PROFILE PRODUCTION QUEUE</a></strong></p>
-            </div>
-        </div>
-        <?php
 
         $state_slug = isset($_REQUEST['state']) ? sanitize_text_field(wp_unslash($_REQUEST['state'])) : '';
         $post_status = isset($_REQUEST['post_status']) ? sanitize_key($_REQUEST['post_status']) : 'refining';
@@ -645,6 +635,11 @@ class DH_Prep_Profiles_By_State {
             }
         }
 
+        echo '<div class="wrap">';
+        echo '<div class="notice notice-warning" style="padding: 15px; margin: 20px 0;">';
+        echo '<h2 style="margin-top: 0;">⚠️ Deprecated? Use <a href="' . esc_url(admin_url('edit.php?post_type=state-listing&page=dh-profile-production-queue')) . '">Profile Production</a> instead</h2>';
+        echo '<p>This page is being phased out. The new Profile Production Queue page offers the same functionality with automated batch processing.</p>';
+        echo '</div>';
         echo '<h1>' . esc_html__('Prep Profiles for Publishing', 'directory-helpers') . '</h1>';
 
         if (!empty($action_message)) {
@@ -667,7 +662,7 @@ class DH_Prep_Profiles_By_State {
         echo '</select></label>';
 
         // City search input
-        echo '<label><strong>' . esc_html__('Find:', 'directory-helpers') . '</strong> ';
+        echo '<label><strong>' . esc_html__('City Search:', 'directory-helpers') . '</strong> ';
         echo '<input type="text" name="city_search" value="' . esc_attr($city_search) . '" placeholder="' . esc_attr__('Search city name...', 'directory-helpers') . '" style="width:150px;" />';
         echo '</label>';
 
