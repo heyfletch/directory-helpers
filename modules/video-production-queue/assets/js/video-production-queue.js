@@ -221,7 +221,8 @@ jQuery(document).ready(function($) {
     
     // Start polling if queue is active on page load
     if (dhVideoQueue.isActive) {
-        startStatusPolling();
+        updateQueueStatus(); // Update immediately
+        startStatusPolling(); // Then start polling
     }
     
     /**
