@@ -102,9 +102,12 @@ class DH_Content_Production_Queue {
         $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
         $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
         
-        // Get eligible posts
+        // Get eligible posts for publishing (with images)
         $eligible_posts = $this->get_eligible_posts();
         $total_eligible = count($eligible_posts);
+        
+        // Get ALL draft posts for display (including those missing images)
+        $all_draft_posts = $this->get_all_draft_posts();
         
         $current_post_title = '';
         if ($current_post_id && $is_active) {
@@ -181,9 +184,9 @@ class DH_Content_Production_Queue {
                 </div>
             </div>
             
-            <h2><?php esc_html_e('Eligible Posts', 'directory-helpers'); ?></h2>
+            <h2><?php esc_html_e('Draft Posts', 'directory-helpers'); ?></h2>
             <p class="description">
-                <?php esc_html_e('Posts must have: Featured Image, Body Image 1, Body Image 2, Draft Status, and Link Health (All Ok or Warning).', 'directory-helpers'); ?>
+                <?php esc_html_e('Posts eligible for publishing must have: Featured Image, Body Image 1, Body Image 2, and Link Health (All Ok or Warning).', 'directory-helpers'); ?>
             </p>
             
             <table class="wp-list-table widefat fixed striped">
@@ -196,15 +199,21 @@ class DH_Content_Production_Queue {
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($eligible_posts)): ?>
+                    <?php if (empty($all_draft_posts)): ?>
                         <tr>
-                            <td colspan="4"><?php esc_html_e('No eligible posts found.', 'directory-helpers'); ?></td>
+                            <td colspan="4"><?php esc_html_e('No draft posts found.', 'directory-helpers'); ?></td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($eligible_posts as $post): ?>
+                        <?php foreach ($all_draft_posts as $post): ?>
                             <?php
                             $link_health = get_post_meta($post->ID, '_dh_link_health', true);
                             $link_health_display = $this->get_link_health_display($link_health);
+                            
+                            // Check if all images are present
+                            $has_featured = has_post_thumbnail($post->ID);
+                            $has_body1 = !empty(get_post_meta($post->ID, 'body_image_1', true));
+                            $has_body2 = !empty(get_post_meta($post->ID, 'body_image_2', true));
+                            $all_images_present = $has_featured && $has_body1 && $has_body2;
                             ?>
                             <tr>
                                 <td>
@@ -216,7 +225,13 @@ class DH_Content_Production_Queue {
                                 </td>
                                 <td><?php echo esc_html($post->post_type === 'state-listing' ? 'State' : 'City'); ?></td>
                                 <td><?php echo wp_kses_post($link_health_display); ?></td>
-                                <td><span style="color: #46b450;">✓ <?php esc_html_e('All Present', 'directory-helpers'); ?></span></td>
+                                <td>
+                                    <?php if ($all_images_present): ?>
+                                        <span style="color: #46b450;">✓ <?php esc_html_e('All Present', 'directory-helpers'); ?></span>
+                                    <?php else: ?>
+                                        <span style="color: #dc3232;">❌ <?php esc_html_e('Missing Images', 'directory-helpers'); ?></span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
@@ -240,6 +255,50 @@ class DH_Content_Production_Queue {
             default:
                 return '<span style="color: #999;">❓ Not Checked</span>';
         }
+    }
+    
+    /**
+     * Get all draft posts for display (including those missing images)
+     * Sorted by: All Ok, Warning, Not Checked, then by date
+     *
+     * @return array Array of WP_Post objects
+     */
+    private function get_all_draft_posts() {
+        $args = array(
+            'post_type' => array('city-listing', 'state-listing'),
+            'post_status' => 'draft',
+            'posts_per_page' => -1,
+            'orderby' => 'date',
+            'order' => 'ASC',
+        );
+        
+        $posts = get_posts($args);
+        
+        // Sort by link health priority: all_ok (0), warning (1), not_checked/empty (2)
+        usort($posts, function($a, $b) {
+            $health_a = get_post_meta($a->ID, '_dh_link_health', true);
+            $health_b = get_post_meta($b->ID, '_dh_link_health', true);
+            
+            // Assign priority values
+            $priority_map = array(
+                'all_ok' => 0,
+                'warning' => 1,
+                '' => 2, // Not checked
+            );
+            
+            $priority_a = isset($priority_map[$health_a]) ? $priority_map[$health_a] : 2;
+            $priority_b = isset($priority_map[$health_b]) ? $priority_map[$health_b] : 2;
+            
+            // Sort by priority first
+            if ($priority_a !== $priority_b) {
+                return $priority_a - $priority_b;
+            }
+            
+            // Within same priority, sort by date (oldest first)
+            return strtotime($a->post_date) - strtotime($b->post_date);
+        });
+        
+        return $posts;
     }
     
     /**
