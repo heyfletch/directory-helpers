@@ -36,6 +36,9 @@ class DH_Video_Production_Queue {
      * Constructor
      */
     public function __construct() {
+        // Add custom cron schedule
+        add_filter('cron_schedules', array($this, 'add_cron_schedules'));
+        
         // Add admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
@@ -48,12 +51,38 @@ class DH_Video_Production_Queue {
         add_action('wp_ajax_dh_get_video_queue_status', array($this, 'ajax_get_queue_status'));
         add_action('wp_ajax_dh_clear_video_error', array($this, 'ajax_clear_error'));
         add_action('wp_ajax_dh_reset_video_queue', array($this, 'ajax_reset_queue'));
+        add_action('wp_ajax_dh_process_video_next', array($this, 'ajax_process_next'));
         
         // REST API endpoint for Zero Work callback
         add_action('rest_api_init', array($this, 'register_callback_endpoint'));
         
-        // Hook for scheduled event to send next post
-        add_action('dh_video_queue_send_next', array($this, 'process_next_in_queue'));
+        // Hook for recurring cron event (runs every 5 minutes via xCloud-Cron)
+        add_action('dh_video_queue_process', array($this, 'process_next_in_queue'));
+        
+        // Ensure cron is scheduled
+        add_action('init', array($this, 'ensure_cron_scheduled'));
+    }
+    
+    /**
+     * Add custom cron schedules
+     */
+    public function add_cron_schedules($schedules) {
+        if (!isset($schedules['five_minutes'])) {
+            $schedules['five_minutes'] = array(
+                'interval' => 300, // 5 minutes in seconds
+                'display' => __('Every 5 Minutes', 'directory-helpers'),
+            );
+        }
+        return $schedules;
+    }
+    
+    /**
+     * Ensure cron is scheduled on init
+     */
+    public function ensure_cron_scheduled() {
+        if (!wp_next_scheduled('dh_video_queue_process')) {
+            wp_schedule_event(time(), 'five_minutes', 'dh_video_queue_process');
+        }
     }
     
     /**
@@ -549,6 +578,63 @@ class DH_Video_Production_Queue {
     }
     
     /**
+     * AJAX handler: Process next post (called by frontend polling)
+     */
+    public function ajax_process_next() {
+        check_ajax_referer('dh_video_queue', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Insufficient permissions'));
+        }
+        
+        // Check if queue is active
+        $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
+        
+        if (!$is_active) {
+            wp_send_json_success(array(
+                'is_active' => false,
+                'message' => 'Queue is not active',
+            ));
+            return;
+        }
+        
+        // Check if we're waiting for a video to complete
+        $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
+        if ($current_post_id) {
+            // Still processing current post, don't send next
+            wp_send_json_success(array(
+                'is_active' => true,
+                'waiting' => true,
+                'current_post_id' => $current_post_id,
+                'current_post_title' => get_the_title($current_post_id),
+                'message' => 'Waiting for current video to complete',
+            ));
+            return;
+        }
+        
+        // Process the next post
+        $this->process_next_in_queue();
+        
+        // Get updated status
+        $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
+        $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
+        $last_error = get_option(self::OPTION_LAST_ERROR, '');
+        
+        $current_post_title = '';
+        if ($current_post_id) {
+            $current_post_title = get_the_title($current_post_id);
+        }
+        
+        wp_send_json_success(array(
+            'is_active' => $is_active,
+            'current_post_id' => $current_post_id,
+            'current_post_title' => $current_post_title,
+            'last_error' => $last_error,
+            'message' => $is_active ? 'Processing' : 'Queue completed',
+        ));
+    }
+    
+    /**
      * AJAX handler: Get queue status
      */
     public function ajax_get_queue_status() {
@@ -659,11 +745,12 @@ class DH_Video_Production_Queue {
         if ($status === 'success') {
             error_log('Video Queue Callback: Success status received');
             
-            // Schedule the next post to be sent after a delay (non-blocking)
-            wp_schedule_single_event(time() + 8, 'dh_video_queue_send_next', array($post_id));
+            // Clear current post so next one can be processed
+            update_option(self::OPTION_CURRENT_POST, 0);
             
             // Return response immediately so TaskBot can complete
-            return new WP_REST_Response(array('message' => 'Callback received, next post will be sent in 15 seconds'), 200);
+            // Next post will be processed by AJAX polling or cron
+            return new WP_REST_Response(array('message' => 'Callback received, next post will be processed shortly'), 200);
         } else {
             // Failure: Stop queue and log error
             error_log('Video Queue Callback: Failure status received');

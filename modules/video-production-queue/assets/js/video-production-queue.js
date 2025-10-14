@@ -26,13 +26,10 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     showNotice(response.data.message, 'success');
                     
-                    // Start polling for status updates
-                    startStatusPolling();
+                    // Start video processing
+                    startVideoProcessing();
                     
-                    // Reload page after 2 seconds
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 2000);
+                    // Don't reload - let processing continue
                 } else {
                     button.prop('disabled', false);
                     button.text('Start Video Production Queue');
@@ -148,47 +145,43 @@ jQuery(document).ready(function($) {
     });
     
     /**
-     * Status polling
+     * Video processing and status polling
      */
-    let statusPollInterval = null;
+    let processingInterval = null;
     
-    function startStatusPolling() {
-        if (statusPollInterval) {
+    function startVideoProcessing() {
+        if (processingInterval) {
             return;
         }
         
-        statusPollInterval = setInterval(function() {
-            updateQueueStatus();
-        }, 30000); // Poll every 30 seconds (videos take ~10 minutes)
+        // Process immediately, then every 30 seconds
+        processNextVideo();
+        
+        processingInterval = setInterval(function() {
+            processNextVideo();
+        }, 30000); // Check every 30 seconds (videos take ~10 minutes)
     }
     
-    function stopStatusPolling() {
-        if (statusPollInterval) {
-            clearInterval(statusPollInterval);
-            statusPollInterval = null;
+    function stopVideoProcessing() {
+        if (processingInterval) {
+            clearInterval(processingInterval);
+            processingInterval = null;
         }
     }
     
-    function updateQueueStatus() {
+    function processNextVideo() {
         $.ajax({
             url: dhVideoQueue.ajaxUrl,
             type: 'POST',
             data: {
-                action: 'dh_get_video_queue_status',
+                action: 'dh_process_video_next',
                 nonce: dhVideoQueue.nonce
             },
             success: function(response) {
                 if (response.success) {
                     const data = response.data;
                     
-                    // Update status
-                    if (data.is_active) {
-                        $('#dh-queue-status').html('<span style="color: #46b450;">● Active</span>');
-                    } else {
-                        $('#dh-queue-status').html('<span style="color: #999;">● Stopped</span>');
-                    }
-                    
-                    // Update currently processing
+                    // Update current post display
                     if (data.current_post_title) {
                         $('#dh-current-post-title').html('<a href="' + data.current_post_link + '" target="_blank">' + data.current_post_title + '</a>');
                         $('#dh-current-processing').show();
@@ -196,33 +189,35 @@ jQuery(document).ready(function($) {
                         $('#dh-current-processing').hide();
                     }
                     
-                    // Update next in queue
-                    if (data.next_post_title) {
-                        $('#dh-next-post-title').html('<a href="' + data.next_post_link + '" target="_blank">' + data.next_post_title + '</a> <span style="color: #666;">(' + data.next_post_type + ')</span>');
-                        $('#dh-next-in-queue').show();
-                        $('#dh-no-posts-msg').hide();
-                    } else {
-                        $('#dh-next-in-queue').hide();
-                        $('#dh-no-posts-msg').show();
+                    // Show waiting message if applicable
+                    if (data.waiting) {
+                        console.log('Waiting for video to complete: ' + data.current_post_title);
                     }
                     
-                    // If queue is no longer active, stop polling and reload
+                    // If queue is no longer active, stop processing and reload
                     if (!data.is_active) {
-                        stopStatusPolling();
-                        showNotice('Queue completed!', 'success');
+                        stopVideoProcessing();
+                        if (data.last_error) {
+                            showNotice('Queue stopped: ' + data.last_error, 'error');
+                        } else {
+                            showNotice('Queue completed!', 'success');
+                        }
                         setTimeout(function() {
                             window.location.reload();
                         }, 2000);
                     }
                 }
+            },
+            error: function() {
+                // On error, just continue - cron will pick it up
+                console.log('Error processing video, cron will retry');
             }
         });
     }
     
-    // Start polling if queue is active on page load
+    // Start processing if queue is active on page load
     if (dhVideoQueue.isActive) {
-        updateQueueStatus(); // Update immediately
-        startStatusPolling(); // Then start polling
+        startVideoProcessing();
     }
     
     /**
