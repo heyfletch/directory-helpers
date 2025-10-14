@@ -45,6 +45,7 @@ class DH_Video_Production_Queue {
         // AJAX handlers
         add_action('wp_ajax_dh_start_video_queue', array($this, 'ajax_start_queue'));
         add_action('wp_ajax_dh_stop_video_queue', array($this, 'ajax_stop_queue'));
+        add_action('wp_ajax_dh_get_video_queue_status', array($this, 'ajax_get_queue_status'));
         add_action('wp_ajax_dh_clear_video_error', array($this, 'ajax_clear_error'));
         add_action('wp_ajax_dh_reset_video_queue', array($this, 'ajax_reset_queue'));
         
@@ -117,16 +118,13 @@ class DH_Video_Production_Queue {
      * Render admin page
      */
     public function render_admin_page() {
-        // Get filter from query string
-        $filter = isset($_GET['video_filter']) ? sanitize_text_field($_GET['video_filter']) : 'no_video';
-        
         // Get queue state
         $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
         $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
         $last_error = get_option(self::OPTION_LAST_ERROR, '');
         
-        // Get posts based on filter
-        $posts = $this->get_filtered_posts($filter);
+        // Get posts without video only
+        $posts = $this->get_posts_without_video();
         
         // Get next eligible post for queue
         $next_post = $this->get_next_eligible_post();
@@ -153,8 +151,6 @@ class DH_Video_Production_Queue {
             <?php endif; ?>
             
             <div class="dh-video-queue-controls" style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
-                <h2><?php esc_html_e('Queue Controls', 'directory-helpers'); ?></h2>
-                
                 <div style="margin-bottom: 15px;">
                     <strong><?php esc_html_e('Status:', 'directory-helpers'); ?></strong>
                     <span id="dh-queue-status">
@@ -166,28 +162,32 @@ class DH_Video_Production_Queue {
                     </span>
                 </div>
                 
-                <?php if ($current_post_id): ?>
-                    <div style="margin-bottom: 15px;">
-                        <strong><?php esc_html_e('Currently Processing:', 'directory-helpers'); ?></strong>
-                        <a href="<?php echo esc_url(get_edit_post_link($current_post_id)); ?>" target="_blank">
-                            <?php echo esc_html(get_the_title($current_post_id)); ?>
-                        </a>
-                    </div>
-                <?php endif; ?>
+                <div id="dh-current-processing" style="margin-bottom: 15px;<?php echo !$current_post_id ? ' display:none;' : ''; ?>">
+                    <strong><?php esc_html_e('Currently Processing:', 'directory-helpers'); ?></strong>
+                    <span id="dh-current-post-title">
+                        <?php if ($current_post_id): ?>
+                            <a href="<?php echo esc_url(get_edit_post_link($current_post_id)); ?>" target="_blank">
+                                <?php echo esc_html(get_the_title($current_post_id)); ?>
+                            </a>
+                        <?php endif; ?>
+                    </span>
+                </div>
                 
-                <?php if ($next_post): ?>
-                    <div style="margin-bottom: 15px;">
-                        <strong><?php esc_html_e('Next in Queue:', 'directory-helpers'); ?></strong>
-                        <a href="<?php echo esc_url(get_edit_post_link($next_post->ID)); ?>" target="_blank">
-                            <?php echo esc_html(get_the_title($next_post->ID)); ?>
-                        </a>
-                        <span style="color: #666;">(<?php echo esc_html($next_post->post_type === 'state-listing' ? 'State' : 'City'); ?>)</span>
-                    </div>
-                <?php else: ?>
-                    <div style="margin-bottom: 15px; color: #999;">
-                        <?php esc_html_e('No posts in queue (all published posts have videos)', 'directory-helpers'); ?>
-                    </div>
-                <?php endif; ?>
+                <div id="dh-next-in-queue" style="margin-bottom: 15px;<?php echo !$next_post ? ' display:none;' : ''; ?>">
+                    <strong><?php esc_html_e('Next in Queue:', 'directory-helpers'); ?></strong>
+                    <span id="dh-next-post-title">
+                        <?php if ($next_post): ?>
+                            <a href="<?php echo esc_url(get_edit_post_link($next_post->ID)); ?>" target="_blank">
+                                <?php echo esc_html(get_the_title($next_post->ID)); ?>
+                            </a>
+                            <span style="color: #666;">(<?php echo esc_html($next_post->post_type === 'state-listing' ? 'State' : 'City'); ?>)</span>
+                        <?php endif; ?>
+                    </span>
+                </div>
+                
+                <div id="dh-no-posts-msg" style="margin-bottom: 15px; color: #999;<?php echo $next_post ? ' display:none;' : ''; ?>">
+                    <?php esc_html_e('No posts in queue (all published posts have videos)', 'directory-helpers'); ?>
+                </div>
                 
                 <div>
                     <?php if (!$is_active && $next_post): ?>
@@ -211,21 +211,6 @@ class DH_Video_Production_Queue {
                 </div>
             </div>
             
-            <div class="dh-video-filter" style="margin: 20px 0;">
-                <strong><?php esc_html_e('Filter:', 'directory-helpers'); ?></strong>
-                <a href="<?php echo esc_url(add_query_arg('video_filter', 'no_video')); ?>" 
-                   class="button <?php echo $filter === 'no_video' ? 'button-primary' : ''; ?>">
-                    <?php esc_html_e('No Video', 'directory-helpers'); ?>
-                </a>
-                <a href="<?php echo esc_url(add_query_arg('video_filter', 'has_video')); ?>" 
-                   class="button <?php echo $filter === 'has_video' ? 'button-primary' : ''; ?>">
-                    <?php esc_html_e('Has Video', 'directory-helpers'); ?>
-                </a>
-                <a href="<?php echo esc_url(add_query_arg('video_filter', 'all')); ?>" 
-                   class="button <?php echo $filter === 'all' ? 'button-primary' : ''; ?>">
-                    <?php esc_html_e('All', 'directory-helpers'); ?>
-                </a>
-            </div>
             
             <table class="wp-list-table widefat fixed striped">
                 <thead>
@@ -276,21 +261,19 @@ class DH_Video_Production_Queue {
     }
     
     /**
-     * Get filtered posts
+     * Get posts without video
      *
-     * @param string $filter Filter type: 'no_video', 'has_video', 'all'
-     * @return array Array of WP_Post objects
+     * @return array Array of WP_Post objects (states first, then cities)
      */
-    private function get_filtered_posts($filter) {
+    private function get_posts_without_video() {
         // Get state listings first
         $state_args = array(
             'post_type' => 'state-listing',
             'post_status' => 'publish',
             'posts_per_page' => -1,
-            'orderby' => 'date',
+            'orderby' => 'title',
             'order' => 'ASC',
         );
-        
         $state_posts = get_posts($state_args);
         
         // Get city listings
@@ -298,31 +281,18 @@ class DH_Video_Production_Queue {
             'post_type' => 'city-listing',
             'post_status' => 'publish',
             'posts_per_page' => -1,
-            'orderby' => 'date',
+            'orderby' => 'title',
             'order' => 'ASC',
         );
-        
         $city_posts = get_posts($city_args);
         
         // Combine: states first, then cities
         $posts = array_merge($state_posts, $city_posts);
         
-        if ($filter === 'all') {
-            return $posts;
-        }
-        
-        // Filter by video presence
-        return array_filter($posts, function($post) use ($filter) {
+        // Filter to only posts without video
+        return array_filter($posts, function($post) {
             $video_url = get_field('video_overview', $post->ID);
-            $has_video = !empty($video_url);
-            
-            if ($filter === 'has_video') {
-                return $has_video;
-            } elseif ($filter === 'no_video') {
-                return !$has_video;
-            }
-            
-            return true;
+            return empty($video_url);
         });
     }
     
@@ -576,6 +546,42 @@ class DH_Video_Production_Queue {
         update_option(self::OPTION_CURRENT_POST, 0);
         
         wp_send_json_success(array('message' => 'Queue stopped'));
+    }
+    
+    /**
+     * AJAX handler: Get queue status
+     */
+    public function ajax_get_queue_status() {
+        check_ajax_referer('dh_video_queue', 'nonce');
+        
+        $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
+        $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
+        
+        $current_post_title = '';
+        $current_post_link = '';
+        if ($current_post_id) {
+            $current_post_title = get_the_title($current_post_id);
+            $current_post_link = get_edit_post_link($current_post_id);
+        }
+        
+        $next_post = $this->get_next_eligible_post();
+        $next_post_title = '';
+        $next_post_link = '';
+        $next_post_type = '';
+        if ($next_post) {
+            $next_post_title = get_the_title($next_post->ID);
+            $next_post_link = get_edit_post_link($next_post->ID);
+            $next_post_type = $next_post->post_type === 'state-listing' ? 'State' : 'City';
+        }
+        
+        wp_send_json_success(array(
+            'is_active' => $is_active,
+            'current_post_title' => $current_post_title,
+            'current_post_link' => $current_post_link,
+            'next_post_title' => $next_post_title,
+            'next_post_link' => $next_post_link,
+            'next_post_type' => $next_post_type,
+        ));
     }
     
     /**

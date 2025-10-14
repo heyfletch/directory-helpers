@@ -26,6 +26,9 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     showNotice(response.data.message, 'success');
                     
+                    // Start polling for status updates
+                    startStatusPolling();
+                    
                     // Reload page after 2 seconds
                     setTimeout(function() {
                         window.location.reload();
@@ -143,6 +146,83 @@ jQuery(document).ready(function($) {
             }
         });
     });
+    
+    /**
+     * Status polling
+     */
+    let statusPollInterval = null;
+    
+    function startStatusPolling() {
+        if (statusPollInterval) {
+            return;
+        }
+        
+        statusPollInterval = setInterval(function() {
+            updateQueueStatus();
+        }, 30000); // Poll every 30 seconds (videos take ~10 minutes)
+    }
+    
+    function stopStatusPolling() {
+        if (statusPollInterval) {
+            clearInterval(statusPollInterval);
+            statusPollInterval = null;
+        }
+    }
+    
+    function updateQueueStatus() {
+        $.ajax({
+            url: dhVideoQueue.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'dh_get_video_queue_status',
+                nonce: dhVideoQueue.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    const data = response.data;
+                    
+                    // Update status
+                    if (data.is_active) {
+                        $('#dh-queue-status').html('<span style="color: #46b450;">● Active</span>');
+                    } else {
+                        $('#dh-queue-status').html('<span style="color: #999;">● Stopped</span>');
+                    }
+                    
+                    // Update currently processing
+                    if (data.current_post_title) {
+                        $('#dh-current-post-title').html('<a href="' + data.current_post_link + '" target="_blank">' + data.current_post_title + '</a>');
+                        $('#dh-current-processing').show();
+                    } else {
+                        $('#dh-current-processing').hide();
+                    }
+                    
+                    // Update next in queue
+                    if (data.next_post_title) {
+                        $('#dh-next-post-title').html('<a href="' + data.next_post_link + '" target="_blank">' + data.next_post_title + '</a> <span style="color: #666;">(' + data.next_post_type + ')</span>');
+                        $('#dh-next-in-queue').show();
+                        $('#dh-no-posts-msg').hide();
+                    } else {
+                        $('#dh-next-in-queue').hide();
+                        $('#dh-no-posts-msg').show();
+                    }
+                    
+                    // If queue is no longer active, stop polling and reload
+                    if (!data.is_active) {
+                        stopStatusPolling();
+                        showNotice('Queue completed!', 'success');
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 2000);
+                    }
+                }
+            }
+        });
+    }
+    
+    // Start polling if queue is active on page load
+    if (dhVideoQueue.isActive) {
+        startStatusPolling();
+    }
     
     /**
      * Show admin notice
