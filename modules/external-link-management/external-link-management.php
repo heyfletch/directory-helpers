@@ -1050,16 +1050,33 @@ class DH_External_Link_Management {
     }
 
     private function http_check_url($url, $timeout = 10) {
-        // Common headers and args
-        $headers = array(
-            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-            'referer'    => home_url('/'),
-            'accept'     => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'accept-language' => 'en-US,en;q=0.9',
-            'cache-control' => 'no-cache',
-            'pragma' => 'no-cache',
+        // Multiple user-agent strings to try (latest versions as of October 2025)
+        $user_agents = array(
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
         );
-        $base_args = array('timeout' => $timeout, 'redirection' => 5, 'headers' => $headers);
+        
+        // Start with minimal, browser-like headers (no referer initially - many sites block cross-origin referers)
+        $headers = array(
+            'user-agent' => $user_agents[0],
+            'accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'accept-language' => 'en-US,en;q=0.9',
+            'accept-encoding' => 'gzip, deflate, br',
+            'dnt' => '1',
+            'upgrade-insecure-requests' => '1',
+            'sec-fetch-dest' => 'document',
+            'sec-fetch-mode' => 'navigate',
+            'sec-fetch-site' => 'none',
+        );
+        $base_args = array(
+            'timeout' => $timeout, 
+            'redirection' => 5, 
+            'headers' => $headers, 
+            'sslverify' => false,
+            'httpversion' => '1.1', // WordPress supports 1.0 and 1.1; HTTP/2 requires direct cURL
+        );
 
         // Detect binary assets (PDF, images, archives, media)
         $path = (string) parse_url($url, PHP_URL_PATH);
@@ -1087,11 +1104,12 @@ class DH_External_Link_Management {
                 $code = (int) wp_remote_retrieve_response_code($resp);
                 $text = (string) wp_remote_retrieve_response_message($resp);
                 if ($code === 206) { $code = 200; $text = 'OK'; }
-                // If still 403, try alternate headers (no referer)
+                // Enhanced 403 handling for binary files
                 if ($code === 403) {
+                    sleep(1);
                     $alt_args = $base_args;
-                    unset($alt_args['headers']['referer']);
-                    $alt_args['headers']['accept-language'] = 'en-US,en;q=0.9';
+                    $alt_args['headers']['user-agent'] = $user_agents[2]; // Try Firefox
+                    unset($alt_args['headers']['range']); // Remove range header
                     $resp = wp_remote_get($url, $alt_args);
                     if (!is_wp_error($resp)) {
                         $code = (int) wp_remote_retrieve_response_code($resp);
@@ -1114,24 +1132,48 @@ class DH_External_Link_Management {
         }
         $code = (int) wp_remote_retrieve_response_code($resp);
         $text = (string) wp_remote_retrieve_response_message($resp);
+        
+        // Enhanced 403 retry strategy with multiple fallbacks
         if ($code === 403) {
-            // Try alternate headers typical of browsers and no referer
+            // Strategy 1: Try with different user-agent (Firefox)
+            sleep(1); // Brief delay to avoid rate limiting
             $alt_args = $base_args;
-            unset($alt_args['headers']['referer']);
-            $alt_args['headers']['accept-language'] = 'en-US,en;q=0.9';
+            $alt_args['headers']['user-agent'] = $user_agents[2]; // Firefox
             $resp2 = wp_remote_get($url, $alt_args);
             if (!is_wp_error($resp2)) {
                 $code = (int) wp_remote_retrieve_response_code($resp2);
                 $text = (string) wp_remote_retrieve_response_message($resp2);
             }
-            // If still 403, try referer=self
+            
+            // Strategy 2: If still 403, try with Safari user-agent and referer=self
             if ($code === 403) {
+                sleep(1);
                 $alt2 = $base_args;
-                $alt2['headers']['referer'] = $url;
+                $alt2['headers']['user-agent'] = $user_agents[3]; // Safari
+                $alt2['headers']['referer'] = $url; // Self-referrer
                 $resp3 = wp_remote_get($url, $alt2);
                 if (!is_wp_error($resp3)) {
                     $code = (int) wp_remote_retrieve_response_code($resp3);
                     $text = (string) wp_remote_retrieve_response_message($resp3);
+                }
+            }
+            
+            // Strategy 3: If still 403, try minimal headers (just user-agent and accept)
+            if ($code === 403) {
+                sleep(1);
+                $minimal_args = array(
+                    'timeout' => $timeout,
+                    'redirection' => 5,
+                    'sslverify' => false,
+                    'headers' => array(
+                        'user-agent' => $user_agents[1], // Mac Chrome
+                        'accept' => '*/*',
+                    )
+                );
+                $resp4 = wp_remote_get($url, $minimal_args);
+                if (!is_wp_error($resp4)) {
+                    $code = (int) wp_remote_retrieve_response_code($resp4);
+                    $text = (string) wp_remote_retrieve_response_message($resp4);
                 }
             }
         }
