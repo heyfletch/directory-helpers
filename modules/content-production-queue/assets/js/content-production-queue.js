@@ -189,11 +189,7 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     const data = response.data;
                     
-                    // Update UI
-                    $('#dh-cpq-eligible-count').text(data.total_eligible);
-                    $('#dh-cpq-published-count').text(data.published_count);
-                    $('#dh-cpq-queue-count').text(data.total_eligible);
-                    
+                    // Update current post
                     if (data.current_post_title) {
                         $('#dh-cpq-current-post').text(data.current_post_title);
                     }

@@ -100,11 +100,6 @@ class DH_Content_Production_Queue {
     public function render_admin_page() {
         $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
         $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
-        $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
-        
-        // Get eligible posts for publishing (with images)
-        $eligible_posts = $this->get_eligible_posts();
-        $total_eligible = count($eligible_posts);
         
         // Get ALL draft posts for display (including those missing images)
         $all_draft_posts = $this->get_all_draft_posts();
@@ -131,18 +126,6 @@ class DH_Content_Production_Queue {
                         </span>
                     </p>
                     
-                    <p>
-                        <strong><?php esc_html_e('Eligible Posts:', 'directory-helpers'); ?></strong>
-                        <span id="dh-cpq-eligible-count"><?php echo esc_html($total_eligible); ?></span>
-                    </p>
-                    
-                    <p>
-                        <strong><?php esc_html_e('Published:', 'directory-helpers'); ?></strong>
-                        <span id="dh-cpq-published-count"><?php echo esc_html($published_count); ?></span>
-                        <strong style="margin-left: 20px;"><?php esc_html_e('In Queue:', 'directory-helpers'); ?></strong>
-                        <span id="dh-cpq-queue-count"><?php echo esc_html($total_eligible); ?></span>
-                    </p>
-                    
                     <?php if ($is_active && $current_post_title): ?>
                     <p>
                         <strong><?php esc_html_e('Current:', 'directory-helpers'); ?></strong>
@@ -152,7 +135,7 @@ class DH_Content_Production_Queue {
                 </div>
                 
                 <div class="dh-cpq-controls" style="margin-top: 20px;">
-                    <?php if (!$is_active && $total_eligible > 0): ?>
+                    <?php if (!$is_active && !empty($all_draft_posts)): ?>
                         <button type="button" id="dh-start-cpq-healthy-btn" class="button button-primary" data-mode="healthy">
                             <?php esc_html_e('Publish Healthy Cities', 'directory-helpers'); ?>
                         </button>
@@ -456,10 +439,6 @@ class DH_Content_Production_Queue {
         
         $is_active = (bool) get_option(self::OPTION_QUEUE_ACTIVE, false);
         $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
-        $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
-        
-        $eligible_posts = $this->get_eligible_posts();
-        $total_eligible = count($eligible_posts);
         
         $current_post_title = '';
         if ($current_post_id) {
@@ -468,8 +447,6 @@ class DH_Content_Production_Queue {
         
         wp_send_json_success(array(
             'is_active' => $is_active,
-            'published_count' => $published_count,
-            'total_eligible' => $total_eligible,
             'current_post_title' => $current_post_title,
         ));
     }
