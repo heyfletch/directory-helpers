@@ -50,7 +50,7 @@ class DH_Video_Production_Queue {
         add_action('wp_ajax_dh_process_video_next', array($this, 'ajax_process_next'));
         
         // Zero Work webhook handler
-        add_action('rest_api_init', array($this, 'register_webhook_endpoint'));
+        add_action('rest_api_init', array($this, 'register_callback_endpoint'));
     }
     
     /**

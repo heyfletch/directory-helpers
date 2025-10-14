@@ -425,6 +425,11 @@ class DH_Profile_Production_Queue {
             }
         }
         
+        // Trigger AI for newly created cities immediately
+        if (!empty($created_city_ids)) {
+            $this->trigger_ai_for_cities($created_city_ids);
+        }
+        
         // Publish profiles in this batch (only if not already published)
         $published_now = array();
         foreach ($profile_ids as $pid) {
@@ -460,17 +465,13 @@ class DH_Profile_Production_Queue {
         $min_count = isset($queue_data['min_count']) ? $queue_data['min_count'] : 2;
         $city_slug = isset($queue_data['city_slug']) ? $queue_data['city_slug'] : '';
         $city_search = isset($queue_data['city_search']) ? $queue_data['city_search'] : '';
-        $created_city_ids = isset($queue_data['created_city_ids']) ? $queue_data['created_city_ids'] : array();
         
         // Step 4: Rerank (use published only) - EXACTLY like one-click button
         $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug, $city_search);
         $pub_ids = wp_list_pluck($published, 'ID');
         $this->rerank_posts($pub_ids, $state_slug);
         
-        // Step 5: Trigger AI for new city pages
-        if (!empty($created_city_ids)) {
-            $this->trigger_ai_for_cities($created_city_ids);
-        }
+        // Note: AI is triggered per batch immediately after city creation
     }
     
     /**
