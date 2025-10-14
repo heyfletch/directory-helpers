@@ -1075,7 +1075,6 @@ class DH_External_Link_Management {
             'redirection' => 5, 
             'headers' => $headers, 
             'sslverify' => false,
-            'httpversion' => '1.1', // WordPress supports 1.0 and 1.1; HTTP/2 requires direct cURL
         );
 
         // Detect binary assets (PDF, images, archives, media)
