@@ -12,10 +12,6 @@ jQuery(document).ready(function($) {
             return;
         }
         
-        if (!confirm('Add filtered profiles to production pipeline?')) {
-            return;
-        }
-        
         button.prop('disabled', true);
         button.text('Adding...');
         
@@ -60,6 +56,50 @@ jQuery(document).ready(function($) {
             error: function(xhr, status, error) {
                 button.prop('disabled', false);
                 button.text('Add Profiles to Production Pipeline');
+                showNotice('Error: ' + error, 'error');
+            }
+        });
+    });
+    
+    /**
+     * Handle Start Queue button
+     */
+    $(document).on('click', '#dh-start-ppq-btn', function(e) {
+        e.preventDefault();
+        
+        const button = $(this);
+        
+        button.prop('disabled', true);
+        button.text('Starting...');
+        
+        $.ajax({
+            url: dhProfileQueue.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'dh_start_profile_queue',
+                nonce: dhProfileQueue.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    showNotice(response.data.message, 'success');
+                    
+                    // Reload page after 1 second
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    button.prop('disabled', false);
+                    button.text('Start Queue');
+                    
+                    const errorMsg = response.data && response.data.message 
+                        ? response.data.message 
+                        : 'Failed to start queue';
+                    showNotice(errorMsg, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                button.prop('disabled', false);
+                button.text('Start Queue');
                 showNotice('Error: ' + error, 'error');
             }
         });
@@ -210,8 +250,9 @@ jQuery(document).ready(function($) {
                     const data = response.data;
                     
                     // Update counters
-                    if (data.processed_count !== undefined) {
-                        $('#dh-ppq-processed').text(data.processed_count);
+                    const processed = data.processed !== undefined ? data.processed : data.processed_count;
+                    if (processed !== undefined) {
+                        $('#dh-ppq-processed').text(processed);
                     }
                     if (data.remaining !== undefined) {
                         $('#dh-ppq-remaining').text(data.remaining);
@@ -226,7 +267,8 @@ jQuery(document).ready(function($) {
                         if (data.last_error) {
                             showNotice('Queue stopped: ' + data.last_error, 'error');
                         } else {
-                            showNotice('Queue completed! Processed ' + data.processed_count + ' profiles.', 'success');
+                            const finalProcessed = processed !== undefined ? processed : 0;
+                            showNotice('Queue completed! Processed ' + finalProcessed + ' profiles.', 'success');
                         }
                         setTimeout(function() {
                             window.location.reload();
