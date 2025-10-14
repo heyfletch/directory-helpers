@@ -235,6 +235,7 @@ class DH_Video_Production_Queue {
                     <tr>
                         <th><?php esc_html_e('Title', 'directory-helpers'); ?></th>
                         <th><?php esc_html_e('Type', 'directory-helpers'); ?></th>
+                        <th><?php esc_html_e('Profiles', 'directory-helpers'); ?></th>
                         <th><?php esc_html_e('Status', 'directory-helpers'); ?></th>
                         <th><?php esc_html_e('Video', 'directory-helpers'); ?></th>
                         <th><?php esc_html_e('Published', 'directory-helpers'); ?></th>
@@ -243,13 +244,14 @@ class DH_Video_Production_Queue {
                 <tbody>
                     <?php if (empty($posts)): ?>
                         <tr>
-                            <td colspan="5"><?php esc_html_e('No posts found.', 'directory-helpers'); ?></td>
+                            <td colspan="6"><?php esc_html_e('No posts found.', 'directory-helpers'); ?></td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($posts as $post): ?>
                             <?php
                             $video_url = get_field('video_overview', $post->ID);
                             $has_video = !empty($video_url);
+                            $profile_count = get_post_meta($post->ID, '_profile_count', true);
                             ?>
                             <tr>
                                 <td>
@@ -260,6 +262,7 @@ class DH_Video_Production_Queue {
                                     </strong>
                                 </td>
                                 <td><?php echo esc_html($post->post_type === 'state-listing' ? 'State' : 'City'); ?></td>
+                                <td><?php echo $profile_count ? esc_html($profile_count) : '<span style="color: #999;">—</span>'; ?></td>
                                 <td><?php echo esc_html(ucfirst($post->post_status)); ?></td>
                                 <td>
                                     <?php if ($has_video): ?>
