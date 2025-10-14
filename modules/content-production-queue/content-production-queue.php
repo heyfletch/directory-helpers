@@ -25,9 +25,14 @@ class DH_Content_Production_Queue {
     const OPTION_PUBLISHED_COUNT = 'dh_content_queue_published_count';
     
     /**
-     * Rate limit in seconds between publishes
+     * Rate limit in seconds between batch cycles
      */
     const RATE_LIMIT_SECONDS = 2;
+    
+    /**
+     * Number of posts to process per batch cycle
+     */
+    const BATCH_SIZE = 4;
     
     /**
      * Constructor
@@ -372,7 +377,7 @@ class DH_Content_Production_Queue {
     }
     
     /**
-     * Process next post in queue
+     * Process next batch of posts in queue
      */
     public function process_next_in_queue() {
         // Check if queue is still active
@@ -380,7 +385,7 @@ class DH_Content_Production_Queue {
             return;
         }
         
-        // Get next eligible post
+        // Get eligible posts
         $posts = $this->get_eligible_posts();
         
         if (empty($posts)) {
@@ -390,25 +395,43 @@ class DH_Content_Production_Queue {
             return;
         }
         
-        // Get first post
-        $post = $posts[0];
+        // Process batch of posts (up to BATCH_SIZE)
+        $batch_count = min(self::BATCH_SIZE, count($posts));
+        $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
         
-        // Update current post
-        update_option(self::OPTION_CURRENT_POST, $post->ID);
-        
-        // Publish the post
-        $result = wp_update_post(array(
-            'ID' => $post->ID,
-            'post_status' => 'publish',
-        ), true);
-        
-        if (!is_wp_error($result)) {
-            // Increment published count
-            $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
-            update_option(self::OPTION_PUBLISHED_COUNT, $published_count + 1);
+        for ($i = 0; $i < $batch_count; $i++) {
+            $post = $posts[$i];
+            
+            // Update current post for UI display
+            update_option(self::OPTION_CURRENT_POST, $post->ID);
+            
+            // Publish the post
+            $result = wp_update_post(array(
+                'ID' => $post->ID,
+                'post_status' => 'publish',
+            ), true);
+            
+            if (!is_wp_error($result)) {
+                $published_count++;
+                update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
+            }
+            
+            // Small delay between posts in the batch to avoid overwhelming the server
+            if ($i < $batch_count - 1) {
+                usleep(100000); // 0.1 second delay between posts in batch
+            }
         }
         
-        // Schedule next post with rate limit
-        wp_schedule_single_event(time() + self::RATE_LIMIT_SECONDS, 'dh_content_queue_publish_next');
+        // Check if there are more posts to process
+        $remaining_posts = $this->get_eligible_posts();
+        
+        if (!empty($remaining_posts)) {
+            // Schedule next batch with rate limit
+            wp_schedule_single_event(time() + self::RATE_LIMIT_SECONDS, 'dh_content_queue_publish_next');
+        } else {
+            // All done, stop queue
+            update_option(self::OPTION_QUEUE_ACTIVE, false);
+            update_option(self::OPTION_CURRENT_POST, 0);
+        }
     }
 }
