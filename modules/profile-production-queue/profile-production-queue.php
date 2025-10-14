@@ -533,15 +533,31 @@ class DH_Profile_Production_Queue {
     }
     
     /**
-     * Helper: Clean area terms from profiles
+     * Helper: Clean area terms - removes " - ST" suffix from area term names
      */
     private function cleanup_area_terms($post_ids) {
+        if (empty($post_ids)) {
+            return;
+        }
+        
+        $unique_terms = array();
         foreach ($post_ids as $pid) {
-            wp_remove_object_terms($pid, get_terms(array(
-                'taxonomy' => 'area',
-                'fields' => 'ids',
-                'hide_empty' => false,
-            )), 'area');
+            $terms = get_the_terms((int)$pid, 'area');
+            if (!empty($terms) && !is_wp_error($terms)) {
+                foreach ($terms as $t) {
+                    $unique_terms[$t->term_id] = $t;
+                }
+            }
+        }
+        
+        foreach ($unique_terms as $term) {
+            $name = $term->name;
+            if (preg_match('/\s-\s[A-Za-z]{2}$/', $name)) {
+                $new_name = trim(preg_replace('/\s-\s[A-Za-z]{2}$/', '', $name));
+                if ($new_name && $new_name !== $name) {
+                    wp_update_term((int)$term->term_id, 'area', array('name' => $new_name));
+                }
+            }
         }
     }
     

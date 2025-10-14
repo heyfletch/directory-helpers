@@ -74,6 +74,9 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     showNotice(response.data.message, 'success');
                     
+                    // Stop processing
+                    stopVideoProcessing();
+                    
                     // Reload page after 1 second
                     setTimeout(function() {
                         window.location.reload();
