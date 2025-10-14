@@ -293,26 +293,27 @@ class DH_Video_Production_Queue {
     /**
      * Get posts without video
      *
-     * @return array Array of WP_Post objects (states first, then cities)
+     * @return array Array of WP_Post objects (states first by date, then cities by profile count)
      */
     private function get_posts_without_video() {
-        // Get state listings first
+        // Get state listings first (oldest first to match queue order)
         $state_args = array(
             'post_type' => 'state-listing',
             'post_status' => 'publish',
             'posts_per_page' => -1,
-            'orderby' => 'title',
+            'orderby' => 'date',
             'order' => 'ASC',
         );
         $state_posts = get_posts($state_args);
         
-        // Get city listings
+        // Get city listings (by profile count descending to match queue order)
         $city_args = array(
             'post_type' => 'city-listing',
             'post_status' => 'publish',
             'posts_per_page' => -1,
-            'orderby' => 'title',
-            'order' => 'ASC',
+            'meta_key' => '_profile_count',
+            'orderby' => 'meta_value_num date',
+            'order' => 'DESC',
         );
         $city_posts = get_posts($city_args);
         
@@ -328,7 +329,7 @@ class DH_Video_Production_Queue {
     
     /**
      * Get next eligible post for video production
-     * Priority: State listings first, then cities by oldest publish date
+     * Priority: State listings first, then cities by profile count descending
      *
      * @return WP_Post|null
      */
@@ -336,6 +337,7 @@ class DH_Video_Production_Queue {
         $attempt_map = get_option(self::OPTION_ATTEMPT_MAP, array());
         $options = get_option('directory_helpers_options', array());
         $max_retries = isset($options['video_queue_max_retries']) ? (int) $options['video_queue_max_retries'] : 0;
+        $current_post_id = (int) get_option(self::OPTION_CURRENT_POST, 0);
         
         // Get all state listings first (oldest first)
         $state_posts = get_posts(array(
@@ -348,6 +350,10 @@ class DH_Video_Production_Queue {
         
         // Check state listings
         foreach ($state_posts as $post) {
+            // Skip if this is the currently processing post
+            if ($post->ID === $current_post_id) {
+                continue;
+            }
             $video = get_field('video_overview', $post->ID);
             if (empty($video)) {
                 $attempts = isset($attempt_map[$post->ID]) ? (int) $attempt_map[$post->ID] : 0;
@@ -357,17 +363,22 @@ class DH_Video_Production_Queue {
             }
         }
         
-        // Get all city listings (oldest first)
+        // Get all city listings (by profile count descending, then oldest first)
         $city_posts = get_posts(array(
             'post_type' => 'city-listing',
             'post_status' => 'publish',
             'posts_per_page' => -1,
-            'orderby' => 'date',
-            'order' => 'ASC',
+            'meta_key' => '_profile_count',
+            'orderby' => 'meta_value_num date',
+            'order' => 'DESC',
         ));
         
         // Check city listings
         foreach ($city_posts as $post) {
+            // Skip if this is the currently processing post
+            if ($post->ID === $current_post_id) {
+                continue;
+            }
             $video = get_field('video_overview', $post->ID);
             if (empty($video)) {
                 $attempts = isset($attempt_map[$post->ID]) ? (int) $attempt_map[$post->ID] : 0;

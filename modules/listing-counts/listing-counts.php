@@ -441,6 +441,13 @@ class DH_Listing_Counts {
      * Show update button at bottom of page
      */
     public function show_update_button() {
+        // Prevent duplicate buttons
+        static $button_shown = false;
+        if ($button_shown) {
+            return;
+        }
+        $button_shown = true;
+        
         // Show update button on city/state listing pages
         $screen = get_current_screen();
         if ($screen && in_array($screen->id, array('edit-city-listing', 'edit-state-listing'), true)) {
