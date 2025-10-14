@@ -654,7 +654,7 @@ class DH_Video_Production_Queue {
             error_log('Video Queue Callback: Success status received');
             
             // Schedule the next post to be sent after a delay (non-blocking)
-            wp_schedule_single_event(time() + 15, 'dh_video_queue_send_next', array($post_id));
+            wp_schedule_single_event(time() + 8, 'dh_video_queue_send_next', array($post_id));
             
             // Return response immediately so TaskBot can complete
             return new WP_REST_Response(array('message' => 'Callback received, next post will be sent in 15 seconds'), 200);

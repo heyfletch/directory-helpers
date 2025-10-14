@@ -502,7 +502,7 @@ class DH_Prep_Profiles_By_State {
 
         $state_slug = isset($_REQUEST['state']) ? sanitize_text_field(wp_unslash($_REQUEST['state'])) : '';
         $post_status = isset($_REQUEST['post_status']) ? sanitize_key($_REQUEST['post_status']) : 'refining';
-        $min_count = isset($_REQUEST['min_count']) ? max(1, min(5, (int) $_REQUEST['min_count'])) : 2;
+        $min_count = isset($_REQUEST['min_count']) ? max(1, min(5, (int) $_REQUEST['min_count'])) : 5;
         $city_slug = isset($_REQUEST['city']) ? sanitize_title(wp_unslash($_REQUEST['city'])) : '';
         $niche_slug = isset($_REQUEST['niche']) ? sanitize_title(wp_unslash($_REQUEST['niche'])) : 'dog-trainer';
         if (!in_array($post_status, array('refining', 'publish', 'private', 'all'), true)) {
@@ -640,7 +640,6 @@ class DH_Prep_Profiles_By_State {
         echo '<input type="hidden" name="page" value="dh-prep-profiles" />';
 
         echo '<div style="display:flex; gap:12px; align-items:center; margin:12px 0;">';
-        submit_button(__('Filter'), 'secondary', '', false);
         // State selector
         echo '<label><strong>' . esc_html__('State:', 'directory-helpers') . '</strong> ';
         echo '<select name="state">';
@@ -699,18 +698,6 @@ class DH_Prep_Profiles_By_State {
         echo '</form>';
 
         // Action buttons
-        if ($post_status !== 'publish') {
-            echo '<form method="post" style="display:inline-block; margin-right:8px;" onsubmit="return confirm(\'Are you sure you want to publish these profiles?\')">';
-            wp_nonce_field('dh_prepprofiles');
-            echo '<input type="hidden" name="state" value="' . esc_attr($state_slug) . '" />';
-            echo '<input type="hidden" name="post_status" value="' . esc_attr($post_status) . '" />';
-            echo '<input type="hidden" name="city" value="' . esc_attr($city_slug) . '" />';
-            echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
-            echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
-            echo '<input type="hidden" name="dh_action" value="publish_all" />';
-            submit_button(__('Publish All Profiles', 'directory-helpers'), 'primary', 'submit', false);
-            echo '</form>';
-        }
 
         if ($post_status === 'publish') {
             echo '<form method="post" style="display:inline-block;" onsubmit="return confirm(\'Are you sure you want to re-rank these profiles?\')">';
@@ -733,7 +720,7 @@ class DH_Prep_Profiles_By_State {
         echo '<input type="hidden" name="min_count" value="' . esc_attr($min_count) . '" />';
         echo '<input type="hidden" name="niche" value="' . esc_attr($niche_slug) . '" />';
         echo '<input type="hidden" name="dh_action" value="one_click_flow" />';
-        submit_button(__('One-Click: Create Cities + Publish + Rerank + Generate AI', 'directory-helpers'), 'primary', 'submit', false);
+        submit_button(__('Create Cities, Publish, Rerank, and Generate AI', 'directory-helpers'), 'primary', 'submit', false);
         echo '</form>';
 
         // Unique cities list
