@@ -230,18 +230,6 @@ class DH_Video_Production_Queue {
                 </div>
             </div>
             
-            <div class="card">
-                <h2><?php esc_html_e('How It Works', 'directory-helpers'); ?></h2>
-                <p><?php esc_html_e('The video production queue automatically processes posts sequentially:', 'directory-helpers'); ?></p>
-                <ol>
-                    <li><?php esc_html_e('Finds the next eligible post (draft city/state listing without a video)', 'directory-helpers'); ?></li>
-                    <li><?php esc_html_e('Sends the post to Zero Work for video creation', 'directory-helpers'); ?></li>
-                    <li><?php esc_html_e('Waits for Zero Work to complete the video and send a webhook callback', 'directory-helpers'); ?></li>
-                    <li><?php esc_html_e('Automatically continues to the next post', 'directory-helpers'); ?></li>
-                </ol>
-                <p><strong><?php esc_html_e('Note:', 'directory-helpers'); ?></strong> <?php esc_html_e('Videos typically take 10-15 minutes to create. Keep this page open for continuous processing.', 'directory-helpers'); ?></p>
-            </div>
-            
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
@@ -286,6 +274,18 @@ class DH_Video_Production_Queue {
                     <?php endif; ?>
                 </tbody>
             </table>
+            
+            <div class="card" style="margin-top: 20px;">
+                <h2><?php esc_html_e('How It Works', 'directory-helpers'); ?></h2>
+                <p><?php esc_html_e('The video production queue automatically processes posts sequentially:', 'directory-helpers'); ?></p>
+                <ol>
+                    <li><?php esc_html_e('Finds the next eligible post (draft city/state listing without a video)', 'directory-helpers'); ?></li>
+                    <li><?php esc_html_e('Sends the post to Zero Work for video creation', 'directory-helpers'); ?></li>
+                    <li><?php esc_html_e('Waits for Zero Work to complete the video and send a webhook callback', 'directory-helpers'); ?></li>
+                    <li><?php esc_html_e('Automatically continues to the next post', 'directory-helpers'); ?></li>
+                </ol>
+                <p><strong><?php esc_html_e('Note:', 'directory-helpers'); ?></strong> <?php esc_html_e('Videos typically take 10-15 minutes to create. Keep this page open for continuous processing.', 'directory-helpers'); ?></p>
+            </div>
         </div>
         <?php
     }

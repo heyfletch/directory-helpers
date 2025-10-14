@@ -746,6 +746,12 @@ class Directory_Helpers {
                 'description' => __('AJAX-based profile production queue. Processes profiles in batches: creates cities, publishes profiles, reranks, and generates AI content. Keep browser open for continuous processing.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-production-queue/profile-production-queue.php',
                 'class' => 'DH_Profile_Production_Queue'
+            ),
+            'listing-counts' => array(
+                'name' => __('Listing Counts', 'directory-helpers'),
+                'description' => __('Maintains cached counts for city and state listings. City listings get _profile_count (published profiles). State listings get _city_count and _profile_count. Updates automatically via hooks.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/listing-counts/listing-counts.php',
+                'class' => 'DH_Listing_Counts'
             )
             // Add more modules here as needed
         );
