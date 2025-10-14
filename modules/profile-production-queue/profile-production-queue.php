@@ -222,8 +222,16 @@ class DH_Profile_Production_Queue {
         
         // Fetch data for display
         $states = $this->get_state_terms();
-        $profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug, $city_search) : array();
+        $all_profiles = !empty($state_slug) ? $this->query_profiles_by_state_and_status($state_slug, $post_status, $min_count, $city_slug, $niche_slug, $city_search) : array();
+        
+        // Filter out profiles already in queue
+        $queued_profile_ids = isset($queue_data['profile_ids']) ? $queue_data['profile_ids'] : array();
+        $profiles = array_filter($all_profiles, function($profile) use ($queued_profile_ids) {
+            return !in_array($profile->ID, $queued_profile_ids);
+        });
+        
         $profile_count = count($profiles);
+        $queued_count = count($all_profiles) - $profile_count;
         
         ?>
         <div class="wrap">
@@ -346,6 +354,12 @@ class DH_Profile_Production_Queue {
             <?php else: ?>
                 <p><?php esc_html_e('No profiles found with the selected filters.', 'directory-helpers'); ?></p>
             <?php endif; ?>
+            
+            <?php if ($queued_count > 0): ?>
+                <p style="color: #666; font-style: italic; margin-top: 10px;">
+                    <?php echo sprintf(esc_html__('Note: %d profiles from this filter are already in the queue and hidden from this list.', 'directory-helpers'), $queued_count); ?>
+                </p>
+            <?php endif; ?>
         </div>
         <?php
     }
@@ -379,21 +393,35 @@ class DH_Profile_Production_Queue {
             wp_send_json_error(array('message' => 'No profiles found'));
         }
         
-        $profile_ids = wp_list_pluck($profiles, 'ID');
+        $new_profile_ids = wp_list_pluck($profiles, 'ID');
         
-        // Store queue data
+        // Get existing queue data
+        $existing_queue_data = get_option(self::OPTION_QUEUE_DATA, array());
+        $existing_profile_ids = isset($existing_queue_data['profile_ids']) ? $existing_queue_data['profile_ids'] : array();
+        
+        // Merge and remove duplicates
+        $merged_profile_ids = array_unique(array_merge($existing_profile_ids, $new_profile_ids));
+        $added_count = count($merged_profile_ids) - count($existing_profile_ids);
+        
+        // Store updated queue data
         update_option(self::OPTION_QUEUE_DATA, array(
-            'profile_ids' => $profile_ids,
+            'profile_ids' => $merged_profile_ids,
             'state_slug' => $state_slug,
             'niche_slug' => $niche_slug,
+            'created_city_ids' => isset($existing_queue_data['created_city_ids']) ? $existing_queue_data['created_city_ids'] : array(),
         ));
-        update_option(self::OPTION_PROCESSED_COUNT, 0);
-        update_option(self::OPTION_CURRENT_BATCH, 0);
-        delete_option(self::OPTION_LAST_ERROR);
+        
+        // Only reset counters if this is a fresh queue (no existing profiles)
+        if (empty($existing_profile_ids)) {
+            update_option(self::OPTION_PROCESSED_COUNT, 0);
+            update_option(self::OPTION_CURRENT_BATCH, 0);
+            delete_option(self::OPTION_LAST_ERROR);
+        }
         
         wp_send_json_success(array(
-            'message' => sprintf('Added %d profiles to pipeline', count($profile_ids)),
-            'total' => count($profile_ids),
+            'message' => sprintf('Added %d new profiles to pipeline (total: %d)', $added_count, count($merged_profile_ids)),
+            'total' => count($merged_profile_ids),
+            'added' => $added_count,
         ));
     }
     
