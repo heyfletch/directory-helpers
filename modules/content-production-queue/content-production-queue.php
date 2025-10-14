@@ -453,7 +453,7 @@ class DH_Content_Production_Queue {
         $this->process_next_in_queue();
         
         wp_send_json_success(array(
-            'message' => 'Queue started - processing will continue every 5 minutes',
+            'message' => 'Queue started - processing in batches',
             'total' => count($posts),
         ));
     }
@@ -613,6 +613,6 @@ class DH_Content_Production_Queue {
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
         }
-        // If there are more posts, they will be processed on the next cron run (every 5 minutes)
+        // If there are more posts, they will be processed by the next AJAX poll
     }
 }
