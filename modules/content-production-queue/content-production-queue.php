@@ -123,7 +123,7 @@ class DH_Content_Production_Queue {
                             <?php if ($is_active): ?>
                                 <span style="color: #46b450;">▶️ <?php esc_html_e('Running', 'directory-helpers'); ?></span>
                             <?php else: ?>
-                                <span style="color: #999;">⏸️ <?php esc_html_e('Idle', 'directory-helpers'); ?></span>
+                                <span style="color: #999;">⏸️ <?php esc_html_e('Stopped', 'directory-helpers'); ?></span>
                             <?php endif; ?>
                         </span>
                     </p>
@@ -157,8 +157,11 @@ class DH_Content_Production_Queue {
                             <?php esc_html_e('Publish All Cities', 'directory-helpers'); ?>
                         </button>
                     <?php elseif ($is_active): ?>
-                        <button type="button" id="dh-stop-cpq-btn" class="button">
+                        <button type="button" id="dh-stop-cpq-btn" class="button button-secondary">
                             <?php esc_html_e('Stop Queue', 'directory-helpers'); ?>
+                        </button>
+                        <button type="button" id="dh-reset-cpq-btn" class="button" style="margin-left: 10px;">
+                            <?php esc_html_e('Reset Counters', 'directory-helpers'); ?>
                         </button>
                     <?php else: ?>
                         <button type="button" class="button button-primary" disabled>
@@ -170,9 +173,11 @@ class DH_Content_Production_Queue {
                         <p class="description"><?php esc_html_e('No eligible posts to publish', 'directory-helpers'); ?></p>
                     <?php endif; ?>
                     
-                    <button type="button" id="dh-reset-cpq-btn" class="button" style="margin-left: 10px;">
-                        <?php esc_html_e('Reset Counters', 'directory-helpers'); ?>
-                    </button>
+                    <?php if (!$is_active): ?>
+                        <button type="button" id="dh-reset-cpq-btn" class="button" style="margin-left: 10px;">
+                            <?php esc_html_e('Reset Counters', 'directory-helpers'); ?>
+                        </button>
+                    <?php endif; ?>
                 </div>
             </div>
             
