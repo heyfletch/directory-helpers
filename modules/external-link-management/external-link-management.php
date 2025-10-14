@@ -1407,21 +1407,51 @@ class DH_External_Link_Management {
         if (!current_user_can('edit_post', $post_id)) { wp_send_json_error(array('message' => 'forbidden')); }
         global $wpdb;
         $table = $this->table_name();
-        $row = $wpdb->get_row($wpdb->prepare("SELECT id, current_url FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, current_url, status_override_code, status_override_expires FROM {$table} WHERE id=%d AND post_id=%d", $id, $post_id));
         if (!$row) { wp_send_json_error(array('message' => 'not found')); }
         list($code, $text) = $this->http_check_url((string)$row->current_url, 10);
-        $wpdb->update(
-            $table,
-            array(
-                'status_code' => $code,
-                'status_text' => $text,
-                'last_checked' => current_time('mysql'),
-                'updated_at' => current_time('mysql'),
-            ),
-            array('id' => $id),
-            array('%d','%s','%s','%s'),
-            array('%d')
-        );
+        
+        // Check if there's an active override
+        $has_override = false;
+        if ($row->status_override_code && $row->status_override_expires) {
+            $expires_ts = strtotime($row->status_override_expires);
+            if ($expires_ts && $expires_ts > time()) {
+                $has_override = true;
+            }
+        }
+        
+        // If override is active, don't update status_code (keep it as the override)
+        // But do update last_checked to show the link was rechecked
+        if ($has_override) {
+            $wpdb->update(
+                $table,
+                array(
+                    'last_checked' => current_time('mysql'),
+                    'updated_at' => current_time('mysql'),
+                ),
+                array('id' => $id),
+                array('%s','%s'),
+                array('%d')
+            );
+            
+            // Return the override code, not the actual check result
+            $code = (int)$row->status_override_code;
+            $text = 'Manually verified (override active)';
+        } else {
+            // No override, update normally
+            $wpdb->update(
+                $table,
+                array(
+                    'status_code' => $code,
+                    'status_text' => $text,
+                    'last_checked' => current_time('mysql'),
+                    'updated_at' => current_time('mysql'),
+                ),
+                array('id' => $id),
+                array('%d','%s','%s','%s'),
+                array('%d')
+            );
+        }
         
         // Update Link Health after recheck
         $this->update_post_link_health($post_id);
@@ -1431,6 +1461,7 @@ class DH_External_Link_Management {
             'status_code' => (int)$code,
             'status_text' => (string)$text,
             'last_checked_display' => $last_display,
+            'has_override' => $has_override,
         ));
     }
 
