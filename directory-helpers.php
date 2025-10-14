@@ -731,19 +731,19 @@ class Directory_Helpers {
             ),
             'video-production-queue' => array(
                 'name' => __('Video Production Queue', 'directory-helpers'),
-                'description' => __('Automated video production queue for city and state listings. Manages sequential video creation via Zero Work webhook with auto-continuation.', 'directory-helpers'),
+                'description' => __('AJAX-based video production queue for city and state listings. Manages sequential video creation via Zero Work webhook. Keep browser open for continuous processing.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/video-production-queue/video-production-queue.php',
                 'class' => 'DH_Video_Production_Queue'
             ),
             'content-production-queue' => array(
                 'name' => __('Content Production Queue', 'directory-helpers'),
-                'description' => __('Automated content publishing queue for city and state listings. Publishes draft posts that meet all content requirements (images, link health) sequentially.', 'directory-helpers'),
+                'description' => __('AJAX-based content publishing queue for city and state listings. Publishes draft posts that meet all content requirements (images, link health) in batches. Keep browser open for continuous processing.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/content-production-queue/content-production-queue.php',
                 'class' => 'DH_Content_Production_Queue'
             ),
             'profile-production-queue' => array(
                 'name' => __('Profile Production Queue', 'directory-helpers'),
-                'description' => __('Automated profile production queue. Processes profiles in batches: creates cities, publishes profiles, reranks, and generates AI content sequentially.', 'directory-helpers'),
+                'description' => __('AJAX-based profile production queue. Processes profiles in batches: creates cities, publishes profiles, reranks, and generates AI content. Keep browser open for continuous processing.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-production-queue/profile-production-queue.php',
                 'class' => 'DH_Profile_Production_Queue'
             )

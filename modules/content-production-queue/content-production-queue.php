@@ -39,9 +39,6 @@ class DH_Content_Production_Queue {
      * Constructor
      */
     public function __construct() {
-        // Add custom cron schedule
-        add_filter('cron_schedules', array($this, 'add_cron_schedules'));
-        
         // Add admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
@@ -54,16 +51,6 @@ class DH_Content_Production_Queue {
         add_action('wp_ajax_dh_get_content_queue_status', array($this, 'ajax_get_queue_status'));
         add_action('wp_ajax_dh_reset_content_queue', array($this, 'ajax_reset_queue'));
         add_action('wp_ajax_dh_process_content_batch', array($this, 'ajax_process_batch'));
-        
-        // Hook for recurring cron event (runs every 5 minutes via xCloud-Cron)
-        add_action('dh_content_queue_process', array($this, 'process_next_in_queue'));
-        
-        // Register activation/deactivation hooks to manage cron
-        register_activation_hook(__FILE__, array($this, 'activate_cron'));
-        register_deactivation_hook(__FILE__, array($this, 'deactivate_cron'));
-        
-        // Ensure cron is scheduled
-        add_action('init', array($this, 'ensure_cron_scheduled'));
     }
     
     /**

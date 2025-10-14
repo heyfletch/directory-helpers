@@ -40,9 +40,6 @@ class DH_Profile_Production_Queue {
      * Constructor
      */
     public function __construct() {
-        // Add custom cron schedule
-        add_filter('cron_schedules', array($this, 'add_cron_schedules'));
-        
         // Add admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
@@ -55,12 +52,6 @@ class DH_Profile_Production_Queue {
         add_action('wp_ajax_dh_get_profile_queue_status', array($this, 'ajax_get_queue_status'));
         add_action('wp_ajax_dh_process_profile_batch', array($this, 'ajax_process_batch'));
         add_action('wp_ajax_dh_reset_profile_queue', array($this, 'ajax_reset_queue'));
-        
-        // Hook for recurring cron event (runs every 5 minutes via xCloud-Cron)
-        add_action('dh_profile_queue_process', array($this, 'process_next_batch'));
-        
-        // Ensure cron is scheduled
-        add_action('init', array($this, 'ensure_cron_scheduled'));
     }
     
     /**

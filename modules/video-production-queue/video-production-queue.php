@@ -36,9 +36,6 @@ class DH_Video_Production_Queue {
      * Constructor
      */
     public function __construct() {
-        // Add custom cron schedule
-        add_filter('cron_schedules', array($this, 'add_cron_schedules'));
-        
         // Add admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
@@ -49,18 +46,11 @@ class DH_Video_Production_Queue {
         add_action('wp_ajax_dh_start_video_queue', array($this, 'ajax_start_queue'));
         add_action('wp_ajax_dh_stop_video_queue', array($this, 'ajax_stop_queue'));
         add_action('wp_ajax_dh_get_video_queue_status', array($this, 'ajax_get_queue_status'));
-        add_action('wp_ajax_dh_clear_video_error', array($this, 'ajax_clear_error'));
         add_action('wp_ajax_dh_reset_video_queue', array($this, 'ajax_reset_queue'));
         add_action('wp_ajax_dh_process_video_next', array($this, 'ajax_process_next'));
         
-        // REST API endpoint for Zero Work callback
-        add_action('rest_api_init', array($this, 'register_callback_endpoint'));
-        
-        // Hook for recurring cron event (runs every 5 minutes via xCloud-Cron)
-        add_action('dh_video_queue_process', array($this, 'process_next_in_queue'));
-        
-        // Ensure cron is scheduled
-        add_action('init', array($this, 'ensure_cron_scheduled'));
+        // Zero Work webhook handler
+        add_action('rest_api_init', array($this, 'register_webhook_endpoint'));
     }
     
     /**
@@ -240,6 +230,17 @@ class DH_Video_Production_Queue {
                 </div>
             </div>
             
+            <div class="card">
+                <h2><?php esc_html_e('How It Works', 'directory-helpers'); ?></h2>
+                <p><?php esc_html_e('The video production queue automatically processes posts sequentially:', 'directory-helpers'); ?></p>
+                <ol>
+                    <li><?php esc_html_e('Finds the next eligible post (draft city/state listing without a video)', 'directory-helpers'); ?></li>
+                    <li><?php esc_html_e('Sends the post to Zero Work for video creation', 'directory-helpers'); ?></li>
+                    <li><?php esc_html_e('Waits for Zero Work to complete the video and send a webhook callback', 'directory-helpers'); ?></li>
+                    <li><?php esc_html_e('Automatically continues to the next post', 'directory-helpers'); ?></li>
+                </ol>
+                <p><strong><?php esc_html_e('Note:', 'directory-helpers'); ?></strong> <?php esc_html_e('Videos typically take 10-15 minutes to create. Keep this page open for continuous processing.', 'directory-helpers'); ?></p>
+            </div>
             
             <table class="wp-list-table widefat fixed striped">
                 <thead>
