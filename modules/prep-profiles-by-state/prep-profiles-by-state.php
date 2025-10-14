@@ -643,7 +643,7 @@ class DH_Prep_Profiles_By_State {
         }
 
         // Filter form
-        echo '<form method="get" action="">';
+        echo '<form method="get" action="edit.php">';
         echo '<input type="hidden" name="post_type" value="state-listing" />';
         echo '<input type="hidden" name="page" value="dh-prep-profiles" />';
 

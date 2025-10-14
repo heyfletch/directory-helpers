@@ -29,7 +29,7 @@ class DH_Profile_Production_Queue {
     /**
      * Batch size - number of profiles to process per cycle
      */
-    const BATCH_SIZE = 2;
+    const BATCH_SIZE = 5;
     
     /**
      * Rate limit in seconds between batches
@@ -184,7 +184,7 @@ class DH_Profile_Production_Queue {
                     <li><?php echo esc_html__('The queue will automatically process profiles in batches', 'directory-helpers'); ?></li>
                 </ol>
                 <p>
-                    <a href="<?php echo esc_url(admin_url('admin.php?page=dh-prep-profiles')); ?>" class="button button-primary">
+                    <a href="<?php echo esc_url(admin_url('edit.php?post_type=state-listing&page=dh-prep-profiles')); ?>" class="button button-primary">
                         <?php echo esc_html__('Go to Prep Profiles', 'directory-helpers'); ?>
                     </a>
                 </p>
