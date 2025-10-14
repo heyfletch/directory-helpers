@@ -492,28 +492,62 @@ class DH_Profile_Production_Queue {
      * Helper: Create city listing
      */
     private function create_city_listing($area_term, $state_slug, $niche_term) {
-        $state_term = get_term_by('slug', $state_slug, 'state');
-        if (!$state_term || is_wp_error($state_term)) {
+        if (!$area_term || is_wp_error($area_term)) {
             return false;
         }
         
-        $title = $area_term->name . ', ' . strtoupper($state_slug);
-        if ($niche_term && !is_wp_error($niche_term)) {
-            $title .= ' - ' . $niche_term->name;
+        // City Name: strip trailing " - ST"
+        $city_name = $area_term->name;
+        $city_name = preg_replace('/\s+-\s+[A-Za-z]{2}$/', '', $city_name);
+        $city_name = trim($city_name);
+        
+        // Determine state code (prefer 2-letter slug, else term description, else parse from area name)
+        $state_term = get_term_by('slug', $state_slug, 'state');
+        $state_code = '';
+        if ($state_term && !is_wp_error($state_term)) {
+            if (strlen($state_term->slug) === 2) {
+                $state_code = strtoupper($state_term->slug);
+            } elseif (!empty($state_term->description) && preg_match('/^[A-Za-z]{2}$/', $state_term->description)) {
+                $state_code = strtoupper($state_term->description);
+            }
         }
+        if (!$state_code && preg_match('/\s-\s([A-Za-z]{2})$/', $area_term->name, $m)) {
+            $state_code = strtoupper($m[1]);
+        }
+        if (!$state_code && strlen($state_slug) >= 2) {
+            $state_code = strtoupper(substr($state_slug, 0, 2));
+        }
+        
+        // Title: "City, ST" (NO niche in title)
+        $title = $city_name . ($state_code ? ', ' . $state_code : '');
+        
+        // Niche pluralization for slug (simple rules)
+        $niche_name = ($niche_term && !is_wp_error($niche_term)) ? $niche_term->name : '';
+        $plural_niche = $niche_name;
+        if ($plural_niche) {
+            if (preg_match('/[^aeiou]y$/i', $plural_niche)) {
+                $plural_niche = preg_replace('/y$/i', 'ies', $plural_niche);
+            } elseif (!preg_match('/s$/i', $plural_niche)) {
+                $plural_niche .= 's';
+            }
+        }
+        
+        // Slug base: "Title + plural niche"
+        $slug_base = $title . ($plural_niche ? ' ' . $plural_niche : '');
+        $desired_slug = sanitize_title($slug_base);
         
         $post_id = wp_insert_post(array(
-            'post_title' => $title,
             'post_type' => 'city-listing',
             'post_status' => 'draft',
-            'post_content' => '',
-        ));
+            'post_title' => $title,
+            'post_name' => $desired_slug,
+        ), true);
         
-        if (is_wp_error($post_id)) {
+        if (is_wp_error($post_id) || !$post_id) {
             return false;
         }
         
-        // Set taxonomies
+        // Assign taxonomy terms
         wp_set_object_terms($post_id, $area_term->term_id, 'area');
         wp_set_object_terms($post_id, $state_term->term_id, 'state');
         if ($niche_term && !is_wp_error($niche_term)) {
@@ -556,9 +590,82 @@ class DH_Profile_Production_Queue {
      * Helper: Rerank posts
      */
     private function rerank_posts($post_ids, $state_slug) {
-        // This would call the existing rerank functionality
-        // For now, just log it
-        error_log('Profile Queue: Reranking ' . count($post_ids) . ' posts for state ' . $state_slug);
+        if (empty($post_ids)) {
+            return;
+        }
+        
+        // Only consider published posts for ranking
+        $published_ids = array();
+        foreach ($post_ids as $pid) {
+            if (get_post_status($pid) === 'publish') {
+                $published_ids[] = $pid;
+            }
+        }
+        if (empty($published_ids)) {
+            return;
+        }
+        
+        // Re-rank city by city (area terms)
+        $area_terms = $this->get_unique_area_terms_for_posts($published_ids);
+        foreach ($area_terms as $term_id => $term) {
+            // Use a representative post in this city to trigger ACF save hook ranking
+            $rep = $this->find_post_in_term($published_ids, $term_id, 'area');
+            if ($rep) {
+                do_action('acf/save_post', $rep);
+            }
+        }
+        
+        // Finally, trigger a state ranking once using a representative post in the selected state
+        $rep_state_post = $this->find_post_in_state($published_ids, $state_slug);
+        if ($rep_state_post) {
+            do_action('acf/save_post', $rep_state_post);
+        }
+    }
+    
+    /**
+     * Helper: Get unique area terms for posts
+     */
+    private function get_unique_area_terms_for_posts($post_ids) {
+        $unique = array();
+        foreach ($post_ids as $pid) {
+            $terms = get_the_terms($pid, 'area');
+            if (!empty($terms) && !is_wp_error($terms)) {
+                foreach ($terms as $t) {
+                    $unique[$t->term_id] = $t;
+                }
+            }
+        }
+        return $unique;
+    }
+    
+    /**
+     * Helper: Find post in term
+     */
+    private function find_post_in_term($post_ids, $term_id, $taxonomy) {
+        foreach ($post_ids as $pid) {
+            $terms = wp_get_post_terms($pid, $taxonomy, array('fields' => 'ids'));
+            if (!is_wp_error($terms) && in_array((int)$term_id, array_map('intval', (array)$terms), true)) {
+                return $pid;
+            }
+        }
+        return 0;
+    }
+    
+    /**
+     * Helper: Find post in state
+     */
+    private function find_post_in_state($post_ids, $state_slug) {
+        foreach ($post_ids as $pid) {
+            $terms = get_the_terms($pid, 'state');
+            if (!empty($terms) && !is_wp_error($terms)) {
+                foreach ($terms as $t) {
+                    if ($t->slug === $state_slug) {
+                        return $pid;
+                    }
+                }
+            }
+        }
+        return 0;
     }
     
     /**
