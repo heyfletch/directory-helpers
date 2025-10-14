@@ -737,6 +737,90 @@ class DH_Prep_Profiles_By_State {
         echo '<input type="hidden" name="dh_action" value="one_click_flow" />';
         submit_button(__('Create Cities, Publish, Rerank, and Generate AI', 'directory-helpers'), 'primary', 'submit', false);
         echo '</form>';
+        
+        // Add Profiles to Production Pipeline button
+        if (!empty($profiles) && is_array($profiles)) {
+            try {
+                $profile_ids = array();
+                foreach ($profiles as $p) {
+                    if (isset($p->ID)) {
+                        $profile_ids[] = (int)$p->ID;
+                    }
+                }
+                
+                if (!empty($profile_ids)) {
+                    echo '<form method="post" id="dh-add-to-pipeline-form" style="margin-top: 10px;">';
+                    wp_nonce_field('dh_profile_queue', 'dh_ppq_nonce');
+                    echo '<input type="hidden" name="profile_ids" value="' . esc_attr(implode(',', $profile_ids)) . '" />';
+                    echo '<input type="hidden" name="state_slug" value="' . esc_attr($state_slug) . '" />';
+                    echo '<input type="hidden" name="niche_slug" value="' . esc_attr($niche_slug) . '" />';
+                    echo '<button type="button" id="dh-add-to-pipeline-btn" class="button button-secondary">';
+                    echo esc_html__('Add Profiles to Production Pipeline', 'directory-helpers');
+                    echo ' (' . count($profile_ids) . ' profiles)';
+                    echo '</button>';
+                    echo '</form>';
+                    
+                    // Add JavaScript for AJAX submission
+                    $profile_count = count($profile_ids);
+                    $pipeline_url = esc_url(admin_url('admin.php?page=dh-profile-production'));
+                    ?>
+                    <script type="text/javascript">
+                    jQuery(document).ready(function($) {
+                        $('#dh-add-to-pipeline-btn').on('click', function(e) {
+                            e.preventDefault();
+                            
+                            var button = $(this);
+                            var form = $('#dh-add-to-pipeline-form');
+                            var profileCount = <?php echo (int)$profile_count; ?>;
+                            
+                            if (!confirm('Add ' + profileCount + ' profiles to production pipeline? They will be processed in batches.')) {
+                                return;
+                            }
+                            
+                            button.prop('disabled', true);
+                            button.text('Adding to pipeline...');
+                            
+                            var profileIds = form.find('input[name="profile_ids"]').val().split(',').map(Number);
+                            var stateSlug = form.find('input[name="state_slug"]').val();
+                            var nicheSlug = form.find('input[name="niche_slug"]').val();
+                            var nonce = form.find('input[name="dh_ppq_nonce"]').val();
+                            
+                            $.ajax({
+                                url: ajaxurl,
+                                type: 'POST',
+                                data: {
+                                    action: 'dh_start_profile_queue',
+                                    nonce: nonce,
+                                    profile_ids: profileIds,
+                                    state_slug: stateSlug,
+                                    niche_slug: nicheSlug
+                                },
+                                success: function(response) {
+                                    if (response.success) {
+                                        alert(response.data.message + '\n\nTotal profiles: ' + response.data.total);
+                                        window.location.href = '<?php echo $pipeline_url; ?>';
+                                    } else {
+                                        alert('Error: ' + (response.data && response.data.message ? response.data.message : 'Failed to start queue'));
+                                        button.prop('disabled', false);
+                                        button.text('Add Profiles to Production Pipeline (' + profileCount + ' profiles)');
+                                    }
+                                },
+                                error: function(xhr, status, error) {
+                                    alert('Error: ' + error);
+                                    button.prop('disabled', false);
+                                    button.text('Add Profiles to Production Pipeline (' + profileCount + ' profiles)');
+                                }
+                            });
+                        });
+                    });
+                    </script>
+                    <?php
+                }
+            } catch (Exception $e) {
+                // Silently fail if there's an issue with the button
+                error_log('Profile Pipeline Button Error: ' . $e->getMessage());
+            }
+        }
 
 
         // Results table

@@ -740,6 +740,12 @@ class Directory_Helpers {
                 'description' => __('Automated content publishing queue for city and state listings. Publishes draft posts that meet all content requirements (images, link health) sequentially.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/content-production-queue/content-production-queue.php',
                 'class' => 'DH_Content_Production_Queue'
+            ),
+            'profile-production-queue' => array(
+                'name' => __('Profile Production Queue', 'directory-helpers'),
+                'description' => __('Automated profile production queue. Processes profiles in batches: creates cities, publishes profiles, reranks, and generates AI content sequentially.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-production-queue/profile-production-queue.php',
+                'class' => 'DH_Profile_Production_Queue'
             )
             // Add more modules here as needed
         );
