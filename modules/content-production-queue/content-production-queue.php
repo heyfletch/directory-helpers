@@ -258,10 +258,17 @@ class DH_Content_Production_Queue {
      * @return array Array of WP_Post objects
      */
     private function get_all_draft_posts() {
+        // Check cache first (5 minute cache)
+        $cache_key = 'dh_cpq_draft_posts';
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+        
         $args = array(
             'post_type' => array('city-listing', 'state-listing'),
             'post_status' => 'draft',
-            'posts_per_page' => -1,
+            'posts_per_page' => 500, // Limit to 500 most recent drafts for performance
             'orderby' => 'date',
             'order' => 'ASC',
         );
@@ -291,6 +298,9 @@ class DH_Content_Production_Queue {
             // Within same priority, sort by date (oldest first)
             return strtotime($a->post_date) - strtotime($b->post_date);
         });
+        
+        // Cache for 5 minutes
+        set_transient($cache_key, $posts, 5 * MINUTE_IN_SECONDS);
         
         return $posts;
     }
@@ -585,6 +595,8 @@ class DH_Content_Production_Queue {
             if (!is_wp_error($result)) {
                 $published_count++;
                 update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
+                // Invalidate draft posts cache
+                delete_transient('dh_cpq_draft_posts');
             }
             
             // Small delay between posts in the batch to avoid overwhelming the server
