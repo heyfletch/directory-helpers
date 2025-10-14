@@ -407,9 +407,9 @@ class DH_Profile_Production_Queue {
                 continue;
             }
             
-            // Check if city already exists or was created in a previous batch
-            $exists = $this->city_listing_exists((int)$area_term->term_id, ($niche_term && !is_wp_error($niche_term)) ? (int)$niche_term->term_id : 0);
-            if ($exists || in_array($exists, $existing_city_ids)) {
+            // Check if city already exists
+            $exists_id = $this->city_listing_exists((int)$area_term->term_id, ($niche_term && !is_wp_error($niche_term)) ? (int)$niche_term->term_id : 0);
+            if ($exists_id) {
                 continue;
             }
             
@@ -419,17 +419,25 @@ class DH_Profile_Production_Queue {
             }
         }
         
-        // Publish profiles in this batch
+        // Publish profiles in this batch (only if not already published)
+        $published_now = array();
         foreach ($profile_ids as $pid) {
-            wp_update_post(array(
-                'ID' => $pid,
-                'post_status' => 'publish',
-            ));
+            $pid = (int) $pid;
+            $current = get_post_status($pid);
+            if ('publish' !== $current) {
+                $result = wp_update_post(array(
+                    'ID' => $pid,
+                    'post_status' => 'publish',
+                ), true);
+                if (!is_wp_error($result) && $result) {
+                    $published_now[] = $pid;
+                }
+            }
         }
         
-        // Clean area terms for published profiles
-        if (!empty($profile_ids)) {
-            $this->cleanup_area_terms($profile_ids);
+        // Clean area terms only for newly published profiles
+        if (!empty($published_now)) {
+            $this->cleanup_area_terms($published_now);
         }
         
         return array(
@@ -460,32 +468,37 @@ class DH_Profile_Production_Queue {
     /**
      * Helper: Check if city listing exists
      */
-    private function city_listing_exists($area_term_id, $niche_term_id) {
-        $args = array(
-            'post_type' => 'city-listing',
-            'post_status' => array('draft', 'publish'),
-            'posts_per_page' => 1,
-            'fields' => 'ids',
-            'tax_query' => array(
-                'relation' => 'AND',
-                array(
-                    'taxonomy' => 'area',
-                    'field' => 'term_id',
-                    'terms' => $area_term_id,
-                ),
+    private function city_listing_exists($area_term_id, $niche_term_id = 0) {
+        $tax_query = array(
+            'relation' => 'AND',
+            array(
+                'taxonomy' => 'area',
+                'field' => 'term_id',
+                'terms' => array((int)$area_term_id),
             ),
         );
         
         if ($niche_term_id) {
-            $args['tax_query'][] = array(
+            $tax_query[] = array(
                 'taxonomy' => 'niche',
                 'field' => 'term_id',
-                'terms' => $niche_term_id,
+                'terms' => array((int)$niche_term_id),
             );
         }
         
-        $query = new WP_Query($args);
-        return $query->have_posts();
+        $q = new WP_Query(array(
+            'post_type' => 'city-listing',
+            'post_status' => array('draft', 'publish'),
+            'posts_per_page' => 1,
+            'tax_query' => $tax_query,
+            'fields' => 'ids',
+            'no_found_rows' => true,
+        ));
+        
+        if (!is_wp_error($q) && !empty($q->posts)) {
+            return (int)$q->posts[0];
+        }
+        return 0;
     }
     
     /**
