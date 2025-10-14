@@ -238,11 +238,8 @@ class DH_Profile_Production_Queue {
         update_option(self::OPTION_CURRENT_BATCH, 0);
         delete_option(self::OPTION_LAST_ERROR);
         
-        // Process first batch immediately
-        $this->process_next_batch();
-        
         wp_send_json_success(array(
-            'message' => 'Queue started - processing will continue every ' . self::RATE_LIMIT_SECONDS . ' seconds',
+            'message' => 'Queue started - processing will begin immediately',
             'total' => count($profile_ids),
         ));
     }
@@ -400,34 +397,13 @@ class DH_Profile_Production_Queue {
     private function process_profile_batch($profile_ids, $state_slug, $niche_slug, $existing_city_ids) {
         $created_city_ids = array();
         
-        // Get prep profiles instance
-        if (!class_exists('DH_Prep_Profiles_By_State')) {
-            throw new Exception('Prep Profiles module not found');
-        }
-        
-        $prep = new DH_Prep_Profiles_By_State();
-        
-        // Get profiles data
-        global $wpdb;
-        $ids_str = implode(',', array_map('intval', $profile_ids));
-        $posts = $wpdb->get_results("
-            SELECT p.ID, 
-                   MAX(CASE WHEN tm.meta_key = 'area' THEN t.slug END) as area_slug,
-                   MAX(CASE WHEN tm.meta_key = 'area' THEN t.name END) as area_name
-            FROM {$wpdb->posts} p
-            LEFT JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
-            LEFT JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
-            LEFT JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
-            LEFT JOIN {$wpdb->termmeta} tm ON t.term_id = tm.term_id AND tm.meta_key = 'area'
-            WHERE p.ID IN ($ids_str)
-            GROUP BY p.ID
-        ");
-        
         // Extract unique cities from this batch
         $unique_cities = array();
-        foreach ($posts as $p) {
-            if (!empty($p->area_slug) && !empty($p->area_name)) {
-                $unique_cities[$p->area_slug] = $p->area_name;
+        foreach ($profile_ids as $pid) {
+            $area_terms = get_the_terms($pid, 'area');
+            if (!empty($area_terms) && !is_wp_error($area_terms)) {
+                $area = $area_terms[0];
+                $unique_cities[$area->slug] = $area->name;
             }
         }
         

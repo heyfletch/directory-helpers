@@ -797,7 +797,7 @@ class DH_Prep_Profiles_By_State {
                                 },
                                 success: function(response) {
                                     if (response.success) {
-                                        alert(response.data.message + '\n\nTotal profiles: ' + response.data.total);
+                                        // Redirect immediately to queue page
                                         window.location.href = '<?php echo $pipeline_url; ?>';
                                     } else {
                                         alert('Error: ' + (response.data && response.data.message ? response.data.message : 'Failed to start queue'));
