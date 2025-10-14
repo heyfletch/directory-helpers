@@ -258,51 +258,17 @@ class DH_Content_Production_Queue {
      * @return array Array of WP_Post objects
      */
     private function get_all_draft_posts() {
-        // Check cache first (5 minute cache)
-        $cache_key = 'dh_cpq_draft_posts';
-        $cached = get_transient($cache_key);
-        if ($cached !== false) {
-            return $cached;
-        }
-        
+        // Simple query without sorting - just get drafts ordered by date
         $args = array(
             'post_type' => array('city-listing', 'state-listing'),
             'post_status' => 'draft',
             'posts_per_page' => 500, // Limit to 500 most recent drafts for performance
             'orderby' => 'date',
-            'order' => 'ASC',
+            'order' => 'DESC', // Newest first
+            'fields' => 'all', // Get all post data
         );
         
-        $posts = get_posts($args);
-        
-        // Sort by link health priority: all_ok (0), warning (1), not_checked/empty (2)
-        usort($posts, function($a, $b) {
-            $health_a = get_post_meta($a->ID, '_dh_link_health', true);
-            $health_b = get_post_meta($b->ID, '_dh_link_health', true);
-            
-            // Assign priority values
-            $priority_map = array(
-                'all_ok' => 0,
-                'warning' => 1,
-                '' => 2, // Not checked
-            );
-            
-            $priority_a = isset($priority_map[$health_a]) ? $priority_map[$health_a] : 2;
-            $priority_b = isset($priority_map[$health_b]) ? $priority_map[$health_b] : 2;
-            
-            // Sort by priority first
-            if ($priority_a !== $priority_b) {
-                return $priority_a - $priority_b;
-            }
-            
-            // Within same priority, sort by date (oldest first)
-            return strtotime($a->post_date) - strtotime($b->post_date);
-        });
-        
-        // Cache for 5 minutes
-        set_transient($cache_key, $posts, 5 * MINUTE_IN_SECONDS);
-        
-        return $posts;
+        return get_posts($args);
     }
     
     /**
@@ -595,8 +561,6 @@ class DH_Content_Production_Queue {
             if (!is_wp_error($result)) {
                 $published_count++;
                 update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
-                // Invalidate draft posts cache
-                delete_transient('dh_cpq_draft_posts');
             }
             
             // Small delay between posts in the batch to avoid overwhelming the server
