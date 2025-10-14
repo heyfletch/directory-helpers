@@ -51,6 +51,7 @@ class DH_Content_Production_Queue {
         add_action('wp_ajax_dh_get_content_queue_status', array($this, 'ajax_get_queue_status'));
         add_action('wp_ajax_dh_reset_content_queue', array($this, 'ajax_reset_queue'));
         add_action('wp_ajax_dh_process_content_batch', array($this, 'ajax_process_batch'));
+        add_action('wp_ajax_dh_recheck_all_link_health', array($this, 'ajax_recheck_all_link_health'));
     }
     
     /**
@@ -181,6 +182,12 @@ class DH_Content_Production_Queue {
             <h2><?php esc_html_e('Draft Posts', 'directory-helpers'); ?></h2>
             <p class="description">
                 <?php esc_html_e('Posts eligible for publishing must have: Featured Image, Body Image 1, Body Image 2, and Link Health (All Ok or Warning).', 'directory-helpers'); ?>
+            </p>
+            <p>
+                <button type="button" id="dh-recheck-all-health-btn" class="button">
+                    <?php esc_html_e('Recheck All Link Health', 'directory-helpers'); ?>
+                </button>
+                <span id="dh-recheck-status" style="margin-left: 10px;"></span>
             </p>
             
             <table class="wp-list-table widefat fixed striped">
@@ -578,5 +585,47 @@ class DH_Content_Production_Queue {
             update_option(self::OPTION_CURRENT_POST, 0);
         }
         // If there are more posts, they will be processed by the next AJAX poll
+    }
+    
+    /**
+     * AJAX: Recheck all link health for draft posts
+     */
+    public function ajax_recheck_all_link_health() {
+        check_ajax_referer('dh_content_queue', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Insufficient permissions'));
+        }
+        
+        // Get all draft posts
+        $posts = $this->get_all_draft_posts();
+        
+        if (empty($posts)) {
+            wp_send_json_success(array('message' => 'No draft posts to check'));
+        }
+        
+        // Check if External Link Management class exists
+        if (!class_exists('DH_External_Link_Management')) {
+            wp_send_json_error(array('message' => 'External Link Management module not found'));
+        }
+        
+        $elm = new DH_External_Link_Management();
+        $checked = 0;
+        
+        // Process all posts - just recalculate health from existing status codes (no HTTP checks)
+        foreach ($posts as $post) {
+            // Use reflection to call the private update_post_link_health method
+            $reflection = new ReflectionClass($elm);
+            $method = $reflection->getMethod('update_post_link_health');
+            $method->setAccessible(true);
+            $method->invoke($elm, $post->ID);
+            $checked++;
+        }
+        
+        wp_send_json_success(array(
+            'message' => sprintf('Rechecked %d post(s)', $checked),
+            'checked' => $checked,
+            'total' => count($posts)
+        ));
     }
 }

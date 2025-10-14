@@ -241,4 +241,57 @@ jQuery(document).ready(function($) {
             });
         }, 5000);
     }
+    
+    /**
+     * Handle Recheck All Link Health button
+     */
+    $(document).on('click', '#dh-recheck-all-health-btn', function(e) {
+        e.preventDefault();
+        
+        const button = $(this);
+        const status = $('#dh-recheck-status');
+        
+        if (!confirm('Recalculate link health for all draft posts? This will update health status based on existing link checks (no new HTTP requests).')) {
+            return;
+        }
+        
+        button.prop('disabled', true);
+        button.text('Rechecking...');
+        status.html('<span style="color: #999;">Processing...</span>');
+        
+        $.ajax({
+            url: dhContentQueue.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'dh_recheck_all_link_health',
+                nonce: dhContentQueue.nonce
+            },
+            success: function(response) {
+                button.prop('disabled', false);
+                button.text('Recheck All Link Health');
+                
+                if (response.success) {
+                    status.html('<span style="color: #46b450;">✓ ' + response.data.message + '</span>');
+                    showNotice(response.data.message + ' - Refreshing page...', 'success');
+                    
+                    // Reload page after 2 seconds to show updated health status
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    const errorMsg = response.data && response.data.message 
+                        ? response.data.message 
+                        : 'Failed to recheck link health';
+                    status.html('<span style="color: #dc3232;">✗ ' + errorMsg + '</span>');
+                    showNotice(errorMsg, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                button.prop('disabled', false);
+                button.text('Recheck All Link Health');
+                status.html('<span style="color: #dc3232;">✗ Error</span>');
+                showNotice('AJAX error: ' + error, 'error');
+            }
+        });
+    });
 });
