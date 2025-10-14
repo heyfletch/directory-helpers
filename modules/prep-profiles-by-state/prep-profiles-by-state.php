@@ -558,13 +558,12 @@ class DH_Prep_Profiles_By_State {
                     }
                 }
 
-                // Step 3: Publish all filtered profiles (current status filter), then clean area terms, set status to publish
+                // Step 3: Publish all filtered profiles (current status filter), then clean area terms
                 $ids = wp_list_pluck($posts, 'ID');
                 $published_now_ids = $this->publish_posts($ids);
                 if (!empty($published_now_ids)) {
                     $this->cleanup_area_terms_for_posts($published_now_ids);
                 }
-                $post_status = 'publish';
 
                 // Step 4: Rerank (use published only)
                 $published = $this->query_profiles_by_state_and_status($state_slug, 'publish', $min_count, $city_slug, $niche_slug, $city_search);
@@ -603,7 +602,7 @@ class DH_Prep_Profiles_By_State {
                     }
                 }
 
-                // Build action message
+                // Build action message and redirect to draft city listings
                 $action_message = sprintf(
                     /* translators: 1: cities created, 2: profiles published, 3: AI triggers */
                     esc_html__('Created %1$d city page(s). Published %2$d profile(s). Re-ranked profiles. Triggered AI for %3$d new city page(s).', 'directory-helpers'),
@@ -611,6 +610,10 @@ class DH_Prep_Profiles_By_State {
                     isset($published_now_ids) ? count($published_now_ids) : 0,
                     $ai_triggered
                 );
+                
+                // Redirect to draft city listings page
+                wp_safe_redirect(admin_url('edit.php?post_status=draft&post_type=city-listing'));
+                exit;
             }
         }
 
