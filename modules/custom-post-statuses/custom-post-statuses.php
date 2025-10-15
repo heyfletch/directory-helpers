@@ -45,6 +45,9 @@ class DH_Custom_Post_Statuses {
         add_action('pre_get_posts', array($this, 'handle_closed_status_query'));
         add_action('template_redirect', array($this, 'handle_closed_status_redirect'), 1);
         add_action('wp', array($this, 'handle_404_redirect_for_closed_profiles'));
+        
+        // Clear cache when profile status changes
+        add_action('transition_post_status', array($this, 'clear_closed_profile_cache'), 10, 3);
     }
     
     /**
@@ -384,17 +387,37 @@ class DH_Custom_Post_Statuses {
             return;
         }
         
+        // Only check for profile post type queries
+        $post_type = $query->get('post_type');
+        if ($post_type && $post_type !== 'profile') {
+            return;
+        }
+        
+        // Use transient cache to avoid repeated queries (1 hour cache)
+        $cache_key = 'dh_closed_profile_' . md5($post_name);
+        $cached = get_transient($cache_key);
+        
+        if ($cached === 'exists') {
+            $query->set('post_status', array('publish', 'closed'));
+            return;
+        } elseif ($cached === 'not_found') {
+            return;
+        }
+        
         // Check if there's a closed profile with this slug
         $closed_post = get_posts(array(
             'name' => $post_name,
             'post_type' => 'profile',
             'post_status' => 'closed',
-            'numberposts' => 1
+            'numberposts' => 1,
+            'fields' => 'ids', // Only get IDs for performance
         ));
         
         if ($closed_post) {
-            // Set the found post in the query
+            set_transient($cache_key, 'exists', HOUR_IN_SECONDS);
             $query->set('post_status', array('publish', 'closed'));
+        } else {
+            set_transient($cache_key, 'not_found', HOUR_IN_SECONDS);
         }
     }
     
@@ -562,6 +585,22 @@ class DH_Custom_Post_Statuses {
                 wp_redirect($redirect_to, 301);
                 exit;
             }
+        }
+    }
+    
+    /**
+     * Clear closed profile cache when post status changes
+     */
+    public function clear_closed_profile_cache($new_status, $old_status, $post) {
+        // Only clear cache for profile post type
+        if ($post->post_type !== 'profile') {
+            return;
+        }
+        
+        // Clear cache if status changed to or from 'closed'
+        if ($new_status === 'closed' || $old_status === 'closed') {
+            $cache_key = 'dh_closed_profile_' . md5($post->post_name);
+            delete_transient($cache_key);
         }
     }
 }
