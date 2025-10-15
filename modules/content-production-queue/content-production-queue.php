@@ -269,13 +269,22 @@ class DH_Content_Production_Queue {
         $args = array(
             'post_type' => array('city-listing', 'state-listing'),
             'post_status' => 'draft',
-            'posts_per_page' => 500, // Limit to 500 most recent drafts for performance
+            'posts_per_page' => 100, // Limit to 100 most recent drafts for performance
             'orderby' => 'date',
             'order' => 'DESC', // Newest first
             'fields' => 'all', // Get all post data
         );
         
-        return get_posts($args);
+        $posts = get_posts($args);
+        
+        // Prime meta cache to avoid N+1 queries
+        if (!empty($posts)) {
+            $post_ids = wp_list_pluck($posts, 'ID');
+            update_meta_cache('post', $post_ids);
+            update_post_thumbnail_cache(get_posts(array('post__in' => $post_ids, 'post_type' => 'any')));
+        }
+        
+        return $posts;
     }
     
     /**
