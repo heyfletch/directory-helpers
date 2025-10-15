@@ -5,8 +5,9 @@ jQuery(document).ready(function ($) {
     const postId = document.getElementById('post_ID').value;
     const photosBtn = document.getElementById('dh-unsplash-photos-btn');
     const createNotebookBtn = document.getElementById('dh-create-notebook');
+    const replaceFeaturedImageBtn = document.getElementById('dh-replace-featured-image');
 
-    if (!generateBtn && !photosBtn && !createNotebookBtn) {
+    if (!generateBtn && !photosBtn && !createNotebookBtn && !replaceFeaturedImageBtn) {
         return;
     }
 
@@ -156,6 +157,72 @@ jQuery(document).ready(function ($) {
                     console.error('Fetch Error:', error);
                     statusDiv.textContent = 'Error: Failed to fetch. Please make sure the Zerowork webhook is activated.';
                     statusDiv.style.color = 'red';
+                });
+        });
+    }
+
+    // Replace Featured Image button: trigger n8n workflow
+    if (replaceFeaturedImageBtn) {
+        replaceFeaturedImageBtn.addEventListener('click', function () {
+            const featuredImageWebhookUrl = aiContentGenerator && aiContentGenerator.featuredImageWebhookUrl;
+
+            if (!featuredImageWebhookUrl) {
+                statusDiv.textContent = 'Featured Image webhook URL is not configured in Directory Helpers settings.';
+                statusDiv.style.color = 'red';
+                return;
+            }
+
+            if (!window.confirm('Are you sure you want to replace the featured image for this post?')) {
+                statusDiv.textContent = 'Cancelled.';
+                statusDiv.style.color = 'inherit';
+                return;
+            }
+
+            statusDiv.textContent = 'Sending request...';
+            statusDiv.style.color = 'inherit';
+            replaceFeaturedImageBtn.disabled = true;
+
+            // Get ACF keyword or use the keyword input field
+            const acfKeyword = (aiContentGenerator && aiContentGenerator.acfKeyword) || '';
+            const keyword = acfKeyword || (keywordInput ? keywordInput.value : '');
+
+            fetch(aiContentGenerator.triggerEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': aiContentGenerator.nonce,
+                },
+                body: JSON.stringify({
+                    postId: postId,
+                    postTitle: aiContentGenerator.postTitle,
+                    keyword: keyword,
+                    target: 'featured-image'
+                }),
+            })
+                .then(response => {
+                    if (response.ok) {
+                        const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--wp-admin-theme-color--warning').trim();
+                        const warningColor = cssVar || '#ffcb09';
+                        statusDiv.textContent = '🟡 Request sent! The featured image is being generated. Refresh this page in a few minutes to see the new image.';
+                        statusDiv.style.color = warningColor;
+                    } else {
+                        response.json().then(err => {
+                            const errorMessage = err.message || 'An unknown error occurred.';
+                            statusDiv.textContent = `Error: ${errorMessage}`;
+                            statusDiv.style.color = 'red';
+                            replaceFeaturedImageBtn.disabled = false;
+                        }).catch(() => {
+                            statusDiv.textContent = `Error: Request failed with status ${response.status} (${response.statusText}).`;
+                            statusDiv.style.color = 'red';
+                            replaceFeaturedImageBtn.disabled = false;
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch Error:', error);
+                    statusDiv.textContent = 'Error: Failed to fetch. Please check the browser console for more details.';
+                    statusDiv.style.color = 'red';
+                    replaceFeaturedImageBtn.disabled = false;
                 });
         });
     }

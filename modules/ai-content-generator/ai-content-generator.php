@@ -74,6 +74,11 @@ class DH_AI_Content_Generator {
                     <?php esc_html_e('Create Notebook', 'directory-helpers'); ?>
                 </button>
             </p>
+            <p style="margin: 8px 0 0 0;">
+                <button type="button" id="dh-replace-featured-image" class="button" style="width: 100%;">
+                    <?php esc_html_e('Replace Featured Image', 'directory-helpers'); ?>
+                </button>
+            </p>
             <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"></div>
         </div>
         <?php
@@ -131,11 +136,19 @@ class DH_AI_Content_Generator {
             }
         }
 
+        // Get ACF keyword field value if it exists
+        $acf_keyword = '';
+        if (function_exists('get_field')) {
+            $acf_keyword = (string) get_field('keyword', $post->ID);
+        }
+
         wp_localize_script('dh-ai-content-generator-js', 'aiContentGenerator', array(
             'webhookUrl'   => $options['n8n_webhook_url'] ?? '',
             'notebookWebhookUrl' => $options['notebook_webhook_url'] ?? '',
+            'featuredImageWebhookUrl' => $options['featured_image_webhook_url'] ?? '',
             'postTitle'    => isset($post->post_title) ? wp_strip_all_tags(get_the_title($post)) : '',
             'unsplashSlug' => $unsplash_slug,
+            'acfKeyword'   => $acf_keyword,
             'triggerEndpoint' => rest_url('directory-helpers/v1/trigger-webhook'),
             'nonce' => wp_create_nonce('wp_rest'),
             'postId' => isset($post->ID) ? (int) $post->ID : 0,
@@ -207,6 +220,8 @@ class DH_AI_Content_Generator {
             $url = $options['notebook_webhook_url'] ?? '';
         } elseif ($target === 'ai') {
             $url = $options['n8n_webhook_url'] ?? '';
+        } elseif ($target === 'featured-image') {
+            $url = $options['featured_image_webhook_url'] ?? '';
         }
         if (empty($url)) {
             return new WP_Error('missing_configuration', 'Webhook URL not configured.', array('status' => 400));

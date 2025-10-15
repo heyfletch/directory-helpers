@@ -361,6 +361,7 @@ class Directory_Helpers {
             $submitted_options = $_POST['directory_helpers_options'];
             $options['n8n_webhook_url'] = isset($submitted_options['n8n_webhook_url']) ? esc_url_raw($submitted_options['n8n_webhook_url']) : '';
             $options['notebook_webhook_url'] = isset($submitted_options['notebook_webhook_url']) ? esc_url_raw($submitted_options['notebook_webhook_url']) : '';
+            $options['featured_image_webhook_url'] = isset($submitted_options['featured_image_webhook_url']) ? esc_url_raw($submitted_options['featured_image_webhook_url']) : '';
             $options['shared_secret_key'] = isset($submitted_options['shared_secret_key']) ? sanitize_text_field($submitted_options['shared_secret_key']) : '';
             $options['video_queue_max_retries'] = isset($submitted_options['video_queue_max_retries']) ? absint($submitted_options['video_queue_max_retries']) : 0;
             // DataForSEO credentials (Basic Auth)

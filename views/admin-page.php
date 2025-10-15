@@ -83,6 +83,15 @@
                         </tr>
                         <tr>
                             <th scope="row">
+                                <label for="featured_image_webhook_url"><?php esc_html_e('Featured Image Webhook URL', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <input type="url" id="featured_image_webhook_url" name="directory_helpers_options[featured_image_webhook_url]" value="<?php echo esc_attr($options['featured_image_webhook_url'] ?? ''); ?>" class="regular-text" placeholder="https://flow.pressento.com/webhook/...">
+                                <p class="description"><?php esc_html_e('Used by the Replace Featured Image button in the editor.', 'directory-helpers'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
                                 <label for="video_queue_max_retries"><?php esc_html_e('Video Queue Max Retries', 'directory-helpers'); ?></label>
                             </th>
                             <td>
