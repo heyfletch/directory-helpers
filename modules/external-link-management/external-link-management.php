@@ -1325,12 +1325,12 @@ class DH_External_Link_Management {
     }
     
     /**
-     * Calculate and store Link Health status for a post based on its external links.
+     * Update post link health meta based on current link status codes
      * 
      * Link Health Logic:
      * - "all_ok": All links are 200 OR verified (override active) OR no external links
-     * - "warning": All links are 200, 403, or verified
-     * - "red_alert": Any link has a code other than 200/403 and is not verified
+     * - "warning": Any link has status 403 or 0 (and not verified)
+     * - "red_alert": Any link has a code other than 200, 403, or 0 (and not verified)
      * 
      * @param int $post_id Post ID
      */
@@ -1377,10 +1377,15 @@ class DH_External_Link_Management {
             $counts[$effective_code]++;
             
             // Determine health level
-            if ($effective_code !== 200 && $effective_code !== 403) {
-                $has_red_alert = true;
-            } elseif ($effective_code === 403) {
+            // All OK = 200 only
+            // Warning = 403 or 0
+            // Red Alert = everything else
+            if ($effective_code === 200) {
+                // All OK - do nothing
+            } elseif ($effective_code === 403 || $effective_code === 0) {
                 $has_warning = true;
+            } else {
+                $has_red_alert = true;
             }
         }
         

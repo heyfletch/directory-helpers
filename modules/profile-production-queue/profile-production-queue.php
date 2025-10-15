@@ -418,8 +418,11 @@ class DH_Profile_Production_Queue {
             delete_option(self::OPTION_LAST_ERROR);
         }
         
+        // Auto-start the queue
+        update_option(self::OPTION_QUEUE_ACTIVE, true);
+        
         wp_send_json_success(array(
-            'message' => sprintf('Added %d new profiles to pipeline (total: %d)', $added_count, count($merged_profile_ids)),
+            'message' => sprintf('Added %d new profiles to pipeline (total: %d) - Queue started!', $added_count, count($merged_profile_ids)),
             'total' => count($merged_profile_ids),
             'added' => $added_count,
         ));
