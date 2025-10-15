@@ -197,7 +197,7 @@ jQuery(document).ready(function ($) {
                     if (response.ok) {
                         const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--wp-admin-theme-color--warning').trim();
                         const warningColor = cssVar || '#ffcb09';
-                        statusDiv.textContent = '🟡 Request sent! The featured image is being generated. Refresh this page in a few minutes to see the new image.';
+                        statusDiv.textContent = '🟡 Request sent to n8n! Refresh this page in about 15 seconds to see the new image.';
                         statusDiv.style.color = warningColor;
                     } else {
                         response.json().then(err => {
