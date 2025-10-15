@@ -1,8 +1,8 @@
-# Replace Featured Image Button - Setup Instructions
+# Redo Featured Image Button - Setup Instructions
 
 ## What Was Implemented
 
-A new "Replace Featured Image" button in the AI Content Generator meta box on city-listing and state-listing post edit screens. The button triggers your n8n workflow to generate and replace the featured image.
+A new "Redo Featured Image" button in the AI Content Generator meta box on city-listing and state-listing post edit screens. The button triggers your n8n workflow to generate and replace the featured image.
 
 ---
 
@@ -116,7 +116,7 @@ You should see the workflow execute with the correct data in setInputs.
 
 1. Edit any city-listing or state-listing post
 2. Look for the **"AI Content Generator"** meta box (usually in the right sidebar)
-3. You should see the **"Replace Featured Image"** button below the "Create Notebook" button
+3. You should see the **"Redo Featured Image"** button below the "Create Notebook" button
 4. Click the button
 5. Confirm the dialog
 6. You should see: "🟡 Request sent! The featured image is being generated..."
