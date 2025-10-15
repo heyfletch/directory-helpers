@@ -564,18 +564,45 @@ class DH_Custom_Post_Statuses {
         if (preg_match('#^/profile/([^/]+)/?$#', $request_uri, $matches)) {
             $slug = $matches[1];
             
+            // Use transient cache to avoid repeated queries (1 hour cache)
+            $cache_key = 'dh_closed_profile_404_' . md5($slug);
+            $cached = get_transient($cache_key);
+            
+            if ($cached === 'not_found') {
+                return; // Already checked, no closed profile exists
+            } elseif ($cached && is_array($cached)) {
+                // Cached redirect data exists
+                $redirect_to = $cached['redirect_to'];
+                
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('CLOSED PROFILE REDIRECT (404, cached): Profile "' . $cached['title'] . '" (ID: ' . $cached['id'] . ') -> ' . $redirect_to . ' | Referrer: ' . ($_SERVER['HTTP_REFERER'] ?? 'none') . ' | User-Agent: ' . ($_SERVER['HTTP_USER_AGENT'] ?? 'none'));
+                }
+                
+                wp_redirect($redirect_to, 301);
+                exit;
+            }
+            
             // Look for a closed profile with this slug
             $posts = get_posts(array(
                 'name' => $slug,
                 'post_type' => 'profile',
                 'post_status' => 'closed',
-                'numberposts' => 1
+                'numberposts' => 1,
+                'fields' => 'ids', // Only get IDs for performance
             ));
             
             if (!empty($posts)) {
-                $post = $posts[0];
+                $post_id = $posts[0];
+                $post = get_post($post_id);
                 $city_url = $this->get_city_url_for_profile($post);
                 $redirect_to = $city_url ?: home_url();
+                
+                // Cache the redirect data
+                set_transient($cache_key, array(
+                    'id' => $post->ID,
+                    'title' => $post->post_title,
+                    'redirect_to' => $redirect_to,
+                ), HOUR_IN_SECONDS);
                 
                 // Log suspicious closed profile access
                 if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -584,6 +611,9 @@ class DH_Custom_Post_Statuses {
                 
                 wp_redirect($redirect_to, 301);
                 exit;
+            } else {
+                // No closed profile found, cache the negative result
+                set_transient($cache_key, 'not_found', HOUR_IN_SECONDS);
             }
         }
     }
@@ -599,8 +629,10 @@ class DH_Custom_Post_Statuses {
         
         // Clear cache if status changed to or from 'closed'
         if ($new_status === 'closed' || $old_status === 'closed') {
-            $cache_key = 'dh_closed_profile_' . md5($post->post_name);
-            delete_transient($cache_key);
+            $slug_hash = md5($post->post_name);
+            // Clear both cache keys (pre_get_posts and 404 handler)
+            delete_transient('dh_closed_profile_' . $slug_hash);
+            delete_transient('dh_closed_profile_404_' . $slug_hash);
         }
     }
 }
