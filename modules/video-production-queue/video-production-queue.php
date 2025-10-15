@@ -36,8 +36,8 @@ class DH_Video_Production_Queue {
      * Constructor
      */
     public function __construct() {
-        // Add admin menu
-        add_action('admin_menu', array($this, 'add_admin_menu'));
+        // Add admin menu with priority 20 to ensure parent menu exists first
+        add_action('admin_menu', array($this, 'add_admin_menu'), 20);
         
         // Enqueue admin scripts
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
