@@ -36,9 +36,18 @@ class DH_Content_Production_Queue {
     const BATCH_SIZE = 5;
     
     /**
+     * Log file path
+     */
+    private $log_file;
+    
+    /**
      * Constructor
      */
     public function __construct() {
+        // Set log file path
+        $upload_dir = wp_upload_dir();
+        $this->log_file = $upload_dir['basedir'] . '/content-production-queue.log';
+        
         // Add admin menu with priority 20 to ensure parent menu exists first
         add_action('admin_menu', array($this, 'add_admin_menu'), 20);
         
@@ -425,6 +434,15 @@ class DH_Content_Production_Queue {
             wp_send_json_error(array('message' => 'No eligible posts to publish'));
         }
         
+        // Log queue start
+        $this->log(sprintf(
+            "=== QUEUE STARTED ===\nMode: %s\nTotal eligible posts: %d\nUser: %s\nTimestamp: %s",
+            $mode,
+            count($posts),
+            wp_get_current_user()->user_login,
+            current_time('Y-m-d H:i:s')
+        ));
+        
         // Reset counters and set queue active
         update_option(self::OPTION_QUEUE_ACTIVE, true);
         update_option(self::OPTION_PUBLISHED_COUNT, 0);
@@ -452,6 +470,12 @@ class DH_Content_Production_Queue {
         
         update_option(self::OPTION_QUEUE_ACTIVE, false);
         update_option(self::OPTION_CURRENT_POST, 0);
+        
+        $this->log(sprintf(
+            "=== QUEUE STOPPED ===\nUser: %s\nTimestamp: %s",
+            wp_get_current_user()->user_login,
+            current_time('Y-m-d H:i:s')
+        ));
         
         wp_send_json_success(array('message' => 'Queue stopped'));
     }
@@ -553,6 +577,13 @@ class DH_Content_Production_Queue {
         
         if (empty($posts)) {
             // No more posts, stop queue
+            $final_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
+            $this->log(sprintf(
+                "=== QUEUE COMPLETED ===\nTotal published: %d\nTimestamp: %s\n",
+                $final_count,
+                current_time('Y-m-d H:i:s')
+            ));
+            
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
             return;
@@ -561,6 +592,12 @@ class DH_Content_Production_Queue {
         // Process batch of posts (up to BATCH_SIZE)
         $batch_count = min(self::BATCH_SIZE, count($posts));
         $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
+        
+        $this->log(sprintf(
+            "--- Batch Start ---\nProcessing %d posts (Remaining: %d)",
+            $batch_count,
+            count($posts)
+        ));
         
         for ($i = 0; $i < $batch_count; $i++) {
             $post = $posts[$i];
@@ -577,6 +614,21 @@ class DH_Content_Production_Queue {
             if (!is_wp_error($result)) {
                 $published_count++;
                 update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
+                
+                $this->log(sprintf(
+                    "✓ Published #%d: %s (ID: %d, Type: %s)",
+                    $published_count,
+                    get_the_title($post->ID),
+                    $post->ID,
+                    $post->post_type
+                ));
+            } else {
+                $this->log(sprintf(
+                    "✗ Failed to publish: %s (ID: %d) - Error: %s",
+                    get_the_title($post->ID),
+                    $post->ID,
+                    $result->get_error_message()
+                ));
             }
             
             // Small delay between posts in the batch to avoid overwhelming the server
@@ -585,11 +637,19 @@ class DH_Content_Production_Queue {
             }
         }
         
+        $this->log("--- Batch End ---\n");
+        
         // Check if there are more posts to process
         $remaining_posts = $this->get_eligible_posts($mode);
         
         if (empty($remaining_posts)) {
             // All done, stop queue
+            $this->log(sprintf(
+                "=== QUEUE COMPLETED ===\nTotal published: %d\nTimestamp: %s\n",
+                $published_count,
+                current_time('Y-m-d H:i:s')
+            ));
+            
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
         }
@@ -636,5 +696,16 @@ class DH_Content_Production_Queue {
             'checked' => $checked,
             'total' => count($posts)
         ));
+    }
+    
+    /**
+     * Log message to file
+     */
+    private function log($message) {
+        $timestamp = current_time('Y-m-d H:i:s');
+        $log_entry = sprintf("[%s] %s\n", $timestamp, $message);
+        
+        // Append to log file
+        file_put_contents($this->log_file, $log_entry, FILE_APPEND | LOCK_EX);
     }
 }
