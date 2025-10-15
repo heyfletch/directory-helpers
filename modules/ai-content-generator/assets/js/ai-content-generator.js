@@ -172,12 +172,6 @@ jQuery(document).ready(function ($) {
                 return;
             }
 
-            if (!window.confirm('Are you sure you want to replace the featured image for this post?')) {
-                statusDiv.textContent = 'Cancelled.';
-                statusDiv.style.color = 'inherit';
-                return;
-            }
-
             statusDiv.textContent = 'Sending request...';
             statusDiv.style.color = 'inherit';
             replaceFeaturedImageBtn.disabled = true;

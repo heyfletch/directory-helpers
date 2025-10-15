@@ -68,6 +68,10 @@ class Directory_Helpers {
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
         
+        // Load modules IMMEDIATELY so REST routes can register
+        $this->load_modules();
+        $this->init_active_modules();
+        
         // Initialize the plugin on init hook (not plugins_loaded)
         add_action('init', array($this, 'init'), 0);
         
@@ -105,6 +109,9 @@ class Directory_Helpers {
         if (!get_option('directory_helpers_options')) {
             add_option('directory_helpers_options', $default_options);
         }
+        
+        // Flush rewrite rules to register REST API routes
+        flush_rewrite_rules();
     }
 
     /**
@@ -120,12 +127,6 @@ class Directory_Helpers {
     public function init() {
         // Load text domain for internationalization directly on init
         load_plugin_textdomain('directory-helpers', false, dirname(plugin_basename(__FILE__)) . '/languages');
-
-        // Load modules
-        $this->load_modules();
-        
-        // Initialize active modules
-        $this->init_active_modules();
 
         // Register WP-CLI commands
         if ( defined( 'WP_CLI' ) && WP_CLI ) {

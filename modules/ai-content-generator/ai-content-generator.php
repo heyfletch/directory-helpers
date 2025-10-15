@@ -76,7 +76,7 @@ class DH_AI_Content_Generator {
             </p>
             <p style="margin: 8px 0 0 0;">
                 <button type="button" id="dh-replace-featured-image" class="button" style="width: 100%;">
-                    <?php esc_html_e('Replace Featured Image', 'directory-helpers'); ?>
+                    <?php esc_html_e('Redo Featured Image', 'directory-helpers'); ?>
                 </button>
             </p>
             <div id="dh-ai-status" style="margin-top: 10px; font-size: 12px;"></div>
@@ -194,12 +194,6 @@ class DH_AI_Content_Generator {
      * Handle trigger webhook by server-side posting to configured URLs.
      */
     public function handle_trigger_webhook( WP_REST_Request $request ) {
-        // Verify nonce
-        $nonce = $request->get_header('x-wp-nonce');
-        if (!wp_verify_nonce($nonce, 'wp_rest')) {
-            return new WP_Error('rest_forbidden', 'Invalid nonce.', array('status' => 403));
-        }
-
         $params = $request->get_json_params();
         $post_id = isset($params['postId']) ? absint($params['postId']) : 0;
         $keyword = isset($params['keyword']) ? sanitize_text_field($params['keyword']) : '';
