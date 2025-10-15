@@ -153,6 +153,15 @@ class DH_AI_Content_Generator {
                 'permission_callback' => '__return_true' // We will handle security via shared secret
             )
         );
+        
+        // New endpoint for receiving featured media only
+        register_rest_route('ai-content-plugin/v1', '/receive-featured-media',
+            array(
+                'methods'  => 'POST',
+                'callback' => array($this, 'handle_receive_featured_media'),
+                'permission_callback' => '__return_true' // We will handle security via shared secret
+            )
+        );
     }
 
     /**
@@ -338,6 +347,103 @@ class DH_AI_Content_Generator {
         do_action('directory_helpers/ai_content_updated', $post_id, $content);
 
         return new WP_REST_Response($response, 200);
+    }
+
+    /**
+     * Handle receiving featured media only.
+     * Minimal endpoint that only requires secretKey, postId, and featured_media.
+     * Optional: content, image_1_id, image_2_id can also be sent.
+     */
+    public function handle_receive_featured_media($request) {
+        $options = get_option('directory_helpers_options');
+        $secret_key = $options['shared_secret_key'] ?? '';
+
+        $params = $request->get_json_params();
+        $received_secret = isset($params['secretKey']) ? sanitize_text_field($params['secretKey']) : '';
+
+        if (empty($secret_key) || $received_secret !== $secret_key) {
+            return new WP_Error('rest_forbidden', 'Invalid secret key.', array('status' => 403));
+        }
+
+        $post_id = isset($params['postId']) ? absint($params['postId']) : 0;
+        $featured_media_id = isset($params['featured_media']) ? absint($params['featured_media']) : 0;
+
+        // Validate required fields
+        if (empty($post_id)) {
+            return new WP_Error('missing_parameters', 'Missing postId.', array('status' => 400));
+        }
+
+        if (empty($featured_media_id)) {
+            return new WP_Error('missing_parameters', 'Missing featured_media.', array('status' => 400));
+        }
+
+        // Verify post exists
+        $post = get_post($post_id);
+        if (!$post) {
+            return new WP_Error('invalid_post', 'Post not found.', array('status' => 404));
+        }
+
+        $response = array();
+
+        // Set featured image
+        $featured_set = null;
+        $featured_error = '';
+        $attachment = get_post($featured_media_id);
+        if ($attachment && $attachment->post_type === 'attachment') {
+            $set = set_post_thumbnail($post_id, $featured_media_id);
+            if ($set) {
+                $featured_set = true;
+                $response['message'] = 'Featured media set successfully.';
+            } else {
+                $featured_set = false;
+                $featured_error = 'Failed to set featured image (post type may not support thumbnails).';
+                $response['message'] = $featured_error;
+            }
+        } else {
+            $featured_set = false;
+            $featured_error = 'Invalid featured_media ID.';
+            $response['message'] = $featured_error;
+        }
+
+        $response['featured_media_set'] = $featured_set;
+        if (!$featured_set && $featured_error) {
+            $response['error'] = $featured_error;
+        }
+
+        // Optional: Update content if provided
+        $content = isset($params['content']) ? wp_kses_post($params['content']) : '';
+        if (!empty($content)) {
+            $post_data = array(
+                'ID'           => $post_id,
+                'post_content' => $content,
+            );
+            $result = wp_update_post($post_data, true);
+            if (is_wp_error($result)) {
+                $response['content_warning'] = 'Failed to update content: ' . $result->get_error_message();
+            } else {
+                $response['content_updated'] = true;
+            }
+        }
+
+        // Optional: Store body images in ACF fields if provided
+        $image_1_id = isset($params['image_1_id']) ? absint($params['image_1_id']) : 0;
+        $image_2_id = isset($params['image_2_id']) ? absint($params['image_2_id']) : 0;
+        
+        if ($image_1_id && function_exists('update_field')) {
+            update_field('body_image_1', $image_1_id, $post_id);
+            $response['image_1_saved'] = true;
+        }
+        if ($image_2_id && function_exists('update_field')) {
+            update_field('body_image_2', $image_2_id, $post_id);
+            $response['image_2_saved'] = true;
+        }
+
+        // Fire action if content was updated
+        if (!empty($content)) {
+            do_action('directory_helpers/ai_content_updated', $post_id, $content);
+        }
+
+        return new WP_REST_Response($response, $featured_set ? 200 : 400);
     }
 
     /**
