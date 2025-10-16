@@ -234,7 +234,15 @@ class DH_Prep_Pro {
                 $raw_title = wp_strip_all_tags(get_the_title($cid));
                 $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
                 $clean_title = preg_replace('/\s+/', ' ', $clean_title);
-                $keyword = 'dog training in ' . $clean_title;
+                
+                // Get niche from taxonomy and convert to Title Case
+                $niche_text = 'dog training'; // Default fallback
+                $niche_terms = get_the_terms($cid, 'niche');
+                if ($niche_terms && !is_wp_error($niche_terms) && !empty($niche_terms)) {
+                    $niche_text = ucwords(strtolower($niche_terms[0]->name));
+                }
+                
+                $keyword = $niche_text . ' in ' . $clean_title;
                 
                 $body = wp_json_encode(array(
                     'postId' => $cid,

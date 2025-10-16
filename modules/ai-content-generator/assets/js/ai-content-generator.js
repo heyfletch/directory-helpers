@@ -176,9 +176,8 @@ jQuery(document).ready(function ($) {
             statusDiv.style.color = 'inherit';
             replaceFeaturedImageBtn.disabled = true;
 
-            // Get ACF keyword or use the keyword input field
-            const acfKeyword = (aiContentGenerator && aiContentGenerator.acfKeyword) || '';
-            const keyword = acfKeyword || (keywordInput ? keywordInput.value : '');
+            // Get keyword from the input field
+            const keyword = keywordInput ? keywordInput.value : '';
 
             fetch(aiContentGenerator.triggerEndpoint, {
                 method: 'POST',

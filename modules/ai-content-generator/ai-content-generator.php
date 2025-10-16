@@ -59,7 +59,15 @@ class DH_AI_Content_Generator {
         $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
         // Collapse multiple spaces to a single space
         $clean_title = preg_replace('/\s+/', ' ', $clean_title);
-        $default_keyword = 'dog training in ' . $clean_title;
+        
+        // Get niche from taxonomy and convert to Title Case
+        $niche_text = 'dog training'; // Default fallback
+        $niche_terms = get_the_terms($post->ID, 'niche');
+        if ($niche_terms && !is_wp_error($niche_terms) && !empty($niche_terms)) {
+            $niche_text = ucwords(strtolower($niche_terms[0]->name));
+        }
+        
+        $default_keyword = $niche_text . ' in ' . $clean_title;
         ?>
         <div class="dh-ai-content-generator-wrapper">
             <p>
@@ -136,19 +144,12 @@ class DH_AI_Content_Generator {
             }
         }
 
-        // Get ACF keyword field value if it exists
-        $acf_keyword = '';
-        if (function_exists('get_field')) {
-            $acf_keyword = (string) get_field('keyword', $post->ID);
-        }
-
         wp_localize_script('dh-ai-content-generator-js', 'aiContentGenerator', array(
             'webhookUrl'   => $options['n8n_webhook_url'] ?? '',
             'notebookWebhookUrl' => $options['notebook_webhook_url'] ?? '',
             'featuredImageWebhookUrl' => $options['featured_image_webhook_url'] ?? '',
             'postTitle'    => isset($post->post_title) ? wp_strip_all_tags(get_the_title($post)) : '',
             'unsplashSlug' => $unsplash_slug,
-            'acfKeyword'   => $acf_keyword,
             'triggerEndpoint' => rest_url('directory-helpers/v1/trigger-webhook'),
             'nonce' => wp_create_nonce('wp_rest'),
             'postId' => isset($post->ID) ? (int) $post->ID : 0,
