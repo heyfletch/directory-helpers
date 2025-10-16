@@ -179,18 +179,19 @@ class DH_Content_Production_Queue {
                 </div>
             </div>
             
-            <h2><?php esc_html_e('Draft Posts', 'directory-helpers'); ?></h2>
-            <p class="description">
-                <?php esc_html_e('Posts eligible for publishing must have: Featured Image, Body Image 1, Body Image 2, and Link Health (All Ok or Warning).', 'directory-helpers'); ?>
-            </p>
-            <p>
-                <button type="button" id="dh-recheck-all-health-btn" class="button">
-                    <?php esc_html_e('Recheck All Link Health', 'directory-helpers'); ?>
-                </button>
-                <span id="dh-recheck-status" style="margin-left: 10px;"></span>
-            </p>
-            
-            <table class="wp-list-table widefat fixed striped">
+            <div class="dh-cpq-draft-posts">
+                <h2><?php esc_html_e('Draft Posts', 'directory-helpers'); ?></h2>
+                <p class="description">
+                    <?php esc_html_e('Posts eligible for publishing must have: Featured Image, Body Image 1, Body Image 2, and Link Health (All Ok or Warning).', 'directory-helpers'); ?>
+                </p>
+                <p>
+                    <button type="button" id="dh-recheck-all-health-btn" class="button">
+                        <?php esc_html_e('Recheck All Link Health', 'directory-helpers'); ?>
+                    </button>
+                    <span id="dh-recheck-status" style="margin-left: 10px;"></span>
+                </p>
+                
+                <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
                         <th><?php esc_html_e('Title', 'directory-helpers'); ?></th>
@@ -215,8 +216,9 @@ class DH_Content_Production_Queue {
                             $has_body1 = !empty(get_post_meta($post->ID, 'body_image_1', true));
                             $has_body2 = !empty(get_post_meta($post->ID, 'body_image_2', true));
                             $all_images_present = $has_featured && $has_body1 && $has_body2;
+                            $has_images = $all_images_present ? 1 : 0;
                             ?>
-                            <tr>
+                            <tr data-post-id="<?php echo esc_attr($post->ID); ?>" data-health="<?php echo esc_attr($link_health); ?>" data-has-images="<?php echo $has_images; ?>">
                                 <td>
                                     <strong>
                                         <a href="<?php echo esc_url(get_edit_post_link($post->ID)); ?>" target="_blank">
@@ -238,6 +240,7 @@ class DH_Content_Production_Queue {
                     <?php endif; ?>
                 </tbody>
             </table>
+            </div><!-- .dh-cpq-draft-posts -->
         </div>
         <?php
     }
@@ -430,6 +433,7 @@ class DH_Content_Production_Queue {
         update_option(self::OPTION_PUBLISHED_COUNT, 0);
         update_option(self::OPTION_CURRENT_POST, 0);
         update_option(self::OPTION_QUEUE_MODE, $mode);
+        delete_option('dh_cpq_affected_states'); // Clear old tracking
         
         // Process first batch immediately
         $this->process_next_in_queue();
@@ -532,6 +536,7 @@ class DH_Content_Production_Queue {
         
         update_option(self::OPTION_PUBLISHED_COUNT, 0);
         update_option(self::OPTION_CURRENT_POST, 0);
+        delete_option('dh_cpq_affected_states');
         
         wp_send_json_success(array('message' => 'Counters reset'));
     }
@@ -570,8 +575,8 @@ class DH_Content_Production_Queue {
             $prime_hooked = true;
         }
         
-        // Track affected state pages for batch cache update
-        $affected_states = array();
+        // Track affected state slugs across entire queue run
+        $affected_states = get_option('dh_cpq_affected_states', array());
         
         for ($i = 0; $i < $batch_count; $i++) {
             $post = $posts[$i];
@@ -604,30 +609,18 @@ class DH_Content_Production_Queue {
             );
             
             if ($result !== false) {
-                // No cache to clear - posts were never published before
                 $published_count++;
                 update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
             }
             
             // Minimal delay between posts in the batch
             if ($i < $batch_count - 1) {
-                usleep(50000); // 0.05 second delay (reduced from 0.1)
+                usleep(50000); // 0.05 second delay
             }
         }
         
-        // Clear and prime affected state-listing pages once per batch
-        foreach ($affected_states as $state_slug) {
-            $state_listing_id = $this->get_state_listing_by_slug($state_slug);
-            if ($state_listing_id) {
-                // Purge state-listing cache
-                do_action('litespeed_purge_post', $state_listing_id);
-                // Prime state-listing cache with non-blocking request
-                $state_url = get_permalink($state_listing_id);
-                if ($state_url) {
-                    wp_remote_get($state_url, array('blocking' => false, 'timeout' => 0.01));
-                }
-            }
-        }
+        // Save affected states for final cache clear
+        update_option('dh_cpq_affected_states', $affected_states, false);
         
         // Re-hook cache priming
         if ($prime_hooked && $dh_lscache_integration) {
@@ -642,8 +635,11 @@ class DH_Content_Production_Queue {
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
             
-            // Clear all state-listing caches at completion
-            $this->clear_all_state_listing_caches();
+            // Clear affected state-listing caches at completion
+            $this->clear_affected_state_caches();
+            
+            // Clean up tracking
+            delete_option('dh_cpq_affected_states');
         }
         // If there are more posts, they will be processed by the next AJAX poll
     }
@@ -665,23 +661,25 @@ class DH_Content_Production_Queue {
     }
     
     /**
-     * Clear caches for all published state-listing pages
+     * Clear caches for affected state-listing pages only
      */
-    private function clear_all_state_listing_caches() {
-        $state_listings = get_posts(array(
-            'post_type' => 'state-listing',
-            'post_status' => 'publish',
-            'posts_per_page' => -1,
-            'fields' => 'ids',
-        ));
+    private function clear_affected_state_caches() {
+        $affected_states = get_option('dh_cpq_affected_states', array());
         
-        foreach ($state_listings as $state_id) {
-            // Purge LiteSpeed cache
-            do_action('litespeed_purge_post', $state_id);
-            // Prime cache with non-blocking request
-            $state_url = get_permalink($state_id);
-            if ($state_url) {
-                wp_remote_get($state_url, array('blocking' => false, 'timeout' => 0.01));
+        if (empty($affected_states)) {
+            return;
+        }
+        
+        foreach ($affected_states as $state_slug) {
+            $state_listing_id = $this->get_state_listing_by_slug($state_slug);
+            if ($state_listing_id) {
+                // Purge LiteSpeed cache
+                do_action('litespeed_purge_post', $state_listing_id);
+                // Prime cache with non-blocking request
+                $state_url = get_permalink($state_listing_id);
+                if ($state_url) {
+                    wp_remote_get($state_url, array('blocking' => false, 'timeout' => 0.01));
+                }
             }
         }
     }

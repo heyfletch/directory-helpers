@@ -31,8 +31,19 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     showNotice(response.data.message, 'success');
                     
-                    // Update button states
+                    // Update status to Running
+                    $('#dh-cpq-status-text').html('<span style="color: #46b450;">▶️ Running</span>');
+                    
+                    // Hide start buttons
                     $('#dh-start-cpq-healthy-btn, #dh-start-cpq-all-btn').hide();
+                    
+                    // Hide only eligible rows being published
+                    hideEligibleRows(mode);
+                    
+                    // Show processing message if provided
+                    if (response.data.total) {
+                        $('<div class="dh-cpq-processing-msg" style="background: #fff; padding: 20px; margin: 10px 0; border-left: 4px solid #46b450; box-shadow: 0 1px 1px rgba(0,0,0,.04);"><p style="margin: 0; color: #46b450;"><span class="dashicons dashicons-update-alt" style="animation: rotation 2s infinite linear; display: inline-block;"></span> <strong>Publishing ' + response.data.total + ' eligible cities...</strong></p><style>@keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(359deg); }}</style></div>').insertAfter('.dh-cpq-status-box');
+                    }
                     
                     // Start batch processing
                     startBatchProcessing();
@@ -153,6 +164,34 @@ jQuery(document).ready(function($) {
             }
         });
     });
+    
+    /**
+     * Hide eligible rows based on mode
+     */
+    function hideEligibleRows(mode) {
+        $('.dh-cpq-draft-posts table tbody tr').each(function() {
+            const $row = $(this);
+            const health = $row.data('health');
+            const hasImages = $row.data('has-images') == 1;
+            
+            // Check if this row is eligible based on mode and requirements
+            let isEligible = false;
+            
+            if (hasImages) {
+                if (mode === 'healthy') {
+                    // Only all_ok or not_exists (no value means not checked yet)
+                    isEligible = (health === 'all_ok' || health === '' || !health);
+                } else {
+                    // Include warnings too
+                    isEligible = (health === 'all_ok' || health === 'warning' || health === '' || !health);
+                }
+            }
+            
+            if (isEligible) {
+                $row.fadeOut(400);
+            }
+        });
+    }
     
     /**
      * Batch processing and status polling
