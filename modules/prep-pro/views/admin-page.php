@@ -42,6 +42,16 @@ if (!defined('ABSPATH')) exit;
         </div>
     <?php endif; ?>
     
+    <?php if (isset($_GET['rerank_clear'])): ?>
+        <div class="notice notice-success is-dismissible">
+            <p><strong>Reranking and cache clear complete.</strong> 
+            <?php if (isset($_GET['cities']) && $_GET['cities'] > 0): ?>
+                Reranked <?php echo (int)$_GET['cities']; ?> cities and cleared cache.
+            <?php endif; ?>
+            </p>
+        </div>
+    <?php endif; ?>
+    
     <?php if (isset($_GET['cache_cleared'])): ?>
         <div class="notice notice-success is-dismissible">
             <p><strong>Cache cleared.</strong></p>
@@ -218,6 +228,13 @@ if (!defined('ABSPATH')) exit;
             <p>Operate on the <?php echo count($tracking['profile_ids'] ?? array()); ?> profiles you just published.</p>
             
             <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+                <!-- Rerank & Clear Cache -->
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display: inline-block;" onsubmit="return confirm('Rerank profiles and clear cache?');">
+                    <?php wp_nonce_field('dh_prep_pro_maintenance'); ?>
+                    <input type="hidden" name="action" value="dh_prep_pro_rerank_clear" />
+                    <button type="submit" class="button button-secondary">Rerank & Clear Cache</button>
+                </form>
+                
                 <!-- Rerank Profiles -->
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display: inline-block;" onsubmit="return confirm('Rerank profiles?');">
                     <?php wp_nonce_field('dh_prep_pro_maintenance'); ?>

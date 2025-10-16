@@ -22,6 +22,7 @@ class DH_Prep_Pro {
         add_action('admin_post_dh_prep_pro_rerank', array($this, 'handle_rerank'));
         add_action('admin_post_dh_prep_pro_clear_cache', array($this, 'handle_clear_cache'));
         add_action('admin_post_dh_prep_pro_prime_cache', array($this, 'handle_prime_cache'));
+        add_action('admin_post_dh_prep_pro_rerank_clear', array($this, 'handle_rerank_clear'));
         add_action('admin_post_dh_prep_pro_clear_prime', array($this, 'handle_clear_prime'));
         add_action('admin_post_dh_prep_pro_rerank_purge_prime', array($this, 'handle_rerank_purge_prime'));
         add_action('admin_post_dh_prep_pro_reset', array($this, 'handle_reset_tracking'));
@@ -449,6 +450,33 @@ class DH_Prep_Pro {
         exit;
     }
     
+    public function handle_rerank_clear() {
+        if (!current_user_can('manage_options')) wp_die('Unauthorized');
+        check_admin_referer('dh_prep_pro_maintenance');
+        
+        $tracking = $this->get_tracking();
+        if (empty($tracking)) {
+            wp_safe_redirect(add_query_arg('page', 'dh-prep-pro', admin_url('admin.php')));
+            exit;
+        }
+        
+        // Rerank
+        $cities_reranked = 0;
+        if (!empty($tracking['profile_ids'])) {
+            $cities_reranked = $this->rerank_posts($tracking['profile_ids'], $tracking['state_slug']);
+        }
+        
+        // Clear cache
+        $this->clear_cache_for_tracking($tracking);
+        
+        wp_safe_redirect(add_query_arg(array(
+            'page' => 'dh-prep-pro', 
+            'rerank_clear' => '1',
+            'cities' => $cities_reranked
+        ), admin_url('admin.php')));
+        exit;
+    }
+    
     public function handle_clear_prime() {
         if (!current_user_can('manage_options')) wp_die('Unauthorized');
         check_admin_referer('dh_prep_pro_maintenance');
@@ -581,29 +609,27 @@ class DH_Prep_Pro {
     }
     
     private function clear_cache_for_tracking($tracking) {
-        // Clear cache for city-listing posts
+        // LiteSpeed Cache purge only (testing simplified approach)
+        
+        // Purge city-listing posts
         if (!empty($tracking['city_listing_ids'])) {
             foreach ($tracking['city_listing_ids'] as $city_id) {
-                clean_post_cache($city_id);
-                wp_cache_delete($city_id, 'posts');
-                wp_cache_delete($city_id, 'post_meta');
+                do_action('litespeed_purge_post', $city_id);
             }
         }
         
-        // Clear cache for state-listing
+        // Purge state-listing
         if (!empty($tracking['state_slug'])) {
             $state_listing = $this->get_state_listing_by_slug($tracking['state_slug']);
             if ($state_listing) {
-                clean_post_cache($state_listing);
-                wp_cache_delete($state_listing, 'posts');
-                wp_cache_delete($state_listing, 'post_meta');
+                do_action('litespeed_purge_post', $state_listing);
             }
         }
         
-        // Clear profile caches
+        // Purge profiles
         if (!empty($tracking['profile_ids'])) {
             foreach ($tracking['profile_ids'] as $pid) {
-                clean_post_cache($pid);
+                do_action('litespeed_purge_post', $pid);
             }
         }
     }
