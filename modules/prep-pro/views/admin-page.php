@@ -74,12 +74,10 @@ if (!defined('ABSPATH')) exit;
     
     <!-- Filter Form -->
     <div style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
-        <h2 style="margin-top: 0;">Filter Profiles</h2>
         
         <!-- State Selection Grid -->
         <div style="margin-bottom: 20px;">
-            <strong><?php esc_html_e('Select State:', 'directory-helpers'); ?></strong>
-            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <?php
                 // Separate states by published status and sort
                 $published_states = array();
@@ -194,7 +192,7 @@ if (!defined('ABSPATH')) exit;
     <?php if (!empty($profiles)): ?>
         <div style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
             <h2 style="margin-top: 0;">🚀 Publish Profiles & Create Cities</h2>
-            <p>This will create missing city pages, publish all filtered profiles, and send cities for AI content. <strong>Reranking is skipped for speed.</strong></p>
+            <p>This creates new city pages, publishes selected profiles, and sends cities for AI content (1 second delay between each city request).</p>
             
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Publish <?php echo count($profiles); ?> profiles? This will create missing city pages and trigger AI content generation.');">
                 <?php wp_nonce_field('dh_prep_pro_publish'); ?>
@@ -252,11 +250,11 @@ if (!defined('ABSPATH')) exit;
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display: inline-block;" onsubmit="return confirm('Run rerank, purge, and prime all together?');">
                     <?php wp_nonce_field('dh_prep_pro_maintenance'); ?>
                     <input type="hidden" name="action" value="dh_prep_pro_rerank_purge_prime" />
-                    <button type="submit" class="button button-primary">Rerank, Purge, Prime</button>
+                    <button type="submit" class="button button-secondary">Rerank, Purge, Prime</button>
                 </form>
                 
                 <!-- Reset Tracking -->
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display: inline-block; margin-left: 20px;" onsubmit="return confirm('Reset tracking? This will clear the list of tracked profiles.');">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display: inline-block; margin-left: 20px;" onsubmit="return confirm('Reset tracking? This clears the list of recent profiles.');">
                     <?php wp_nonce_field('dh_prep_pro_maintenance'); ?>
                     <input type="hidden" name="action" value="dh_prep_pro_reset" />
                     <button type="submit" class="button">Reset Tracking</button>

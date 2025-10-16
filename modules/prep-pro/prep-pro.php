@@ -251,7 +251,8 @@ class DH_Prep_Pro {
                 if (!is_wp_error($resp)) {
                     $count++;
                 }
-                sleep(1);
+                // Reduced sleep for faster bulk operations (was 1 second)
+                usleep(250000); // 0.25 seconds
             }
         }
         return $count;
@@ -320,12 +321,25 @@ class DH_Prep_Pro {
         $this->trigger_ai_for_cities($created_city_ids);
         
         // 4. Publish profiles
+        // Temporarily unhook ranking module to avoid expensive operations during bulk publish
+        global $dh_profile_rankings;
+        $ranking_hooked = false;
+        if ($dh_profile_rankings && method_exists($dh_profile_rankings, 'update_ranks_on_save')) {
+            remove_action('acf/save_post', array($dh_profile_rankings, 'update_ranks_on_save'), 20);
+            $ranking_hooked = true;
+        }
+        
         $published_count = 0;
         foreach ($profile_ids as $pid) {
             if (get_post_status($pid) !== 'publish') {
                 wp_update_post(array('ID' => $pid, 'post_status' => 'publish'));
                 $published_count++;
             }
+        }
+        
+        // Re-hook ranking module
+        if ($ranking_hooked && $dh_profile_rankings) {
+            add_action('acf/save_post', array($dh_profile_rankings, 'update_ranks_on_save'), 20);
         }
         
         // 5. Clean area terms
