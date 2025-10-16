@@ -56,10 +56,6 @@ jQuery(document).ready(function($) {
         
         const button = $(this);
         
-        if (!confirm('Stop video production queue?')) {
-            return;
-        }
-        
         button.prop('disabled', true);
         button.text('Stopping...');
         
@@ -106,10 +102,6 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         
         const button = $(this);
-        
-        if (!confirm('Reset all queue counters? This will clear attempt counts and allow all posts to be processed again.')) {
-            return;
-        }
         
         button.prop('disabled', true);
         button.text('Resetting...');
