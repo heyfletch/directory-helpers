@@ -259,20 +259,9 @@ class DH_Prep_Pro {
     
     // Store tracking data
     private function save_tracking($profile_ids, $city_ids, $state_slug) {
-        // Get unique city area term IDs
-        $city_term_ids = array();
-        foreach ($profile_ids as $pid) {
-            $terms = get_the_terms($pid, 'area');
-            if ($terms && !is_wp_error($terms)) {
-                $city_term_ids[] = $terms[0]->term_id;
-            }
-        }
-        $city_term_ids = array_unique($city_term_ids);
-        
         update_option(self::TRACKING_OPTION, array(
             'profile_ids' => $profile_ids,
             'city_listing_ids' => $city_ids,
-            'city_term_ids' => $city_term_ids,
             'state_slug' => $state_slug,
             'timestamp' => time(),
         ), false);
@@ -368,26 +357,16 @@ class DH_Prep_Pro {
             exit;
         }
         
-        // Rerank: trigger acf/save_post on one profile per city + once for state
-        if (!empty($tracking['city_term_ids'])) {
-            foreach ($tracking['city_term_ids'] as $city_term_id) {
-                // Find one published profile in this city
-                $rep_profile = $this->find_profile_in_city($city_term_id);
-                if ($rep_profile) {
-                    do_action('acf/save_post', $rep_profile);
-                }
-            }
+        $cities_reranked = 0;
+        if (!empty($tracking['profile_ids'])) {
+            $cities_reranked = $this->rerank_posts($tracking['profile_ids'], $tracking['state_slug']);
         }
         
-        // Rerank state
-        if (!empty($tracking['state_slug'])) {
-            $rep_profile = $this->find_profile_in_state($tracking['state_slug']);
-            if ($rep_profile) {
-                do_action('acf/save_post', $rep_profile);
-            }
-        }
-        
-        wp_safe_redirect(add_query_arg(array('page' => 'dh-prep-pro', 'reranked' => '1'), admin_url('admin.php')));
+        wp_safe_redirect(add_query_arg(array(
+            'page' => 'dh-prep-pro', 
+            'reranked' => '1',
+            'cities' => $cities_reranked
+        ), admin_url('admin.php')));
         exit;
     }
     
@@ -451,19 +430,8 @@ class DH_Prep_Pro {
         }
         
         // Rerank
-        if (!empty($tracking['city_term_ids'])) {
-            foreach ($tracking['city_term_ids'] as $city_term_id) {
-                $rep_profile = $this->find_profile_in_city($city_term_id);
-                if ($rep_profile) {
-                    do_action('acf/save_post', $rep_profile);
-                }
-            }
-        }
-        if (!empty($tracking['state_slug'])) {
-            $rep_profile = $this->find_profile_in_state($tracking['state_slug']);
-            if ($rep_profile) {
-                do_action('acf/save_post', $rep_profile);
-            }
+        if (!empty($tracking['profile_ids'])) {
+            $this->rerank_posts($tracking['profile_ids'], $tracking['state_slug']);
         }
         
         // Clear and prime cache
@@ -486,30 +454,83 @@ class DH_Prep_Pro {
     
     // === HELPER FUNCTIONS ===
     
-    private function find_profile_in_city($city_term_id) {
-        $q = new WP_Query(array(
-            'post_type' => 'profile',
-            'post_status' => 'publish',
-            'posts_per_page' => 1,
-            'tax_query' => array(
-                array('taxonomy' => 'area', 'field' => 'term_id', 'terms' => (int)$city_term_id),
-            ),
-            'fields' => 'ids',
-        ));
-        return !empty($q->posts) ? $q->posts[0] : 0;
+    /**
+     * Rerank posts using the same method as Prep Profiles
+     * 
+     * @param array $post_ids Profile IDs to rerank
+     * @param string $state_slug State slug
+     * @return int Number of cities reranked
+     */
+    private function rerank_posts($post_ids, $state_slug) {
+        if (empty($post_ids)) {
+            return 0;
+        }
+
+        // Only consider published posts for ranking
+        $published_ids = array();
+        foreach ($post_ids as $pid) {
+            if (get_post_status($pid) === 'publish') {
+                $published_ids[] = $pid;
+            }
+        }
+        if (empty($published_ids)) {
+            return 0;
+        }
+
+        // Re-rank city by city (area terms)
+        $area_terms = $this->get_unique_area_terms_for_posts($published_ids);
+        $cities_reranked = 0;
+        foreach ($area_terms as $term_id => $term) {
+            // Use a representative post in this city to trigger ACF save hook ranking
+            $rep = $this->find_post_in_term($published_ids, $term_id, 'area');
+            if ($rep) {
+                do_action('acf/save_post', $rep);
+                $cities_reranked++;
+            }
+        }
+
+        // Finally, trigger a state ranking once using a representative post in the selected state
+        $rep_state_post = $this->find_post_in_state($published_ids, $state_slug);
+        if ($rep_state_post) {
+            do_action('acf/save_post', $rep_state_post);
+        }
+        
+        return $cities_reranked;
     }
     
-    private function find_profile_in_state($state_slug) {
-        $q = new WP_Query(array(
-            'post_type' => 'profile',
-            'post_status' => 'publish',
-            'posts_per_page' => 1,
-            'tax_query' => array(
-                array('taxonomy' => 'state', 'field' => 'slug', 'terms' => $state_slug),
-            ),
-            'fields' => 'ids',
-        ));
-        return !empty($q->posts) ? $q->posts[0] : 0;
+    private function get_unique_area_terms_for_posts($post_ids) {
+        $unique = array();
+        foreach ($post_ids as $pid) {
+            $terms = get_the_terms($pid, 'area');
+            if (!empty($terms) && !is_wp_error($terms)) {
+                $unique[$terms[0]->term_id] = $terms[0];
+            }
+        }
+        return $unique; // term_id => WP_Term
+    }
+
+    private function find_post_in_term($post_ids, $term_id, $taxonomy) {
+        foreach ($post_ids as $pid) {
+            $terms = wp_get_post_terms($pid, $taxonomy, array('fields' => 'ids'));
+            if (!is_wp_error($terms) && in_array((int)$term_id, array_map('intval', (array)$terms), true)) {
+                return $pid;
+            }
+        }
+        return 0;
+    }
+
+    private function find_post_in_state($post_ids, $state_slug) {
+        foreach ($post_ids as $pid) {
+            $terms = get_the_terms($pid, 'state');
+            if (!empty($terms) && !is_wp_error($terms)) {
+                foreach ($terms as $t) {
+                    if ($t->slug === $state_slug) {
+                        return $pid;
+                    }
+                }
+            }
+        }
+        return 0;
     }
     
     private function clear_cache_for_tracking($tracking) {

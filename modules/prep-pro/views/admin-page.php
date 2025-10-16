@@ -34,7 +34,11 @@ if (!defined('ABSPATH')) exit;
     
     <?php if (isset($_GET['reranked'])): ?>
         <div class="notice notice-success is-dismissible">
-            <p><strong>Reranking complete.</strong></p>
+            <p><strong>Reranking complete.</strong> 
+            <?php if (isset($_GET['cities']) && $_GET['cities'] > 0): ?>
+                Reranked <?php echo (int)$_GET['cities']; ?> cities.
+            <?php endif; ?>
+            </p>
         </div>
     <?php endif; ?>
     
