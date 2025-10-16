@@ -297,9 +297,9 @@ class DH_Content_Production_Queue {
         $base_args = array(
             'post_type' => array('city-listing', 'state-listing'),
             'post_status' => 'draft',
-            'posts_per_page' => -1,
+            'posts_per_page' => 100, // Match UI limit - only show/publish what user sees
             'orderby' => 'date',
-            'order' => 'ASC',
+            'order' => 'DESC', // Newest first to match UI
             'meta_query' => array(
                 'relation' => 'AND',
                 // Must have featured image
@@ -562,27 +562,76 @@ class DH_Content_Production_Queue {
         $batch_count = min(self::BATCH_SIZE, count($posts));
         $published_count = (int) get_option(self::OPTION_PUBLISHED_COUNT, 0);
         
+        // Disable expensive cache operations during batch publish
+        global $dh_lscache_integration;
+        $prime_hooked = false;
+        if ($dh_lscache_integration && method_exists($dh_lscache_integration, 'prime_on_publish_or_update')) {
+            remove_action('transition_post_status', array($dh_lscache_integration, 'prime_on_publish_or_update'), 11);
+            $prime_hooked = true;
+        }
+        
+        // Track affected state pages for batch cache update
+        $affected_states = array();
+        
         for ($i = 0; $i < $batch_count; $i++) {
             $post = $posts[$i];
             
             // Update current post for UI display
             update_option(self::OPTION_CURRENT_POST, $post->ID);
             
-            // Publish the post
-            $result = wp_update_post(array(
-                'ID' => $post->ID,
-                'post_status' => 'publish',
-            ), true);
+            // Track state for this city-listing
+            if ($post->post_type === 'city-listing') {
+                $state_terms = get_the_terms($post->ID, 'state');
+                if (!empty($state_terms) && !is_wp_error($state_terms)) {
+                    $affected_states[$state_terms[0]->slug] = $state_terms[0]->slug;
+                }
+            }
             
-            if (!is_wp_error($result)) {
+            // Publish the post using direct database update for speed
+            global $wpdb;
+            $result = $wpdb->update(
+                $wpdb->posts,
+                array(
+                    'post_status' => 'publish',
+                    'post_date' => current_time('mysql'),
+                    'post_date_gmt' => current_time('mysql', 1),
+                    'post_modified' => current_time('mysql'),
+                    'post_modified_gmt' => current_time('mysql', 1)
+                ),
+                array('ID' => $post->ID),
+                array('%s', '%s', '%s', '%s', '%s'),
+                array('%d')
+            );
+            
+            if ($result !== false) {
+                // No cache to clear - posts were never published before
                 $published_count++;
                 update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
             }
             
-            // Small delay between posts in the batch to avoid overwhelming the server
+            // Minimal delay between posts in the batch
             if ($i < $batch_count - 1) {
-                usleep(100000); // 0.1 second delay between posts in batch
+                usleep(50000); // 0.05 second delay (reduced from 0.1)
             }
+        }
+        
+        // Clear and prime affected state-listing pages once per batch
+        foreach ($affected_states as $state_slug) {
+            $state_listing_id = $this->get_state_listing_by_slug($state_slug);
+            if ($state_listing_id) {
+                // Purge state-listing cache
+                do_action('litespeed_purge_post', $state_listing_id);
+                // Prime state-listing cache with non-blocking request
+                $state_url = get_permalink($state_listing_id);
+                if ($state_url) {
+                    wp_remote_get($state_url, array('blocking' => false, 'timeout' => 0.01));
+                }
+            }
+        }
+        
+        // Re-hook cache priming
+        if ($prime_hooked && $dh_lscache_integration) {
+            add_action('transition_post_status', array($dh_lscache_integration, 'prime_on_publish_or_update'), 11, 3);
         }
         
         // Check if there are more posts to process
@@ -592,8 +641,49 @@ class DH_Content_Production_Queue {
             // All done, stop queue
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
+            
+            // Clear all state-listing caches at completion
+            $this->clear_all_state_listing_caches();
         }
         // If there are more posts, they will be processed by the next AJAX poll
+    }
+    
+    /**
+     * Get state-listing post ID by state slug
+     */
+    private function get_state_listing_by_slug($state_slug) {
+        $q = new WP_Query(array(
+            'post_type' => 'state-listing',
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'tax_query' => array(
+                array('taxonomy' => 'state', 'field' => 'slug', 'terms' => $state_slug),
+            ),
+            'fields' => 'ids',
+        ));
+        return !empty($q->posts) ? $q->posts[0] : 0;
+    }
+    
+    /**
+     * Clear caches for all published state-listing pages
+     */
+    private function clear_all_state_listing_caches() {
+        $state_listings = get_posts(array(
+            'post_type' => 'state-listing',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'fields' => 'ids',
+        ));
+        
+        foreach ($state_listings as $state_id) {
+            // Purge LiteSpeed cache
+            do_action('litespeed_purge_post', $state_id);
+            // Prime cache with non-blocking request
+            $state_url = get_permalink($state_id);
+            if ($state_url) {
+                wp_remote_get($state_url, array('blocking' => false, 'timeout' => 0.01));
+            }
+        }
     }
     
     /**

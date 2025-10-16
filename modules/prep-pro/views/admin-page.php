@@ -16,7 +16,8 @@ if (!defined('ABSPATH')) exit;
         }
         ?>
         <div class="notice notice-success is-dismissible">
-            <p><strong>Published <?php echo (int)$_GET['published']; ?> profiles. Created <?php echo (int)$_GET['cities_created']; ?> cities.</strong></p>
+            <p><strong>Published <?php echo (int)$_GET['published']; ?> profiles. Created <?php echo (int)$_GET['cities_created']; ?> cities.</strong><br>
+            <em>Reranking and cache clearing running in background...</em></p>
             <?php if (!empty($created_city_ids)): ?>
                 <p><strong>Created Cities:</strong></p>
                 <ul style="margin-top: 5px;">

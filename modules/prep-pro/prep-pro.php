@@ -387,6 +387,9 @@ class DH_Prep_Pro {
             set_transient('dh_prep_pro_created_cities_' . get_current_user_id(), $created_city_ids, 60);
         }
         
+        // Trigger async rerank & clear cache in background (non-blocking)
+        $this->trigger_async_rerank_clear();
+        
         wp_safe_redirect(add_query_arg(array(
             'page' => 'dh-prep-pro',
             'published' => $published_count,
@@ -456,6 +459,10 @@ class DH_Prep_Pro {
         
         $tracking = $this->get_tracking();
         if (empty($tracking)) {
+            // If async call (no referer), just exit silently
+            if (empty($_POST) && empty($_SERVER['HTTP_REFERER'])) {
+                exit;
+            }
             wp_safe_redirect(add_query_arg('page', 'dh-prep-pro', admin_url('admin.php')));
             exit;
         }
@@ -468,6 +475,11 @@ class DH_Prep_Pro {
         
         // Clear cache
         $this->clear_cache_for_tracking($tracking);
+        
+        // If async call (triggered from background), exit silently without redirect
+        if (empty($_POST) && empty($_SERVER['HTTP_REFERER'])) {
+            exit;
+        }
         
         wp_safe_redirect(add_query_arg(array(
             'page' => 'dh-prep-pro', 
@@ -528,6 +540,25 @@ class DH_Prep_Pro {
     }
     
     // === HELPER FUNCTIONS ===
+    
+    /**
+     * Trigger async rerank & clear cache in background
+     */
+    private function trigger_async_rerank_clear() {
+        // Build URL to trigger rerank_clear handler
+        $url = add_query_arg(array(
+            'action' => 'dh_prep_pro_rerank_clear',
+            '_wpnonce' => wp_create_nonce('dh_prep_pro_maintenance'),
+        ), admin_url('admin-post.php'));
+        
+        // Trigger async request (non-blocking)
+        wp_remote_post($url, array(
+            'blocking' => false,
+            'timeout' => 0.01,
+            'sslverify' => false,
+            'cookies' => $_COOKIE, // Pass auth cookies
+        ));
+    }
     
     /**
      * Rerank posts using the same method as Prep Profiles
