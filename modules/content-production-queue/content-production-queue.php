@@ -578,11 +578,10 @@ class DH_Content_Production_Queue {
         // Track affected state slugs across entire queue run
         $affected_states = get_option('dh_cpq_affected_states', array());
         
+        $last_post_id = 0;
         for ($i = 0; $i < $batch_count; $i++) {
             $post = $posts[$i];
-            
-            // Update current post for UI display
-            update_option(self::OPTION_CURRENT_POST, $post->ID);
+            $last_post_id = $post->ID;
             
             // Track state for this city-listing
             if ($post->post_type === 'city-listing') {
@@ -610,16 +609,12 @@ class DH_Content_Production_Queue {
             
             if ($result !== false) {
                 $published_count++;
-                update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
-            }
-            
-            // Minimal delay between posts in the batch
-            if ($i < $batch_count - 1) {
-                usleep(50000); // 0.05 second delay
             }
         }
         
-        // Save affected states for final cache clear
+        // Update all options once at end of batch
+        update_option(self::OPTION_CURRENT_POST, $last_post_id);
+        update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
         update_option('dh_cpq_affected_states', $affected_states, false);
         
         // Re-hook cache priming
@@ -635,8 +630,16 @@ class DH_Content_Production_Queue {
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
             
-            // Clear affected state-listing caches at completion
-            $this->clear_affected_state_caches();
+            // Clear affected state-listing caches at completion - do this SYNCHRONOUSLY
+            $affected_states_final = get_option('dh_cpq_affected_states', array());
+            if (!empty($affected_states_final)) {
+                foreach ($affected_states_final as $state_slug) {
+                    $state_listing_id = $this->get_state_listing_by_slug($state_slug);
+                    if ($state_listing_id) {
+                        do_action('litespeed_purge_post', $state_listing_id);
+                    }
+                }
+            }
             
             // Clean up tracking
             delete_option('dh_cpq_affected_states');
