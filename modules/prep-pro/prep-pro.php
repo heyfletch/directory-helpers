@@ -345,6 +345,11 @@ class DH_Prep_Pro {
         // Save tracking
         $this->save_tracking($profile_ids, $created_city_ids, $state_slug);
         
+        // Store created city IDs in transient for display on success page
+        if (!empty($created_city_ids)) {
+            set_transient('dh_prep_pro_created_cities_' . get_current_user_id(), $created_city_ids, 60);
+        }
+        
         wp_safe_redirect(add_query_arg(array(
             'page' => 'dh-prep-pro',
             'published' => $published_count,

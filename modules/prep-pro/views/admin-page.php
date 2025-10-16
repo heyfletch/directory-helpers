@@ -9,8 +9,26 @@ if (!defined('ABSPATH')) exit;
     <h1><?php esc_html_e('Prep Pro - Prepare Profiles', 'directory-helpers'); ?></h1>
     
     <?php if (isset($_GET['published'])): ?>
+        <?php 
+        $created_city_ids = get_transient('dh_prep_pro_created_cities_' . get_current_user_id());
+        if ($created_city_ids) {
+            delete_transient('dh_prep_pro_created_cities_' . get_current_user_id());
+        }
+        ?>
         <div class="notice notice-success is-dismissible">
             <p><strong>Published <?php echo (int)$_GET['published']; ?> profiles. Created <?php echo (int)$_GET['cities_created']; ?> cities.</strong></p>
+            <?php if (!empty($created_city_ids)): ?>
+                <p><strong>Created Cities:</strong></p>
+                <ul style="margin-top: 5px;">
+                    <?php foreach ($created_city_ids as $city_id): ?>
+                        <li>
+                            <a href="<?php echo esc_url(get_edit_post_link($city_id)); ?>" target="_blank">
+                                <?php echo esc_html(get_the_title($city_id)); ?>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
     
