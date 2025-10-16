@@ -690,7 +690,7 @@ class Directory_Helpers {
             ),
             'prep-pro' => array(
                 'name' => __('Prep Pro', 'directory-helpers'),
-                'description' => __('Streamlined profile production: fast publishing without reranking, with targeted maintenance buttons.', 'directory-helpers'),
+                'description' => __('Streamlined profile production: fast publishing without reranking, with targeted maintenance buttons. Note: Status filter (always "refining") and Niche filter (always "dog-trainer") are hidden but can be modified in the code if needed.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/prep-pro/prep-pro.php',
                 'class' => 'DH_Prep_Pro'
             ),

@@ -71,21 +71,97 @@ if (!defined('ABSPATH')) exit;
     <!-- Filter Form -->
     <div style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
         <h2 style="margin-top: 0;">Filter Profiles</h2>
+        
+        <!-- State Selection Grid -->
+        <div style="margin-bottom: 20px;">
+            <strong><?php esc_html_e('Select State:', 'directory-helpers'); ?></strong>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                <?php
+                // Separate states by published status and sort
+                $published_states = array();
+                $unpublished_states = array();
+                
+                foreach ($states as $term) {
+                    // Check if state has published state-listing
+                    $state_listing = get_posts(array(
+                        'post_type' => 'state-listing',
+                        'post_status' => 'publish',
+                        'posts_per_page' => 1,
+                        'tax_query' => array(
+                            array(
+                                'taxonomy' => 'state',
+                                'field' => 'term_id',
+                                'terms' => $term->term_id
+                            )
+                        ),
+                        'fields' => 'ids'
+                    ));
+                    
+                    if (!empty($state_listing)) {
+                        $published_states[] = $term;
+                    } else {
+                        $unpublished_states[] = $term;
+                    }
+                }
+                
+                // Sort each group alphabetically
+                usort($published_states, function($a, $b) {
+                    $a_label = !empty($a->description) ? $a->description : $a->name;
+                    $b_label = !empty($b->description) ? $b->description : $b->name;
+                    return strcmp($a_label, $b_label);
+                });
+                usort($unpublished_states, function($a, $b) {
+                    $a_label = !empty($a->description) ? $a->description : $a->name;
+                    $b_label = !empty($b->description) ? $b->description : $b->name;
+                    return strcmp($a_label, $b_label);
+                });
+                
+                // Display published states first, then unpublished
+                $all_states_ordered = array_merge($published_states, $unpublished_states);
+                
+                foreach ($all_states_ordered as $term):
+                    $label = !empty($term->description) ? $term->description : $term->name;
+                    $is_published = in_array($term, $published_states, true);
+                    $is_selected = ($state_slug === $term->slug);
+                    
+                    // Style based on status
+                    if ($is_selected) {
+                        $style = 'background: #2271b1; color: white; font-weight: bold;';
+                    } elseif ($is_published) {
+                        $style = 'background: #46b450; color: white;';
+                    } else {
+                        $style = 'background: #dcdcde; color: #2c3338;';
+                    }
+                    
+                    $url = add_query_arg(array(
+                        'page' => 'dh-prep-pro',
+                        'state' => $term->slug
+                    ), admin_url('admin.php'));
+                    ?>
+                    <a href="<?php echo esc_url($url); ?>" 
+                       style="display: inline-block; padding: 6px 12px; text-decoration: none; border-radius: 3px; <?php echo $style; ?>">
+                        <?php echo esc_html($label); ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+            <p style="margin-top: 10px; font-size: 12px; color: #646970;">
+                <span style="display: inline-block; width: 12px; height: 12px; background: #46b450; border-radius: 2px; margin-right: 4px;"></span> Published
+                <span style="display: inline-block; width: 12px; height: 12px; background: #dcdcde; border-radius: 2px; margin: 0 4px 0 12px;"></span> Not Published
+                <span style="display: inline-block; width: 12px; height: 12px; background: #2271b1; border-radius: 2px; margin: 0 4px 0 12px;"></span> Selected
+            </p>
+        </div>
+        
         <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
             <input type="hidden" name="page" value="dh-prep-pro" />
+            <input type="hidden" name="state" value="<?php echo esc_attr($state_slug); ?>" />
+            
+            <!-- Status hidden, always refining -->
+            <input type="hidden" name="post_status" value="refining" />
+            
+            <!-- Niche hidden, always dog-trainer -->
+            <input type="hidden" name="niche" value="dog-trainer" />
             
             <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                <label><strong><?php esc_html_e('State:', 'directory-helpers'); ?></strong>
-                    <select name="state">
-                        <?php foreach ($states as $term): ?>
-                            <?php $label = !empty($term->description) ? $term->description : $term->name; ?>
-                            <option value="<?php echo esc_attr($term->slug); ?>" <?php selected($state_slug, $term->slug); ?>>
-                                <?php echo esc_html($label); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                
                 <label><strong><?php esc_html_e('Find:', 'directory-helpers'); ?></strong>
                     <input type="text" name="city_search" value="<?php echo esc_attr($city_search); ?>" placeholder="<?php esc_attr_e('Search city name...', 'directory-helpers'); ?>" style="width:150px;" />
                 </label>
@@ -98,23 +174,6 @@ if (!defined('ABSPATH')) exit;
                                 <?php echo esc_html($name); ?>
                             </option>
                         <?php endforeach; ?>
-                    </select>
-                </label>
-                
-                <!-- Status hidden, always refining -->
-                <input type="hidden" name="post_status" value="refining" />
-                
-                <label><strong><?php esc_html_e('Niche:', 'directory-helpers'); ?></strong>
-                    <select name="niche">
-                        <?php if (!empty($niches)): ?>
-                            <?php foreach ($niches as $term): ?>
-                                <option value="<?php echo esc_attr($term->slug); ?>" <?php selected($niche_slug, $term->slug); ?>>
-                                    <?php echo esc_html($term->name); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <option value="dog-trainer"><?php esc_html_e('Dog Trainer', 'directory-helpers'); ?></option>
-                        <?php endif; ?>
                     </select>
                 </label>
                 
