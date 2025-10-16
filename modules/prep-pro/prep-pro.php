@@ -321,12 +321,28 @@ class DH_Prep_Pro {
         $this->trigger_ai_for_cities($created_city_ids);
         
         // 4. Publish profiles
-        // Temporarily unhook ranking module to avoid expensive operations during bulk publish
-        global $dh_profile_rankings;
+        // Temporarily disable expensive operations: ranking and cache integration
+        // But allow other hooks that update city page ACF data and filters
+        global $dh_profile_rankings, $dh_lscache_integration;
+        
+        // Disable ranking module
         $ranking_hooked = false;
         if ($dh_profile_rankings && method_exists($dh_profile_rankings, 'update_ranks_on_save')) {
             remove_action('acf/save_post', array($dh_profile_rankings, 'update_ranks_on_save'), 20);
             $ranking_hooked = true;
+        }
+        
+        // Disable entire cache integration module
+        $cache_hooks_removed = array();
+        if ($dh_lscache_integration) {
+            if (method_exists($dh_lscache_integration, 'maybe_purge_on_first_publish')) {
+                remove_action('transition_post_status', array($dh_lscache_integration, 'maybe_purge_on_first_publish'), 10);
+                $cache_hooks_removed[] = 'maybe_purge_on_first_publish';
+            }
+            if (method_exists($dh_lscache_integration, 'prime_on_publish_or_update')) {
+                remove_action('transition_post_status', array($dh_lscache_integration, 'prime_on_publish_or_update'), 11);
+                $cache_hooks_removed[] = 'prime_on_publish_or_update';
+            }
         }
         
         $published_count = 0;
@@ -337,13 +353,30 @@ class DH_Prep_Pro {
             }
         }
         
-        // Re-hook ranking module
+        // Re-hook disabled functions
         if ($ranking_hooked && $dh_profile_rankings) {
             add_action('acf/save_post', array($dh_profile_rankings, 'update_ranks_on_save'), 20);
+        }
+        if ($dh_lscache_integration && !empty($cache_hooks_removed)) {
+            foreach ($cache_hooks_removed as $method) {
+                if ($method === 'maybe_purge_on_first_publish') {
+                    add_action('transition_post_status', array($dh_lscache_integration, 'maybe_purge_on_first_publish'), 10, 3);
+                } elseif ($method === 'prime_on_publish_or_update') {
+                    add_action('transition_post_status', array($dh_lscache_integration, 'prime_on_publish_or_update'), 11, 3);
+                }
+            }
         }
         
         // 5. Clean area terms
         $this->cleanup_area_terms($profile_ids);
+        
+        // 6. Set placeholder ranks so profiles appear on city pages
+        // City pages require city_rank to display profiles
+        foreach ($profile_ids as $pid) {
+            if (!get_field('city_rank', $pid)) {
+                update_field('city_rank', 999, $pid); // Placeholder rank
+            }
+        }
         
         // Save tracking
         $this->save_tracking($profile_ids, $created_city_ids, $state_slug);
