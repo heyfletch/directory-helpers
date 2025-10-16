@@ -688,6 +688,12 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/prep-profiles-by-state/prep-profiles-by-state.php',
                 'class' => 'DH_Prep_Profiles_By_State'
             ),
+            'prep-pro' => array(
+                'name' => __('Prep Pro', 'directory-helpers'),
+                'description' => __('Streamlined profile production: fast publishing without reranking, with targeted maintenance buttons.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/prep-pro/prep-pro.php',
+                'class' => 'DH_Prep_Pro'
+            ),
             'instant-search' => array(
                 'name' => __('Instant Search', 'directory-helpers'),
                 'description' => __('Client-side instant search for titles of selected post types with typeahead dropdown and ARIA support. Shortcode: [dh_instant_search].', 'directory-helpers'),
