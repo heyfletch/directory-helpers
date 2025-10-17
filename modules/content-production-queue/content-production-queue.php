@@ -198,7 +198,7 @@ class DH_Content_Production_Queue {
                 <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th style="width: 200px;"><?php esc_html_e('Title', 'directory-helpers'); ?></th>
+                        <th style="width: 120px;"><?php esc_html_e('Title', 'directory-helpers'); ?></th>
                         <th style="width: 1215px;"><?php esc_html_e('Images', 'directory-helpers'); ?></th>
                         <th style="width: 150px;"><?php esc_html_e('Link Health', 'directory-helpers'); ?></th>
                     </tr>
