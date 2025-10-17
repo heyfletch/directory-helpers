@@ -608,6 +608,8 @@ class DH_Content_Production_Queue {
             );
             
             if ($result !== false) {
+                // Clear WordPress object cache so the post shows as published
+                clean_post_cache($post->ID);
                 $published_count++;
             }
         }
