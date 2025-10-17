@@ -793,6 +793,7 @@ class DH_AI_Content_Generator {
             }
 
             $title = strtr($prompt_text, $replacements);
+            $title = $this->clean_token_replacement_artifacts($title);
             $title = str_replace("'", "’", $title);
             $title = trim($title);
             if ($title !== '') { return $title; }
@@ -926,6 +927,7 @@ class DH_AI_Content_Generator {
             }
 
             $out = strtr($prompt_text, $replacements);
+            $out = $this->clean_token_replacement_artifacts($out);
             return $this->normalize_multiline_text($out);
         }
 
@@ -950,6 +952,32 @@ class DH_AI_Content_Generator {
                       : ("For our ultimate guide to dog trainers, costs, and local resources, visit:\n$post_url");
         $body = "\n\nThis video covers training methods, typical costs, certifications, legal requirements, program formats, local resources, and must-ask questions.\n\nLearn more here: $post_url";
         return $this->normalize_multiline_text($intro . $body);
+    }
+
+    /**
+     * Clean up artifacts from token replacement when tokens are empty.
+     * Handles patterns like:
+     * - "in  Montana" (double space) → "in Montana"
+     * - " , Montana" (orphaned comma) → " Montana"
+     * - "to  , Montana" → "to Montana"
+     *
+     * @param string $text
+     * @return string
+     */
+    private function clean_token_replacement_artifacts($text) {
+        if (!is_string($text) || $text === '') { return ''; }
+        
+        // Remove orphaned comma patterns: " ," or ", " when adjacent to spaces
+        $text = preg_replace('/\s*,\s*,\s*/', ', ', $text); // Collapse multiple commas
+        $text = preg_replace('/\s+,\s*/', ', ', $text);      // Fix space before comma
+        $text = preg_replace('/,\s+,/', ',', $text);         // Remove empty items between commas
+        $text = preg_replace('/^,\s*/', '', $text);          // Remove leading comma
+        $text = preg_replace('/\s*,$/', '', $text);          // Remove trailing comma
+        
+        // Collapse multiple spaces to single space
+        $text = preg_replace('/\s{2,}/', ' ', $text);
+        
+        return $text;
     }
 
     /**
