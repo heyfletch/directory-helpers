@@ -385,4 +385,82 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         window.location.reload();
     });
+    
+    /**
+     * Handle Open Non-Healthy Cities button
+     */
+    $(document).on('click', '#dh-open-non-healthy-btn', function(e) {
+        e.preventDefault();
+        
+        // Find all rows with warning or red_alert health status
+        const rows = $('.dh-cpq-draft-posts table tbody tr');
+        const nonHealthyRows = [];
+        
+        rows.each(function() {
+            const $row = $(this);
+            const health = $row.attr('data-health'); // Use attr() instead of data() to get raw string value
+            
+            // Only include warning and red_alert (not all_ok or unchecked)
+            if (health === 'warning' || health === 'red_alert') {
+                const postId = $row.attr('data-post-id');
+                if (postId) {
+                    nonHealthyRows.push(postId);
+                }
+            }
+        });
+        
+        if (nonHealthyRows.length === 0) {
+            alert('No non-healthy cities found.');
+            return;
+        }
+        
+        if (!confirm('Open ' + nonHealthyRows.length + ' non-healthy cities in new tabs?')) {
+            return;
+        }
+        
+        // Open each post's edit link in a new tab
+        nonHealthyRows.forEach(function(postId) {
+            const editUrl = 'post.php?post=' + postId + '&action=edit';
+            window.open(editUrl, '_blank');
+        });
+    });
+    
+    /**
+     * Handle Open Unchecked Cities button
+     */
+    $(document).on('click', '#dh-open-unchecked-btn', function(e) {
+        e.preventDefault();
+        
+        // Find all rows with no health status (unchecked)
+        const rows = $('.dh-cpq-draft-posts table tbody tr');
+        const uncheckedRows = [];
+        
+        rows.each(function() {
+            const $row = $(this);
+            const health = $row.attr('data-health');
+            
+            // Only include rows with empty or no health status
+            if (!health || health === '') {
+                const postId = $row.attr('data-post-id');
+                if (postId) {
+                    uncheckedRows.push(postId);
+                }
+            }
+        });
+        
+        if (uncheckedRows.length === 0) {
+            alert('No unchecked cities found.');
+            return;
+        }
+        
+        if (!confirm('Open ' + uncheckedRows.length + ' unchecked cities in new tabs?')) {
+            return;
+        }
+        
+        // Open each post's edit link in a new tab
+        uncheckedRows.forEach(function(postId) {
+            const editUrl = 'post.php?post=' + postId + '&action=edit';
+            window.open(editUrl, '_blank');
+        });
+    });
 });

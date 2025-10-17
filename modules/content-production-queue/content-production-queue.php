@@ -154,32 +154,31 @@ class DH_Content_Production_Queue {
                         <button type="button" id="dh-start-cpq-healthy-btn" class="button button-primary" data-mode="healthy">
                             <?php esc_html_e('Publish Healthy Cities', 'directory-helpers'); ?>
                         </button>
+                        <?php /* Hidden for future use
                         <button type="button" id="dh-start-cpq-all-btn" class="button button-secondary" data-mode="all" title="<?php esc_attr_e('Publish Cities including Link Health Warnings or Unchecked', 'directory-helpers'); ?>" style="margin-left: 10px;">
                             <?php esc_html_e('Publish All Cities', 'directory-helpers'); ?>
                         </button>
+                        */ ?>
                     <?php elseif ($is_active): ?>
                         <button type="button" id="dh-stop-cpq-btn" class="button button-secondary">
                             <?php esc_html_e('Stop Queue', 'directory-helpers'); ?>
-                        </button>
-                        <button type="button" id="dh-reset-cpq-btn" class="button" style="margin-left: 10px;">
-                            <?php esc_html_e('Reset Counters', 'directory-helpers'); ?>
                         </button>
                     <?php else: ?>
                         <button type="button" class="button button-primary" disabled>
                             <?php esc_html_e('Publish Healthy Cities', 'directory-helpers'); ?>
                         </button>
-                        <button type="button" class="button button-secondary" disabled style="margin-left: 10px;">
-                            <?php esc_html_e('Publish All Cities', 'directory-helpers'); ?>
-                        </button>
                         <p class="description"><?php esc_html_e('No eligible posts to publish', 'directory-helpers'); ?></p>
                     <?php endif; ?>
                     
                     <?php if (!$is_active): ?>
-                        <button type="button" id="dh-reset-cpq-btn" class="button" style="margin-left: 10px;">
-                            <?php esc_html_e('Reset Counters', 'directory-helpers'); ?>
-                        </button>
                         <button type="button" id="dh-recheck-all-health-btn" class="button" style="margin-left: 10px;">
                             <?php esc_html_e('Recheck All Link Health', 'directory-helpers'); ?>
+                        </button>
+                        <button type="button" id="dh-open-non-healthy-btn" class="button" style="margin-left: 10px;">
+                            <?php esc_html_e('↗️ Open Non-Healthy Cities', 'directory-helpers'); ?>
+                        </button>
+                        <button type="button" id="dh-open-unchecked-btn" class="button" style="margin-left: 10px;">
+                            <?php esc_html_e('↗️ Open Unchecked Cities', 'directory-helpers'); ?>
                         </button>
                         <button type="button" id="dh-refresh-page-btn" class="button" style="margin-left: 10px;">
                             <?php esc_html_e('Refresh Page', 'directory-helpers'); ?>
