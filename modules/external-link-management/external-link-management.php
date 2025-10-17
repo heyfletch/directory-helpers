@@ -194,8 +194,8 @@ class DH_External_Link_Management {
             $ai_suggestion = isset($r->ai_suggestion_url) && $r->ai_suggestion_url ? $r->ai_suggestion_url : '';
             
             echo '<td class="dh-elm-manage">'
-                . '<button type="button" class="dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '" title="Delete"><span class="dashicons dashicons-no" style="font-size:16px;width:16px;height:16px;"></span></button> '
-                . '<button type="button" class="dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '" title="Edit"><span class="dashicons dashicons-edit" style="font-size:16px;width:16px;height:16px;"></span></button>'
+                . '<button type="button" class="dh-elm-delete" data-nonce="' . esc_attr($manage_nonce) . '" title="Delete"><span class="dashicons dashicons-no" style="font-size:20px;width:20px;height:20px;color:#d44949;"></span></button> '
+                . '<button type="button" class="dh-elm-edit" data-nonce="' . esc_attr($manage_nonce) . '" title="Edit"><span class="dashicons dashicons-edit" style="font-size:20px;width:20px;height:20px;color:cornflowerblue"></span></button>'
                 . ' <button type="button" class="button button-small dh-elm-ai-suggest" data-nonce-ai="' . esc_attr($ai_nonce) . '">Suggest</button>';
             
             // Show cached AI suggestion if exists - Replace button right after Suggest
