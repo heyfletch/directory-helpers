@@ -94,6 +94,10 @@ class Directory_Helpers {
 
         // Register Prompts display meta box on edit screens (targets configured on admin page)
         add_action('add_meta_boxes', array($this, 'register_prompts_display_meta_box'));
+        
+        // Change ACF image field preview size for body images to medium
+        add_filter('acf/load_field/name=body_image_1', array($this, 'set_body_image_preview_size'));
+        add_filter('acf/load_field/name=body_image_2', array($this, 'set_body_image_preview_size'));
     }
 
     /**
@@ -834,6 +838,17 @@ class Directory_Helpers {
     public static function get_prompt($key, $default = '') {
         $prompts = self::get_prompts();
         return isset($prompts[$key]) ? $prompts[$key] : $default;
+    }
+    
+    /**
+     * Set ACF image field preview size to medium for body images
+     *
+     * @param array $field
+     * @return array
+     */
+    public function set_body_image_preview_size($field) {
+        $field['preview_size'] = 'medium';
+        return $field;
     }
 }
 

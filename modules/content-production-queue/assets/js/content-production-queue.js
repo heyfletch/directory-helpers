@@ -377,4 +377,12 @@ jQuery(document).ready(function($) {
             }
         });
     });
+    
+    /**
+     * Handle Refresh Page button
+     */
+    $(document).on('click', '#dh-refresh-page-btn', function(e) {
+        e.preventDefault();
+        window.location.reload();
+    });
 });

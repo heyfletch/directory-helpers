@@ -181,6 +181,9 @@ class DH_Content_Production_Queue {
                         <button type="button" id="dh-recheck-all-health-btn" class="button" style="margin-left: 10px;">
                             <?php esc_html_e('Recheck All Link Health', 'directory-helpers'); ?>
                         </button>
+                        <button type="button" id="dh-refresh-page-btn" class="button" style="margin-left: 10px;">
+                            <?php esc_html_e('Refresh Page', 'directory-helpers'); ?>
+                        </button>
                         <span id="dh-recheck-status" style="margin-left: 10px;"></span>
                     <?php endif; ?>
                 </div>
