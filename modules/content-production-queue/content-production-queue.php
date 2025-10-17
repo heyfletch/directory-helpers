@@ -52,6 +52,7 @@ class DH_Content_Production_Queue {
         add_action('wp_ajax_dh_reset_content_queue', array($this, 'ajax_reset_queue'));
         add_action('wp_ajax_dh_process_content_batch', array($this, 'ajax_process_batch'));
         add_action('wp_ajax_dh_recheck_all_link_health', array($this, 'ajax_recheck_all_link_health'));
+        add_action('wp_ajax_dh_trigger_featured_image_webhook', array($this, 'ajax_trigger_featured_image_webhook'));
     }
     
     /**
@@ -103,6 +104,8 @@ class DH_Content_Production_Queue {
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('dh_content_queue'),
             'isActive' => (bool) get_option(self::OPTION_QUEUE_ACTIVE, false),
+            'successMessageThumb' => __('✅ Featured image generation triggered!', 'directory-helpers'),
+            'errorMessage' => __('Error triggering webhook. Please try again.', 'directory-helpers'),
         ));
     }
     
@@ -193,8 +196,8 @@ class DH_Content_Production_Queue {
                 <thead>
                     <tr>
                         <th style="width: 200px;"><?php esc_html_e('Title', 'directory-helpers'); ?></th>
-                        <th style="width: 150px;"><?php esc_html_e('Link Health', 'directory-helpers'); ?></th>
                         <th style="width: 1215px;"><?php esc_html_e('Images', 'directory-helpers'); ?></th>
+                        <th style="width: 150px;"><?php esc_html_e('Link Health', 'directory-helpers'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -223,12 +226,14 @@ class DH_Content_Production_Queue {
                                         </a>
                                     </strong>
                                 </td>
-                                <td><?php echo wp_kses_post($link_health_display); ?></td>
                                 <td style="white-space: nowrap;">
                                     <?php
-                                    // Featured Image
+                                    // Featured Image - clickable to trigger webhook
+                                    $nonce_thumb = wp_create_nonce('dh_trigger_thumb_' . $post->ID);
                                     if ($has_featured) {
-                                        echo wp_get_attachment_image(get_post_thumbnail_id($post->ID), 'medium', false, array('style' => 'width: 400px; height: auto; margin-right: 5px; vertical-align: middle;'));
+                                        echo '<a href="#" class="dh-trigger-thumb-link" data-post-id="' . esc_attr($post->ID) . '" data-nonce="' . esc_attr($nonce_thumb) . '" title="' . esc_attr__('Click to generate new featured image', 'directory-helpers') . '" style="display: inline-block; margin-right: 5px; vertical-align: middle; border: 2px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor=\'#0073aa\'" onmouseout="this.style.borderColor=\'transparent\'">';
+                                        echo wp_get_attachment_image(get_post_thumbnail_id($post->ID), 'medium', false, array('style' => 'width: 400px; height: auto; display: block;'));
+                                        echo '</a>';
                                     } else {
                                         echo '<span style="display: inline-block; width: 400px; height: 300px; background: #ddd; margin-right: 5px; vertical-align: middle; text-align: center; line-height: 300px; color: #999; font-size: 14px;">No Featured</span>';
                                     }
@@ -250,6 +255,7 @@ class DH_Content_Production_Queue {
                                     }
                                     ?>
                                 </td>
+                                <td><?php echo wp_kses_post($link_health_display); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
@@ -788,5 +794,96 @@ class DH_Content_Production_Queue {
             'checked' => $checked,
             'total' => count($posts)
         ));
+    }
+    
+    /**
+     * AJAX: Trigger featured image webhook
+     */
+    public function ajax_trigger_featured_image_webhook() {
+        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field($_POST['nonce']) : '';
+        
+        // Verify nonce
+        if (!wp_verify_nonce($nonce, 'dh_trigger_thumb_' . $post_id)) {
+            wp_send_json_error(array('message' => __('Invalid security token.', 'directory-helpers')));
+            return;
+        }
+        
+        // Check permissions
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_send_json_error(array('message' => __('Insufficient permissions.', 'directory-helpers')));
+            return;
+        }
+        
+        // Get post
+        $post = get_post($post_id);
+        if (!$post || !in_array($post->post_type, array('city-listing', 'state-listing'), true)) {
+            wp_send_json_error(array('message' => __('Invalid post.', 'directory-helpers')));
+            return;
+        }
+        
+        // Get webhook URL from settings
+        $options = get_option('directory_helpers_options');
+        $webhook_url = $options['featured_image_webhook_url'] ?? '';
+        
+        if (empty($webhook_url)) {
+            wp_send_json_error(array('message' => __('Featured Image webhook URL not configured.', 'directory-helpers')));
+            return;
+        }
+        
+        // Build keyword from post title
+        $raw_title = wp_strip_all_tags(get_the_title($post));
+        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s,]/u', '', $raw_title));
+        $clean_title = preg_replace('/\s+/', ' ', $clean_title);
+        
+        // Get niche from taxonomy description (or fallback to name, then default)
+        $niche_text = 'dog training'; // Default fallback
+        $niche_terms = get_the_terms($post_id, 'niche');
+        if ($niche_terms && !is_wp_error($niche_terms) && !empty($niche_terms)) {
+            $term_description = trim($niche_terms[0]->description);
+            if (!empty($term_description)) {
+                $niche_text = $term_description;
+            } else {
+                // Fallback to Title Case name if description is empty
+                $niche_text = ucwords(strtolower($niche_terms[0]->name));
+            }
+        }
+        
+        $keyword = $niche_text . ' in ' . $clean_title;
+        
+        // Get post URL and title
+        $post_url = get_permalink($post_id);
+        $post_title = wp_strip_all_tags(get_the_title($post_id));
+        
+        // Build payload
+        $payload = array(
+            'postId' => $post_id,
+            'postUrl' => $post_url,
+            'postTitle' => $post_title,
+            'keyword' => $keyword,
+        );
+        
+        // Send webhook request
+        $response = wp_remote_post($webhook_url, array(
+            'headers' => array('Content-Type' => 'application/json'),
+            'body' => wp_json_encode($payload),
+            'timeout' => 20,
+        ));
+        
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+        
+        $code = (int) wp_remote_retrieve_response_code($response);
+        
+        if ($code >= 200 && $code < 300) {
+            wp_send_json_success(array(
+                'message' => __('Featured image generation triggered successfully!', 'directory-helpers'),
+            ));
+        } else {
+            $message = wp_remote_retrieve_response_message($response);
+            wp_send_json_error(array('message' => sprintf(__('Webhook returned error: %s (code: %d)', 'directory-helpers'), $message, $code)));
+        }
     }
 }

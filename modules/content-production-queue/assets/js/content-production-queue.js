@@ -333,4 +333,48 @@ jQuery(document).ready(function($) {
             }
         });
     });
+    
+    /**
+     * Handle featured image click to trigger webhook
+     */
+    $(document).on('click', '.dh-trigger-thumb-link', function(e) {
+        e.preventDefault();
+        
+        const link = $(this);
+        const postId = link.data('post-id');
+        const nonce = link.data('nonce');
+        
+        if (!confirm('Generate a new featured image for this post?')) {
+            return;
+        }
+        
+        // Add loading state
+        link.css('opacity', '0.5').css('pointer-events', 'none');
+        
+        $.ajax({
+            url: dhContentQueue.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'dh_trigger_featured_image_webhook',
+                post_id: postId,
+                nonce: nonce
+            },
+            success: function(response) {
+                link.css('opacity', '1').css('pointer-events', 'auto');
+                
+                if (response.success) {
+                    showNotice(dhContentQueue.successMessageThumb, 'success');
+                } else {
+                    const errorMsg = response.data && response.data.message 
+                        ? response.data.message 
+                        : dhContentQueue.errorMessage;
+                    showNotice(errorMsg, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                link.css('opacity', '1').css('pointer-events', 'auto');
+                showNotice(dhContentQueue.errorMessage + ' (' + error + ')', 'error');
+            }
+        });
+    });
 });
