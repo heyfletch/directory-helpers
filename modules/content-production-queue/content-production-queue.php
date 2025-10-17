@@ -302,6 +302,30 @@ class DH_Content_Production_Queue {
             update_post_thumbnail_cache(get_posts(array('post__in' => $post_ids, 'post_type' => 'any')));
         }
         
+        // Sort by link health: all_ok first, then warning, then not checked, then red_alert
+        usort($posts, function($a, $b) {
+            $health_a = get_post_meta($a->ID, '_dh_link_health', true);
+            $health_b = get_post_meta($b->ID, '_dh_link_health', true);
+            
+            // Define priority order (lower number = higher priority)
+            $priority_map = array(
+                'all_ok' => 1,
+                'warning' => 2,
+                '' => 3, // Not checked
+                'red_alert' => 4,
+            );
+            
+            $priority_a = isset($priority_map[$health_a]) ? $priority_map[$health_a] : 3;
+            $priority_b = isset($priority_map[$health_b]) ? $priority_map[$health_b] : 3;
+            
+            if ($priority_a !== $priority_b) {
+                return $priority_a - $priority_b;
+            }
+            
+            // Within same priority, maintain date order (newest first)
+            return strtotime($b->post_date) - strtotime($a->post_date);
+        });
+        
         return $posts;
     }
     
