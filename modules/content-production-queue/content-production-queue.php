@@ -610,6 +610,26 @@ class DH_Content_Production_Queue {
             if ($result !== false) {
                 // Clear WordPress object cache so the post shows as published
                 clean_post_cache($post->ID);
+                
+                // Update profile count for city-listings so they appear in video queue
+                if ($post->post_type === 'city-listing') {
+                    $area_terms = get_the_terms($post->ID, 'area');
+                    if (!empty($area_terms) && !is_wp_error($area_terms)) {
+                        $area_term_id = $area_terms[0]->term_id;
+                        // Count published profiles in this city
+                        $profile_count = count(get_posts(array(
+                            'post_type' => 'profile',
+                            'post_status' => 'publish',
+                            'posts_per_page' => -1,
+                            'tax_query' => array(
+                                array('taxonomy' => 'area', 'field' => 'term_id', 'terms' => $area_term_id),
+                            ),
+                            'fields' => 'ids',
+                        )));
+                        update_post_meta($post->ID, '_profile_count', (int) $profile_count);
+                    }
+                }
+                
                 $published_count++;
             }
         }

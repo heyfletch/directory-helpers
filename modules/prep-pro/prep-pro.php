@@ -404,11 +404,22 @@ class DH_Prep_Pro {
         // Trigger async rerank & clear cache in background (non-blocking)
         $this->trigger_async_rerank_clear();
         
-        wp_safe_redirect(add_query_arg(array(
+        // Preserve filter parameters in redirect
+        $redirect_args = array(
             'page' => 'dh-prep-pro',
             'published' => $published_count,
             'cities_created' => count($created_city_ids),
-        ), admin_url('admin.php')));
+        );
+        
+        // Add original filter parameters
+        if ($state_slug) $redirect_args['state'] = $state_slug;
+        if ($post_status) $redirect_args['post_status'] = $post_status;
+        if ($niche_slug) $redirect_args['niche'] = $niche_slug;
+        if ($min_count) $redirect_args['min_count'] = $min_count;
+        if ($city_slug) $redirect_args['city'] = $city_slug;
+        if ($city_search) $redirect_args['city_search'] = $city_search;
+        
+        wp_safe_redirect(add_query_arg($redirect_args, admin_url('admin.php')));
         exit;
     }
     
