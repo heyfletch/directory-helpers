@@ -175,27 +175,24 @@ class DH_Content_Production_Queue {
                         <button type="button" id="dh-reset-cpq-btn" class="button" style="margin-left: 10px;">
                             <?php esc_html_e('Reset Counters', 'directory-helpers'); ?>
                         </button>
+                        <button type="button" id="dh-recheck-all-health-btn" class="button" style="margin-left: 10px;">
+                            <?php esc_html_e('Recheck All Link Health', 'directory-helpers'); ?>
+                        </button>
+                        <span id="dh-recheck-status" style="margin-left: 10px;"></span>
                     <?php endif; ?>
                 </div>
             </div>
             
             <div class="dh-cpq-draft-posts">
-                <h2><?php esc_html_e('Draft Posts', 'directory-helpers'); ?></h2>
+                <h2><?php esc_html_e('Draft Cities', 'directory-helpers'); ?></h2>
                 <p class="description">
                     <?php esc_html_e('Posts eligible for publishing must have: Featured Image, Body Image 1, Body Image 2, and Link Health (All Ok or Warning).', 'directory-helpers'); ?>
-                </p>
-                <p>
-                    <button type="button" id="dh-recheck-all-health-btn" class="button">
-                        <?php esc_html_e('Recheck All Link Health', 'directory-helpers'); ?>
-                    </button>
-                    <span id="dh-recheck-status" style="margin-left: 10px;"></span>
                 </p>
                 
                 <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
                         <th><?php esc_html_e('Title', 'directory-helpers'); ?></th>
-                        <th><?php esc_html_e('Type', 'directory-helpers'); ?></th>
                         <th><?php esc_html_e('Link Health', 'directory-helpers'); ?></th>
                         <th><?php esc_html_e('Images', 'directory-helpers'); ?></th>
                     </tr>
@@ -203,7 +200,7 @@ class DH_Content_Production_Queue {
                 <tbody>
                     <?php if (empty($all_draft_posts)): ?>
                         <tr>
-                            <td colspan="4"><?php esc_html_e('No draft posts found.', 'directory-helpers'); ?></td>
+                            <td colspan="3"><?php esc_html_e('No draft posts found.', 'directory-helpers'); ?></td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($all_draft_posts as $post): ?>
@@ -226,7 +223,6 @@ class DH_Content_Production_Queue {
                                         </a>
                                     </strong>
                                 </td>
-                                <td><?php echo esc_html($post->post_type === 'state-listing' ? 'State' : 'City'); ?></td>
                                 <td><?php echo wp_kses_post($link_health_display); ?></td>
                                 <td>
                                     <?php if ($all_images_present): ?>
