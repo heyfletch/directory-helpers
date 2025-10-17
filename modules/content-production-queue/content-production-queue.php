@@ -192,9 +192,9 @@ class DH_Content_Production_Queue {
                 <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th><?php esc_html_e('Title', 'directory-helpers'); ?></th>
-                        <th><?php esc_html_e('Link Health', 'directory-helpers'); ?></th>
-                        <th><?php esc_html_e('Images', 'directory-helpers'); ?></th>
+                        <th style="width: 200px;"><?php esc_html_e('Title', 'directory-helpers'); ?></th>
+                        <th style="width: 150px;"><?php esc_html_e('Link Health', 'directory-helpers'); ?></th>
+                        <th style="width: 1215px;"><?php esc_html_e('Images', 'directory-helpers'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -224,12 +224,31 @@ class DH_Content_Production_Queue {
                                     </strong>
                                 </td>
                                 <td><?php echo wp_kses_post($link_health_display); ?></td>
-                                <td>
-                                    <?php if ($all_images_present): ?>
-                                        <span style="color: #46b450;">✓ <?php esc_html_e('All Present', 'directory-helpers'); ?></span>
-                                    <?php else: ?>
-                                        <span style="color: #dc3232;">❌ <?php esc_html_e('Missing Images', 'directory-helpers'); ?></span>
-                                    <?php endif; ?>
+                                <td style="white-space: nowrap;">
+                                    <?php
+                                    // Featured Image
+                                    if ($has_featured) {
+                                        echo wp_get_attachment_image(get_post_thumbnail_id($post->ID), 'medium', false, array('style' => 'width: 400px; height: auto; margin-right: 5px; vertical-align: middle;'));
+                                    } else {
+                                        echo '<span style="display: inline-block; width: 400px; height: 300px; background: #ddd; margin-right: 5px; vertical-align: middle; text-align: center; line-height: 300px; color: #999; font-size: 14px;">No Featured</span>';
+                                    }
+                                    
+                                    // Body Image 1
+                                    $body1_id = get_post_meta($post->ID, 'body_image_1', true);
+                                    if ($has_body1 && $body1_id) {
+                                        echo wp_get_attachment_image($body1_id, 'medium', false, array('style' => 'width: 400px; height: auto; margin-right: 5px; vertical-align: middle;'));
+                                    } else {
+                                        echo '<span style="display: inline-block; width: 400px; height: 300px; background: #ddd; margin-right: 5px; vertical-align: middle; text-align: center; line-height: 300px; color: #999; font-size: 14px;">No Body 1</span>';
+                                    }
+                                    
+                                    // Body Image 2
+                                    $body2_id = get_post_meta($post->ID, 'body_image_2', true);
+                                    if ($has_body2 && $body2_id) {
+                                        echo wp_get_attachment_image($body2_id, 'medium', false, array('style' => 'width: 400px; height: auto; vertical-align: middle;'));
+                                    } else {
+                                        echo '<span style="display: inline-block; width: 400px; height: 300px; background: #ddd; vertical-align: middle; text-align: center; line-height: 300px; color: #999; font-size: 14px;">No Body 2</span>';
+                                    }
+                                    ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
