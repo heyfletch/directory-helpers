@@ -232,7 +232,7 @@ class DH_Prep_Pro {
             $content = get_post_field('post_content', $cid);
             if (empty($content) || trim(wp_strip_all_tags($content)) === '') {
                 $raw_title = wp_strip_all_tags(get_the_title($cid));
-                $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
+                $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s,]/u', '', $raw_title));
                 $clean_title = preg_replace('/\s+/', ' ', $clean_title);
                 
                 // Get niche from taxonomy description (or fallback to name, then default)

@@ -54,9 +54,9 @@ class DH_AI_Content_Generator {
      */
     public function render_meta_box($post) {
         $default_keyword = '';
-        // Build default keyword from sanitized post title (remove punctuation like commas or dashes)
+        // Build default keyword from sanitized post title (remove punctuation except commas)
         $raw_title = isset($post->post_title) ? wp_strip_all_tags(get_the_title($post)) : '';
-        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
+        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s,]/u', '', $raw_title));
         // Collapse multiple spaces to a single space
         $clean_title = preg_replace('/\s+/', ' ', $clean_title);
         

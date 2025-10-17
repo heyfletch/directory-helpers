@@ -214,7 +214,7 @@ class DH_Admin_Webhook_Trigger {
         
         // Build keyword from post title (same logic as AI Content Generator)
         $raw_title = wp_strip_all_tags(get_the_title($post));
-        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
+        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s,]/u', '', $raw_title));
         $clean_title = preg_replace('/\s+/', ' ', $clean_title);
         
         // Get niche from taxonomy description (or fallback to name, then default)
@@ -321,7 +321,7 @@ class DH_Admin_Webhook_Trigger {
         
         // Build keyword from post title (same logic as AI Content Generator)
         $raw_title = wp_strip_all_tags(get_the_title($post));
-        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
+        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s,]/u', '', $raw_title));
         $clean_title = preg_replace('/\s+/', ' ', $clean_title);
         
         // Get niche from taxonomy description (or fallback to name, then default)
@@ -462,7 +462,7 @@ class DH_Admin_Webhook_Trigger {
         
         // Build keyword from post title (same logic as AI Content Generator)
         $raw_title = wp_strip_all_tags(get_the_title($post));
-        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s]/u', '', $raw_title));
+        $clean_title = trim(preg_replace('/[^\p{L}\p{N}\s,]/u', '', $raw_title));
         $clean_title = preg_replace('/\s+/', ' ', $clean_title);
         
         // Get niche from taxonomy description (or fallback to name, then default)
