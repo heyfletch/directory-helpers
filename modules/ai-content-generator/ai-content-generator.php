@@ -967,15 +967,14 @@ class DH_AI_Content_Generator {
     private function clean_token_replacement_artifacts($text) {
         if (!is_string($text) || $text === '') { return ''; }
         
-        // Remove orphaned comma patterns: " ," or ", " when adjacent to spaces
-        $text = preg_replace('/\s*,\s*,\s*/', ', ', $text); // Collapse multiple commas
-        $text = preg_replace('/\s+,\s*/', ', ', $text);      // Fix space before comma
-        $text = preg_replace('/,\s+,/', ',', $text);         // Remove empty items between commas
-        $text = preg_replace('/^,\s*/', '', $text);          // Remove leading comma
-        $text = preg_replace('/\s*,$/', '', $text);          // Remove trailing comma
+        // Fix orphaned comma patterns: " , " → " "
+        $text = preg_replace('/ , /', ' ', $text);
         
-        // Collapse multiple spaces to single space
-        $text = preg_replace('/\s{2,}/', ' ', $text);
+        // Fix orphaned comma at start: "  , word" → " word"
+        $text = preg_replace('/^\s*,\s*/', '', $text);
+        
+        // Collapse only double+ spaces (not newlines) to single space
+        $text = preg_replace('/ {2,}/', ' ', $text);
         
         return $text;
     }
