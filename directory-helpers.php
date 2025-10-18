@@ -499,6 +499,45 @@ class Directory_Helpers {
     }
 
     /**
+     * Clean up artifacts from token replacement when tokens are empty.
+     * Handles patterns like:
+     * - "in  Montana" (double space) → "in Montana"
+     * - " , Montana" (orphaned comma) → " Montana"
+     * - "to  , Montana" → "to Montana"
+     *
+     * @param string $text
+     * @return string
+     */
+    private function clean_token_replacement_artifacts($text) {
+        if (!is_string($text) || $text === '') { return ''; }
+        
+        // Fix orphaned comma patterns: " , " → " "
+        $text = preg_replace('/ , /', ' ', $text);
+        
+        // Fix orphaned comma at start: "  , word" → " word"
+        $text = preg_replace('/^\s*,\s*/', '', $text);
+        
+        // Fix "in {area}!" when {area} is empty: "in !" → "!"
+        $text = preg_replace('/\s+!/', '!', $text);
+        
+        // Fix "in the {area} area" when {area} is empty: "in the  area" → ""
+        $text = preg_replace('/\bin the\s+area\b/', '', $text);
+        
+        // Fix "the {area} area" when {area} is empty: "the  area" → ""
+        $text = preg_replace('/\bthe\s+area\b/', '', $text);
+        
+        // Collapse only double+ spaces (not newlines) to single space
+        $text = preg_replace('/ {2,}/', ' ', $text);
+        
+        // Trim trailing/leading spaces on each line (but preserve newlines)
+        $lines = explode("\n", $text);
+        $lines = array_map('trim', $lines);
+        $text = implode("\n", $lines);
+        
+        return $text;
+    }
+
+    /**
      * Register Prompts display meta box across post types; it only displays prompts targeted to the current post type.
      */
     public function register_prompts_display_meta_box() {
@@ -589,7 +628,8 @@ class Directory_Helpers {
 
             // Apply replacements and normalize apostrophes for clean display/copy
             $display_text = strtr($text, $replacements);
-            $display_text = str_replace("'", "’", $display_text);
+            $display_text = $this->clean_token_replacement_artifacts($display_text);
+            $display_text = str_replace("'", "'", $display_text);
             echo '<div class="dh-prompt-wrap" style="margin-bottom:12px;">';
             echo '<div class="dh-prompt-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
             echo '<strong>' . esc_html($key) . '</strong>';

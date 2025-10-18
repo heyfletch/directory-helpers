@@ -973,8 +973,22 @@ class DH_AI_Content_Generator {
         // Fix orphaned comma at start: "  , word" → " word"
         $text = preg_replace('/^\s*,\s*/', '', $text);
         
+        // Fix "in {area}!" when {area} is empty: "in !" → "!"
+        $text = preg_replace('/\s+!/', '!', $text);
+        
+        // Fix "in the {area} area" when {area} is empty: "in the  area" → ""
+        $text = preg_replace('/\bin the\s+area\b/', '', $text);
+        
+        // Fix "the {area} area" when {area} is empty: "the  area" → ""
+        $text = preg_replace('/\bthe\s+area\b/', '', $text);
+        
         // Collapse only double+ spaces (not newlines) to single space
         $text = preg_replace('/ {2,}/', ' ', $text);
+        
+        // Trim trailing/leading spaces on each line (but preserve newlines)
+        $lines = explode("\n", $text);
+        $lines = array_map('trim', $lines);
+        $text = implode("\n", $lines);
         
         return $text;
     }

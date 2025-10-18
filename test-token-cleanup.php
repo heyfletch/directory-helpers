@@ -13,8 +13,22 @@ function clean_token_replacement_artifacts($text) {
     // Fix orphaned comma at start: "  , word" → " word"
     $text = preg_replace('/^\s*,\s*/', '', $text);
     
+    // Fix "in {area}!" when {area} is empty: "in !" → "!"
+    $text = preg_replace('/\s+!/', '!', $text);
+    
+    // Fix "in the {area} area" when {area} is empty: "in the  area" → ""
+    $text = preg_replace('/\bin the\s+area\b/', '', $text);
+    
+    // Fix "the {area} area" when {area} is empty: "the  area" → ""
+    $text = preg_replace('/\bthe\s+area\b/', '', $text);
+    
     // Collapse only double+ spaces (not newlines) to single space
     $text = preg_replace('/ {2,}/', ' ', $text);
+    
+    // Trim trailing/leading spaces on each line (but preserve newlines)
+    $lines = explode("\n", $text);
+    $lines = array_map('trim', $lines);
+    $text = implode("\n", $lines);
     
     return $text;
 }
@@ -67,3 +81,19 @@ echo "INPUT:  '$input6'\n";
 echo "OUTPUT: '$output6'\n";
 echo "EXPECT: 'Find the Best Dog Training'\n";
 echo "PASS:   " . ($output6 === "Find the Best Dog Training" ? "✓" : "✗") . "\n\n";
+
+echo "=== TEST 7: Real Prompt - 'in {area}!' with empty area ===\n";
+$input7 = "This video is your complete guide to finding the best dog trainer in !";
+$output7 = clean_token_replacement_artifacts($input7);
+echo "INPUT:  '$input7'\n";
+echo "OUTPUT: '$output7'\n";
+echo "EXPECT: 'This video is your complete guide to finding the best dog trainer in!'\n";
+echo "PASS:   " . ($output7 === "This video is your complete guide to finding the best dog trainer in!" ? "✓" : "✗") . "\n\n";
+
+echo "=== TEST 8: Real Prompt - 'in the {area} area' with empty area ===\n";
+$input8 = "Get a clear idea of what to budget for different training services in the  area";
+$output8 = clean_token_replacement_artifacts($input8);
+echo "INPUT:  '$input8'\n";
+echo "OUTPUT: '$output8'\n";
+echo "EXPECT: 'Get a clear idea of what to budget for different training services'\n";
+echo "PASS:   " . ($output8 === "Get a clear idea of what to budget for different training services" ? "✓" : "✗") . "\n\n";
