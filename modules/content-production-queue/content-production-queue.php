@@ -677,6 +677,12 @@ class DH_Content_Production_Queue {
                     }
                 }
                 
+                // Create shortlink for city/state listings (e.g., goodydoggy.com/burlington-vt)
+                if (in_array($post->post_type, array('city-listing', 'state-listing')) && class_exists('DH_Shortlinks')) {
+                    $shortlinks = new DH_Shortlinks();
+                    $shortlinks->create_shortlink_for_post($post->ID);
+                }
+                
                 $published_count++;
             }
         }
