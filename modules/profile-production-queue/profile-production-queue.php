@@ -586,7 +586,19 @@ class DH_Profile_Production_Queue {
         foreach ($profile_ids as $pid) {
             $area_terms = get_the_terms($pid, 'area');
             if (!empty($area_terms) && !is_wp_error($area_terms)) {
-                $area = $area_terms[0];
+                // Validate area term matches the state we're processing
+                $correct_area_term = null;
+                foreach ($area_terms as $area_term) {
+                    // Check if area term slug ends with the state code
+                    // e.g., richmond-ky matches state 'ky' or 'kentucky'
+                    if (preg_match('/-' . preg_quote($state_slug, '/') . '$/', $area_term->slug)) {
+                        $correct_area_term = $area_term;
+                        break;
+                    }
+                }
+                
+                // Use validated term, or fallback to first term
+                $area = $correct_area_term ? $correct_area_term : $area_terms[0];
                 $unique_cities[$area->slug] = $area->name;
             }
         }
