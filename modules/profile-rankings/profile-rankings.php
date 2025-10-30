@@ -69,34 +69,32 @@ class DH_Profile_Rankings {
         // Cast to int to handle string values from ACF
         $rank = (int) $rank;
         $profile_count = (int) $profile_count;
-        
-        error_log(sprintf('[get_ranking_tier_label] rank:%d profile_count:%d', $rank, $profile_count));
-        
-        if ($rank == 1) {
-            error_log('[get_ranking_tier_label] returning #1');
+
+        if ($rank === 1) {
             return '#1';
         }
-        
+
         // Top 5: if there are 6+ profiles
         if ($rank >= 2 && $rank <= 5 && $profile_count >= 6) {
-            error_log('[get_ranking_tier_label] returning Top 5');
             return 'Top 5';
         }
-        
+
         // Top 3: only if there are 4 or 5 total profiles
-        if ($rank >= 2 && $rank <= 3 && ($profile_count == 4 || $profile_count == 5)) {
-            error_log('[get_ranking_tier_label] returning Top 3');
+        if ($rank >= 2 && $rank <= 3 && ($profile_count === 4 || $profile_count === 5)) {
             return 'Top 3';
         }
-        
+
         // Top 10: if there are 11+ profiles
         if ($rank >= 6 && $rank <= 10 && $profile_count >= 11) {
-            error_log('[get_ranking_tier_label] returning Top 10');
             return 'Top 10';
         }
-        
-        error_log('[get_ranking_tier_label] returning false (no tier)');
-        // No badge for ranks beyond 10 or insufficient peer counts
+
+        // Top 25: if there are 50+ profiles
+        if ($rank >= 11 && $rank <= 25 && $profile_count >= 50) {
+            return 'Top 25';
+        }
+
+        // No badge for ranks beyond 25 or insufficient peer counts
         return false;
     }
     
@@ -142,15 +140,6 @@ class DH_Profile_Rankings {
         // If no rating or reviews, show "not yet ranked"
         $city_rank = get_field('city_rank', $post_id);
 
-        // Debug: log values to help diagnose missing rankings
-        error_log(sprintf('[dh_city_rank] post_id:%d rating:%s review_count:%s city_rank:%s city_term_id:%d', 
-            $post_id, 
-            var_export($rating, true), 
-            var_export($review_count, true), 
-            var_export($city_rank, true), 
-            $city_terms[0]->term_id
-        ));
-
         // If no rating/reviews or rank is 0/empty/99999, show "not yet ranked"
         if (empty($rating) || empty($review_count) || empty($city_rank) || $city_rank == 99999) {
             return 'not yet ranked in ' . $city_name;
@@ -174,14 +163,6 @@ class DH_Profile_Rankings {
         if (!empty($city_posts)) {
             $profile_count = (int) get_post_meta($city_posts[0], '_profile_count', true);
         }
-        
-        // Debug: log profile count and city lookup
-        error_log(sprintf('[dh_city_rank] city_term_id:%d city_post_id:%s profile_count:%d city_rank:%d', 
-            $city_terms[0]->term_id,
-            !empty($city_posts) ? $city_posts[0] : 'none',
-            $profile_count,
-            $city_rank
-        ));
         
         // Determine tier label
         $tier_label = $this->get_ranking_tier_label($city_rank, $profile_count);
@@ -260,15 +241,6 @@ class DH_Profile_Rankings {
         
         // If no rating or reviews, show "not yet ranked"
         $state_rank = get_field('state_rank', $post_id);
-
-        // Debug: log values to help diagnose missing rankings
-        error_log(sprintf('[dh_state_rank] post_id:%d rating:%s review_count:%s state_rank:%s state_term_id:%d', 
-            $post_id, 
-            var_export($rating, true), 
-            var_export($review_count, true), 
-            var_export($state_rank, true), 
-            $state_terms[0]->term_id
-        ));
 
         // If no rating/reviews or rank is 0/empty/99999, show "not yet ranked"
         if (empty($rating) || empty($review_count) || empty($state_rank) || $state_rank == 99999) {
