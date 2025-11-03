@@ -175,6 +175,9 @@ class DH_Profile_Badges {
         $post_id = absint(get_query_var('badge_post_id'));
         $badge_type = sanitize_key(get_query_var('badge_type'));
         
+        // Check for active parameter (strips internal <a> tag for nested embed)
+        $active = isset($_GET['active']) && $_GET['active'] == '1';
+        
         // Validate post exists and is published profile
         $post = get_post($post_id);
         if (!$post || $post->post_type !== 'profile' || $post->post_status !== 'publish') {
@@ -195,8 +198,8 @@ class DH_Profile_Badges {
             exit('Badge not available');
         }
         
-        // Try to get cached SVG
-        $cache_key = 'dh_badge_' . $post_id . '_' . $badge_type;
+        // Try to get cached SVG (separate cache for active/inactive)
+        $cache_key = 'dh_badge_' . $post_id . '_' . $badge_type . ($active ? '_active' : '');
         $svg = get_transient($cache_key);
         
         if ($svg === false) {
@@ -207,7 +210,7 @@ class DH_Profile_Badges {
                 exit('Failed to generate badge');
             }
             
-            $svg = $this->generate_badge_svg($badge_data);
+            $svg = $this->generate_badge_svg($badge_data, $active);
             
             // Cache for 1 hour
             set_transient($cache_key, $svg, $this->cache_ttl);
@@ -457,9 +460,10 @@ class DH_Profile_Badges {
      * Generate SVG badge
      *
      * @param array $data Badge data
+     * @param bool $active Whether to strip internal <a> tag (for nested embeds)
      * @return string SVG markup
      */
-    private function generate_badge_svg($data) {
+    private function generate_badge_svg($data, $active = false) {
         // Escape data for SVG output
         $rank_label = esc_attr($data['rank_label']);
         $niche = esc_attr($data['niche']);
@@ -499,8 +503,10 @@ class DH_Profile_Badges {
         $svg .= '<title>' . esc_attr($name . ' - ' . $niche) . '</title>';
         $svg .= '<desc>Badge for ' . esc_attr($name) . ' in ' . esc_attr($location) . '</desc>';
         
-        // Add clickable link wrapper
-        $svg .= '<a href="' . $url . '" target="_parent">';
+        // Add clickable link wrapper (only if not active mode)
+        if (!$active) {
+            $svg .= '<a href="' . $url . '" target="_parent">';
+        }
         
         // Background with rounded corners and border
         $svg .= '<rect x="1" y="1" width="' . ($width - 2) . '" height="' . ($height - 2) . '" rx="8" ry="8" fill="' . $bg_color . '" stroke="' . $border_color . '" stroke-width="2"/>';
@@ -519,8 +525,10 @@ class DH_Profile_Badges {
             $y += $line_height;
         }
         
-        // Close link and SVG
-        $svg .= '</a>';
+        // Close link (only if not active mode) and SVG
+        if (!$active) {
+            $svg .= '</a>';
+        }
         $svg .= '</svg>';
         
         return $svg;
@@ -578,11 +586,20 @@ class DH_Profile_Badges {
             if ($eligible[$type]) {
                 $badge_data = $this->get_badge_data($post_id, $type);
                 $badge_url = home_url('/badge/' . $post_id . '/' . $type . '.svg');
+                $badge_url_active = home_url('/badge/' . $post_id . '/' . $type . '.svg?active=1');
                 $alt_text = ucfirst($type) . ' Badge for ' . get_the_title($post_id);
                 
-                // Generate embed code
-                $embed_code = '<a href="' . esc_url($badge_data['profile_url']) . '">' . "\n";
-                $embed_code .= '  <img src="' . esc_url($badge_url) . '" alt="' . esc_attr($alt_text) . '" width="250" height="auto" />' . "\n";
+                // Determine target URL based on badge type
+                $target_url = $badge_data['profile_url'];
+                if ($type === 'city' && !empty($badge_data['city_url'])) {
+                    $target_url = $badge_data['city_url'];
+                } elseif ($type === 'state' && !empty($badge_data['state_url'])) {
+                    $target_url = $badge_data['state_url'];
+                }
+                
+                // Generate embed code with active=1 to prevent nested links
+                $embed_code = '<a href="' . esc_url($target_url) . '">' . "\n";
+                $embed_code .= '  <img src="' . esc_url($badge_url_active) . '" alt="' . esc_attr($alt_text) . '" width="250" height="auto" />' . "\n";
                 $embed_code .= '</a>';
                 
                 $output .= '<div class="dh-badge-wrap">';

@@ -408,11 +408,41 @@ Output:
             <h4 style="margin-top: 20px;"><?php esc_html_e('Badge URLs', 'directory-helpers'); ?></h4>
             <p><?php esc_html_e('Badges are also accessible via direct URLs:', 'directory-helpers'); ?></p>
             <ul style="list-style: disc; margin-left: 20px;">
-                <li><code><?php echo esc_html(home_url('/badge/{post_id}/city.svg')); ?></code> - <?php esc_html_e('City ranking badge', 'directory-helpers'); ?></li>
-                <li><code><?php echo esc_html(home_url('/badge/{post_id}/state.svg')); ?></code> - <?php esc_html_e('State ranking badge', 'directory-helpers'); ?></li>
-                <li><code><?php echo esc_html(home_url('/badge/{post_id}/profile.svg')); ?></code> - <?php esc_html_e('Featured/Recognized badge', 'directory-helpers'); ?></li>
+                <li><code><?php echo esc_html(home_url('/badge/{post_id}/city.svg')); ?></code> - <?php esc_html_e('City ranking badge (self-linking)', 'directory-helpers'); ?></li>
+                <li><code><?php echo esc_html(home_url('/badge/{post_id}/state.svg')); ?></code> - <?php esc_html_e('State ranking badge (self-linking)', 'directory-helpers'); ?></li>
+                <li><code><?php echo esc_html(home_url('/badge/{post_id}/profile.svg')); ?></code> - <?php esc_html_e('Featured/Recognized badge (self-linking)', 'directory-helpers'); ?></li>
+                <li><code><?php echo esc_html(home_url('/badge/{post_id}/city.svg?active=1')); ?></code> - <?php esc_html_e('Badge without internal link (for nested embeds)', 'directory-helpers'); ?></li>
             </ul>
             <p><em><?php esc_html_e('Replace {post_id} with the actual profile post ID.', 'directory-helpers'); ?></em></p>
+            
+            <h4 style="margin-top: 20px;"><?php esc_html_e('Embed Modes', 'directory-helpers'); ?></h4>
+            <p><?php esc_html_e('Badges support two embed modes to prevent nested links:', 'directory-helpers'); ?></p>
+            <table class="widefat" style="margin-top: 10px;">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;"><?php esc_html_e('Mode', 'directory-helpers'); ?></th>
+                        <th style="width: 70%;"><?php esc_html_e('Description', 'directory-helpers'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong><?php esc_html_e('Standard', 'directory-helpers'); ?></strong></td>
+                        <td><?php esc_html_e('SVG includes internal <a> tag. Use when embedding badge directly without wrapper link.', 'directory-helpers'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong><?php esc_html_e('Active (?active=1)', 'directory-helpers'); ?></strong></td>
+                        <td><?php esc_html_e('SVG has internal <a> tag stripped. Use when wrapping badge in an <a> tag to prevent invalid nested links.', 'directory-helpers'); ?></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="margin-top: 10px;"><strong><?php esc_html_e('Recommended Embed Code:', 'directory-helpers'); ?></strong></p>
+            <pre style="background: #f5f5f5; padding: 15px; border-left: 4px solid #2271b1; overflow-x: auto;"><code>&lt;!-- Full embed code (prevents nested links) --&gt;
+&lt;a href="<?php echo esc_html(home_url('/top/state-trainers/')); ?>"&gt;
+  &lt;img src="<?php echo esc_html(home_url('/badge/{post_id}/state.svg?active=1')); ?>" alt="State Badge" width="250" height="auto" /&gt;
+&lt;/a&gt;
+
+&lt;!-- Standalone (self-linking) --&gt;
+&lt;img src="<?php echo esc_html(home_url('/badge/{post_id}/state.svg')); ?>" alt="State Badge" width="250" height="auto" /&gt;</code></pre>
         </div>
         
         <div class="card" style="max-width: none; margin-top: 20px;">
