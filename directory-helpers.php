@@ -805,6 +805,12 @@ class Directory_Helpers {
                 'description' => __('Maintains cached counts for city and state listings. City listings get _profile_count (published profiles). State listings get _city_count and _profile_count. Updates automatically via hooks.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/listing-counts/listing-counts.php',
                 'class' => 'DH_Listing_Counts'
+            ),
+            'profile-badges' => array(
+                'name' => __('Profile Badges', 'directory-helpers'),
+                'description' => __('Dynamic SVG badges for trainer profiles with embed codes. Display rankings with [dh_accolades] or with copy buttons using [dh_celebration]. Badge URLs: yoursite.com/badge/{post_id}/city.svg, /state.svg, /profile.svg', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-badges/profile-badges.php',
+                'class' => 'DH_Profile_Badges'
             )
             // Add more modules here as needed
         );

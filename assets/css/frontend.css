@@ -61,3 +61,34 @@
   margin: 0;
   padding: 0;
 }
+
+/* Profile Badges Module */
+.dh-accolades,
+.dh-celebration {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.dh-badge-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dh-badge {
+  display: block;
+  max-width: 250px;
+  height: auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+
+.dh-copy-embed {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
