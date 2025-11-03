@@ -811,6 +811,12 @@ class Directory_Helpers {
                 'description' => __('Dynamic SVG badges for trainer profiles with embed codes. Display rankings with [dh_accolades] or with copy buttons using [dh_celebration]. Badge URLs: yoursite.com/badge/{post_id}/city.svg, /state.svg, /profile.svg', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-badges/profile-badges.php',
                 'class' => 'DH_Profile_Badges'
+            ),
+            'taxonomy-display' => array(
+                'name' => __('Taxonomy Display', 'directory-helpers'),
+                'description' => __('Simple shortcodes to display taxonomy terms: [dh_city_name], [dh_state_name format="full|abbr"], [dh_niche_name plural="true|false"]. Handles multiple area terms using ACF city field.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/taxonomy-display/taxonomy-display.php',
+                'class' => 'DH_Taxonomy_Display'
             )
             // Add more modules here as needed
         );
