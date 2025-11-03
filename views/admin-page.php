@@ -322,4 +322,175 @@
         </div>
         <?php submit_button(__('Save Settings', 'directory-helpers')); ?>
     </form>
+    
+    <!-- Shortcode Documentation -->
+    <div class="directory-helpers-documentation" style="margin-top: 40px;">
+        <h2><?php esc_html_e('Shortcode Reference', 'directory-helpers'); ?></h2>
+        
+        <div class="card" style="max-width: none;">
+            <h3><?php esc_html_e('Taxonomy Display Shortcodes', 'directory-helpers'); ?></h3>
+            <p><?php esc_html_e('Display taxonomy term names on profile pages:', 'directory-helpers'); ?></p>
+            
+            <table class="widefat" style="margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;"><?php esc_html_e('Shortcode', 'directory-helpers'); ?></th>
+                        <th style="width: 35%;"><?php esc_html_e('Description', 'directory-helpers'); ?></th>
+                        <th style="width: 35%;"><?php esc_html_e('Example Output', 'directory-helpers'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>[dh_city_name]</code></td>
+                        <td><?php esc_html_e('Display city name (strips " - ST" suffix by default)', 'directory-helpers'); ?></td>
+                        <td><em>Milwaukee</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_city_name strip_state="false"]</code></td>
+                        <td><?php esc_html_e('Display city name with state suffix', 'directory-helpers'); ?></td>
+                        <td><em>Milwaukee - WI</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_state_name]</code></td>
+                        <td><?php esc_html_e('Display full state name', 'directory-helpers'); ?></td>
+                        <td><em>Wisconsin</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_state_name format="abbr"]</code></td>
+                        <td><?php esc_html_e('Display state abbreviation', 'directory-helpers'); ?></td>
+                        <td><em>WI</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_niche_name]</code></td>
+                        <td><?php esc_html_e('Display niche name', 'directory-helpers'); ?></td>
+                        <td><em>Dog Trainer</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_niche_name plural="true"]</code></td>
+                        <td><?php esc_html_e('Display pluralized niche name', 'directory-helpers'); ?></td>
+                        <td><em>Dog Trainers</em></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h4 style="margin-top: 20px;"><?php esc_html_e('Usage Examples', 'directory-helpers'); ?></h4>
+            <pre style="background: #f5f5f5; padding: 15px; border-left: 4px solid #2271b1; overflow-x: auto;"><code>&lt;h1&gt;Meet [dh_niche_name] in [dh_city_name]&lt;/h1&gt;
+&lt;p&gt;Serving [dh_city_name], [dh_state_name]&lt;/p&gt;
+
+Output:
+&lt;h1&gt;Meet Dog Trainer in Milwaukee&lt;/h1&gt;
+&lt;p&gt;Serving Milwaukee, Wisconsin&lt;/p&gt;</code></pre>
+        </div>
+        
+        <div class="card" style="max-width: none; margin-top: 20px;">
+            <h3><?php esc_html_e('Profile Badge Shortcodes', 'directory-helpers'); ?></h3>
+            <p><?php esc_html_e('Display ranking badges on profile pages:', 'directory-helpers'); ?></p>
+            
+            <table class="widefat" style="margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;"><?php esc_html_e('Shortcode', 'directory-helpers'); ?></th>
+                        <th style="width: 70%;"><?php esc_html_e('Description', 'directory-helpers'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>[dh_accolades]</code></td>
+                        <td><?php esc_html_e('Display all eligible badges (city rank, state rank, featured/recognized) as images', 'directory-helpers'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_celebration]</code></td>
+                        <td><?php esc_html_e('Display badges with "Copy Embed Code" buttons for trainers to share on their websites', 'directory-helpers'); ?></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h4 style="margin-top: 20px;"><?php esc_html_e('Badge URLs', 'directory-helpers'); ?></h4>
+            <p><?php esc_html_e('Badges are also accessible via direct URLs:', 'directory-helpers'); ?></p>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><code><?php echo esc_html(home_url('/badge/{post_id}/city.svg')); ?></code> - <?php esc_html_e('City ranking badge', 'directory-helpers'); ?></li>
+                <li><code><?php echo esc_html(home_url('/badge/{post_id}/state.svg')); ?></code> - <?php esc_html_e('State ranking badge', 'directory-helpers'); ?></li>
+                <li><code><?php echo esc_html(home_url('/badge/{post_id}/profile.svg')); ?></code> - <?php esc_html_e('Featured/Recognized badge', 'directory-helpers'); ?></li>
+            </ul>
+            <p><em><?php esc_html_e('Replace {post_id} with the actual profile post ID.', 'directory-helpers'); ?></em></p>
+        </div>
+        
+        <div class="card" style="max-width: none; margin-top: 20px;">
+            <h3><?php esc_html_e('Ranking Shortcodes', 'directory-helpers'); ?></h3>
+            <table class="widefat" style="margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;"><?php esc_html_e('Shortcode', 'directory-helpers'); ?></th>
+                        <th style="width: 35%;"><?php esc_html_e('Description', 'directory-helpers'); ?></th>
+                        <th style="width: 35%;"><?php esc_html_e('Example Output', 'directory-helpers'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>[dh_city_rank]</code></td>
+                        <td><?php esc_html_e('Display city ranking', 'directory-helpers'); ?></td>
+                        <td><em>Ranked Top 5 in Milwaukee</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_city_rank show_prefix="false"]</code></td>
+                        <td><?php esc_html_e('Display without "Ranked" prefix', 'directory-helpers'); ?></td>
+                        <td><em>Top 5 in Milwaukee</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_state_rank]</code></td>
+                        <td><?php esc_html_e('Display state ranking', 'directory-helpers'); ?></td>
+                        <td><em>Ranked Top 10 in Wisconsin</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_state_rank show_ranking_data="true"]</code></td>
+                        <td><?php esc_html_e('Include rating and review count', 'directory-helpers'); ?></td>
+                        <td><em>Ranked Top 10 in Wisconsin based on 42 reviews and a 4.8 rating</em></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="card" style="max-width: none; margin-top: 20px;">
+            <h3><?php esc_html_e('Other Shortcodes', 'directory-helpers'); ?></h3>
+            <table class="widefat" style="margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;"><?php esc_html_e('Shortcode', 'directory-helpers'); ?></th>
+                        <th style="width: 70%;"><?php esc_html_e('Description', 'directory-helpers'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>[dh_breadcrumbs]</code></td>
+                        <td><?php esc_html_e('Display breadcrumb navigation. Supports attributes: home_text, home_separator, show_niche, show_city, show_state, show_home, separator', 'directory-helpers'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_video_overview]</code></td>
+                        <td><?php esc_html_e('Embed YouTube video from ACF "video_overview" field', 'directory-helpers'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_instant_search]</code></td>
+                        <td><?php esc_html_e('Display instant search widget with typeahead dropdown', 'directory-helpers'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_nearest_cities limit="5"]</code></td>
+                        <td><?php esc_html_e('List nearest cities based on area lat/lng coordinates', 'directory-helpers'); ?></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="card" style="max-width: none; margin-top: 20px; background: #fffbcc; border-left: 4px solid #ffb900;">
+            <h3><?php esc_html_e('⚠️ Multiple Area Terms', 'directory-helpers'); ?></h3>
+            <p><?php esc_html_e('When a profile has multiple area taxonomy terms, the plugin uses the ACF "city" field to determine which is the primary city.', 'directory-helpers'); ?></p>
+            <p><strong><?php esc_html_e('Logic:', 'directory-helpers'); ?></strong></p>
+            <ol style="margin-left: 20px;">
+                <li><?php esc_html_e('If only one area term exists → use it', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('If multiple area terms exist → match against ACF "city" field value', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('If no match found → fallback to first term (alphabetical)', 'directory-helpers'); ?></li>
+            </ol>
+            <p><strong><?php esc_html_e('Example:', 'directory-helpers'); ?></strong> <?php esc_html_e('Profile has area terms "milwaukee-wi" and "waukesha-wi". ACF city field = "Milwaukee". Result: Uses "milwaukee-wi" for rankings and display.', 'directory-helpers'); ?></p>
+            <p><em><?php esc_html_e('This ensures accurate city rankings and badge display for profiles serving multiple cities.', 'directory-helpers'); ?></em></p>
+        </div>
+    </div>
 </div>

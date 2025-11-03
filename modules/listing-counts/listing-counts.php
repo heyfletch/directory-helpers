@@ -61,10 +61,10 @@ class DH_Listing_Counts {
             return;
         }
         
-        // Update city count
-        $area_terms = get_the_terms($post_id, 'area');
-        if (!empty($area_terms) && !is_wp_error($area_terms)) {
-            $this->update_city_profile_count($area_terms[0]->term_id);
+        // Update city count - use primary area term
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+        if ($primary_area_term) {
+            $this->update_city_profile_count($primary_area_term->term_id);
         }
         
         // Update state counts

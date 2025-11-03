@@ -238,7 +238,7 @@ class DH_Profile_Badges {
         
         // Check city rank eligibility
         $city_rank = get_field('city_rank', $post_id);
-        $primary_area_term = $this->get_primary_area_term($post_id);
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
         
         if ($primary_area_term && $city_rank && $city_rank != 99999) {
             // Get profile count for this city
@@ -301,41 +301,6 @@ class DH_Profile_Badges {
         return $eligible;
     }
     
-    /**
-     * Get primary area term for a profile
-     * Uses ACF 'city' field to determine which area term is primary when multiple exist
-     *
-     * @param int $post_id Profile post ID
-     * @return WP_Term|false Primary area term or false
-     */
-    private function get_primary_area_term($post_id) {
-        $area_terms = get_the_terms($post_id, 'area');
-        if (empty($area_terms) || is_wp_error($area_terms)) {
-            return false;
-        }
-        
-        // Single term - easy
-        if (count($area_terms) === 1) {
-            return $area_terms[0];
-        }
-        
-        // Multiple terms - use ACF city field to determine primary
-        $acf_city = get_field('city', $post_id);
-        if ($acf_city && is_string($acf_city)) {
-            $acf_city_clean = strtolower(trim($acf_city));
-            
-            foreach ($area_terms as $term) {
-                $term_name_clean = strtolower($term->name);
-                // Check if term name starts with ACF city value
-                if (strpos($term_name_clean, $acf_city_clean) === 0) {
-                    return $term;
-                }
-            }
-        }
-        
-        // Fallback to first term
-        return $area_terms[0];
-    }
     
     /**
      * Get ranking tier label (mirrors logic from Profile Rankings module)
@@ -400,7 +365,7 @@ class DH_Profile_Badges {
         }
         
         // Get area term for location
-        $primary_area_term = $this->get_primary_area_term($post_id);
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
         if ($primary_area_term) {
             $data['location'] = $primary_area_term->name;
         }

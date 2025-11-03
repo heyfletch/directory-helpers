@@ -23,6 +23,9 @@ define('DIRECTORY_HELPERS_PATH', plugin_dir_path(__FILE__));
 define('DIRECTORY_HELPERS_URL', plugin_dir_url(__FILE__));
 define('DIRECTORY_HELPERS_BASENAME', plugin_basename(__FILE__));
 
+// Load shared utility classes
+require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-taxonomy-helpers.php';
+
 /**
  * Main plugin class
  */

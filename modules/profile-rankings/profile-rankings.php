@@ -131,11 +131,11 @@ class DH_Profile_Rankings {
         $review_count = get_field('rating_votes_count', $post_id);
         
         // Get city name for the profile
-        $city_terms = get_the_terms($post_id, 'area');
-        if (empty($city_terms) || is_wp_error($city_terms)) {
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+        if (!$primary_area_term) {
             return '';
         }
-        $city_name = $city_terms[0]->name;
+        $city_name = $primary_area_term->name;
         
         // If no rating or reviews, show "not yet ranked"
         $city_rank = get_field('city_rank', $post_id);
@@ -155,7 +155,7 @@ class DH_Profile_Rankings {
                 array(
                     'taxonomy' => 'area',
                     'field' => 'term_id',
-                    'terms' => $city_terms[0]->term_id,
+                    'terms' => $primary_area_term->term_id,
                 ),
             ),
             'fields' => 'ids',
@@ -328,10 +328,10 @@ class DH_Profile_Rankings {
      * @param int $post_id The ID of the profile that was updated.
      */
     private function recalculate_and_save_ranks($post_id) {
-        // Recalculate for City
-        $city_terms = get_the_terms($post_id, 'area');
-        if (!empty($city_terms) && !is_wp_error($city_terms)) {
-            $this->update_ranks_for_term($city_terms[0], 'area', 'city_rank');
+        // Recalculate for City - use primary area term
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+        if ($primary_area_term) {
+            $this->update_ranks_for_term($primary_area_term, 'area', 'city_rank');
         }
 
         // Recalculate for State
