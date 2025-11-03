@@ -25,11 +25,11 @@ class DH_Profile_Badges {
     private $text_domain = 'directory-helpers';
     
     /**
-     * Cache TTL in seconds (1 hour)
+     * Cache TTL in seconds (1 minute for testing)
      *
      * @var int
      */
-    private $cache_ttl = 3600;
+    private $cache_ttl = 60;
     
     /**
      * Rate limit per IP (requests per minute)
