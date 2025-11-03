@@ -25,11 +25,11 @@ class DH_Profile_Badges {
     private $text_domain = 'directory-helpers';
     
     /**
-     * Cache TTL in seconds (1 minute for testing)
+     * Cache TTL in seconds (24 hours)
      *
      * @var int
      */
-    private $cache_ttl = 60;
+    private $cache_ttl = 86400;
     
     /**
      * Rate limit per IP (requests per minute)
@@ -44,16 +44,14 @@ class DH_Profile_Badges {
     public function __construct() {
         $this->text_domain = 'directory-helpers';
         
-        // Add rewrite rules
-        add_action('init', array($this, 'add_rewrite_rules'));
-        
-        // Add query vars
-        add_filter('query_vars', array($this, 'add_query_vars'));
+        // Register rewrite rules
+        add_action('init', array($this, 'register_rewrite_rules'));
+        add_filter('query_vars', array($this, 'register_query_vars'));
         
         // Handle badge requests
         add_action('template_redirect', array($this, 'handle_badge_request'));
         
-        // Add shortcodes
+        // Register shortcodes
         add_shortcode('dh_accolades', array($this, 'accolades_shortcode'));
         add_shortcode('dh_celebration', array($this, 'celebration_shortcode'));
         
@@ -62,12 +60,15 @@ class DH_Profile_Badges {
         
         // Add activation notice for flushing rewrite rules
         add_action('admin_notices', array($this, 'activation_notice'));
+        
+        // Clear badge cache when profile is updated
+        add_action('acf/save_post', array($this, 'clear_badge_cache_on_save'), 25);
     }
     
     /**
-     * Add rewrite rules for badge URLs
+     * Register rewrite rules for badge URLs
      */
-    public function add_rewrite_rules() {
+    public function register_rewrite_rules() {
         add_rewrite_rule(
             'badge/([0-9]+)/(city|state|profile)\.svg$',
             'index.php?badge_request=1&badge_post_id=$matches[1]&badge_type=$matches[2]',
@@ -76,12 +77,12 @@ class DH_Profile_Badges {
     }
     
     /**
-     * Add custom query vars
+     * Register custom query vars
      *
      * @param array $vars Existing query vars
      * @return array Modified query vars
      */
-    public function add_query_vars($vars) {
+    public function register_query_vars($vars) {
         $vars[] = 'badge_request';
         $vars[] = 'badge_post_id';
         $vars[] = 'badge_type';
@@ -198,9 +199,9 @@ class DH_Profile_Badges {
             exit('Badge not available');
         }
         
-        // Try to get cached SVG (separate cache for active/inactive)
+        // Try to get cached SVG using wp_cache (APCu/Memcached if available)
         $cache_key = 'dh_badge_' . $post_id . '_' . $badge_type . ($active ? '_active' : '');
-        $svg = get_transient($cache_key);
+        $svg = wp_cache_get($cache_key, 'dh_badges');
         
         if ($svg === false) {
             // Generate new SVG
@@ -212,8 +213,8 @@ class DH_Profile_Badges {
             
             $svg = $this->generate_badge_svg($badge_data, $active);
             
-            // Cache for 1 hour
-            set_transient($cache_key, $svg, $this->cache_ttl);
+            // Cache using wp_cache (uses APCu/Memcached if available)
+            wp_cache_set($cache_key, $svg, 'dh_badges', $this->cache_ttl);
         }
         
         // Serve SVG with appropriate headers
@@ -303,7 +304,6 @@ class DH_Profile_Badges {
         
         return $eligible;
     }
-    
     
     /**
      * Get ranking tier label (mirrors logic from Profile Rankings module)
@@ -535,7 +535,8 @@ class DH_Profile_Badges {
     }
     
     /**
-     * Accolades shortcode - displays badge images
+     * Accolades shortcode - displays badges without embed code
+     * Excludes "recognized" (profile) badge
      *
      * @param array $atts Shortcode attributes
      * @return string HTML output
@@ -548,11 +549,14 @@ class DH_Profile_Badges {
         $post_id = get_the_ID();
         $eligible = $this->get_eligible_badges($post_id);
         
-        $output = '<div class="dh-accolades">';
+        // Only show city and state badges (exclude profile/recognized badge)
+        $badge_types = array('city', 'state');
+        $has_badges = false;
+        $output = '';
         
-        $badge_types = array('city', 'state', 'profile');
         foreach ($badge_types as $type) {
             if ($eligible[$type]) {
+                $has_badges = true;
                 $badge_url = home_url('/badge/' . $post_id . '/' . $type . '.svg');
                 $alt_text = ucfirst($type) . ' Badge for ' . get_the_title($post_id);
                 
@@ -560,9 +564,12 @@ class DH_Profile_Badges {
             }
         }
         
-        $output .= '</div>';
+        // Only return output if there are badges to show
+        if (!$has_badges) {
+            return '';
+        }
         
-        return $output;
+        return '<div class="dh-accolades">' . $output . '</div>';
     }
     
     /**
@@ -659,6 +666,25 @@ class DH_Profile_Badges {
                 }
             });
         ");
+    }
+    
+    /**
+     * Clear badge cache when profile is saved
+     *
+     * @param int $post_id Post ID
+     */
+    public function clear_badge_cache_on_save($post_id) {
+        // Only process profiles
+        if (get_post_type($post_id) !== 'profile') {
+            return;
+        }
+        
+        // Clear wp_cache for all badge types
+        $badge_types = array('city', 'state', 'profile');
+        foreach ($badge_types as $type) {
+            wp_cache_delete('dh_badge_' . $post_id . '_' . $type, 'dh_badges');
+            wp_cache_delete('dh_badge_' . $post_id . '_' . $type . '_active', 'dh_badges');
+        }
     }
 }
 
