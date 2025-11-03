@@ -296,10 +296,10 @@ class DH_Shortlinks {
                 $city_base = sanitize_title( $m[1] );
                 $state_code = sanitize_title( $m[2] );
             } else {
-                // Fallback to area term
-                $terms = get_the_terms( $post->ID, 'area' );
-                if ( is_array( $terms ) && ! empty( $terms ) ) {
-                    $city_base = sanitize_title( $terms[0]->name );
+                // Fallback to primary area term
+                $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term( $post->ID );
+                if ( $primary_area_term ) {
+                    $city_base = sanitize_title( $primary_area_term->name );
                 } else {
                     $city_base = sanitize_title( $post->post_title );
                 }

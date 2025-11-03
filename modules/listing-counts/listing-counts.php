@@ -89,8 +89,10 @@ class DH_Listing_Counts {
         }
         
         // Get area term and update profile count
+        // City-listings should only have one area term, but use helper for consistency
         $area_terms = get_the_terms($post_id, 'area');
         if (!empty($area_terms) && !is_wp_error($area_terms)) {
+            // For city-listings, use first term (they should only have one)
             $this->update_city_profile_count($area_terms[0]->term_id);
         }
         

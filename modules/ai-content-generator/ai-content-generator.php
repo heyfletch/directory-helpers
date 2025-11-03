@@ -143,6 +143,7 @@ class DH_AI_Content_Generator {
         if ($post && isset($post->post_type) && $post->post_type === 'city-listing') {
             $area_terms = get_the_terms($post->ID, 'area');
             if ($area_terms && !is_wp_error($area_terms)) {
+                // For city-listing, use first area term (city-listings should only have one)
                 $area_name = $area_terms[0]->name;
                 // Remove trailing " - ST" pattern if present
                 $area_no_state = preg_replace('/\s-\s[A-Za-z]{2}$/', '', $area_name);
@@ -802,9 +803,9 @@ class DH_AI_Content_Generator {
         // Fallback: build from area + state
         $city = '';
         $state_full = '';
-        $area_terms = get_the_terms($post_id, 'area');
-        if (is_array($area_terms) && !empty($area_terms)) {
-            $area_name = (string) $area_terms[0]->name;
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+        if ($primary_area_term) {
+            $area_name = (string) $primary_area_term->name;
             // Strip trailing " - ST"
             $city = preg_replace('/\s-\s[A-Za-z]{2}$/', '', $area_name);
         }
@@ -934,9 +935,9 @@ class DH_AI_Content_Generator {
         // Fallback generic description
         $city = '';
         $state_full = '';
-        $area_terms = get_the_terms($post_id, 'area');
-        if (is_array($area_terms) && !empty($area_terms)) {
-            $area_name = (string) $area_terms[0]->name;
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+        if ($primary_area_term) {
+            $area_name = (string) $primary_area_term->name;
             $city = preg_replace('/\s-\s[A-Za-z]{2}$/', '', $area_name);
         }
         $state_terms = get_the_terms($post_id, 'state');

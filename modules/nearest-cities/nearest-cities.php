@@ -104,9 +104,9 @@ class DH_Nearest_Cities {
                 $niche_label = $niche_name . 's';
             }
 
-            $area_terms = get_the_terms($row->post_id, 'area');
-            if (empty($area_terms) || is_wp_error($area_terms)) { continue; }
-            $area_name = trim($area_terms[0]->name);
+            $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($row->post_id);
+            if (!$primary_area_term) { continue; }
+            $area_name = trim($primary_area_term->name);
             if ($area_name === '') { continue; }
 
             $url = get_permalink($row->post_id);

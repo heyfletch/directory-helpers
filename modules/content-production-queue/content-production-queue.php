@@ -662,6 +662,7 @@ class DH_Content_Production_Queue {
                 if ($post->post_type === 'city-listing') {
                     $area_terms = get_the_terms($post->ID, 'area');
                     if (!empty($area_terms) && !is_wp_error($area_terms)) {
+                        // City-listings should only have one area term
                         $area_term_id = $area_terms[0]->term_id;
                         // Count published profiles in this city
                         $profile_count = count(get_posts(array(

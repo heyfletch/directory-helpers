@@ -511,14 +511,13 @@ class DH_Breadcrumbs {
                     );
                 }
                 
-                // Get the profile's city term (area taxonomy)
-                $city_terms = get_the_terms($post->ID, 'area');
-                if ($show_city && !empty($city_terms) && !is_wp_error($city_terms)) {
-                    // Get the first city term (or primary term if implemented)
-                    $city_term = $city_terms[0];
+                // Get the profile's primary city term (area taxonomy)
+                if ($show_city) {
+                    $city_term = DH_Taxonomy_Helpers::get_primary_area_term($post->ID);
                     
-                    // Find the corresponding City Listing CPT
-                    $city_listing = $this->get_cpt_by_term('city-listing', 'area', $city_term->term_id);
+                    if ($city_term) {
+                        // Find the corresponding City Listing CPT
+                        $city_listing = $this->get_cpt_by_term('city-listing', 'area', $city_term->term_id);
                 
                     if ($city_listing) {
                         $city_url = get_permalink($city_listing);
@@ -533,6 +532,7 @@ class DH_Breadcrumbs {
                             'name' => $city_term->name,
                             'item' => $city_url
                         );
+                    }
                     }
                 }
             
