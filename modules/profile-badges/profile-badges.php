@@ -467,13 +467,74 @@ class DH_Profile_Badges {
     }
     
     /**
-     * Generate SVG badge
+     * Get template file path based on rank label
+     *
+     * @param string $rank_label Rank label (e.g., "Top 1", "Top 3", "Featured", "Recognized")
+     * @return string Template file path
+     */
+    private function get_template_path($rank_label) {
+        $template_dir = plugin_dir_path(__FILE__) . 'templates/';
+        
+        // Map rank labels to template files
+        $template_map = array(
+            'Top 1'      => 'top-1-template.svg',
+            'Top 3'      => 'top-3-template.svg',
+            'Top 5'      => 'top-5-template.svg',
+            'Top 10'     => 'top-10-template.svg',
+            'Top 25'     => 'top-25-template.svg',
+            'Featured'   => 'featured-template.svg',
+            'Recognized' => 'recognized-template.svg',
+        );
+        
+        // For development, use top-1-template.svg for all ranks
+        // TODO: Remove this after all templates are created
+        $template_file = 'top-1-template.svg';
+        
+        // Uncomment this when all templates are ready:
+        //$template_file = isset($template_map[$rank_label]) ? $template_map[$rank_label] : 'recognized-template.svg';
+        
+        return $template_dir . $template_file;
+    }
+    
+    /**
+     * Generate SVG badge from template
      *
      * @param array $data Badge data
      * @param bool $active Whether to strip internal <a> tag (for nested embeds)
      * @return string SVG markup
      */
     private function generate_badge_svg($data, $active = false) {
+        $rank_label = $data['rank_label'];
+        $name = $data['name']; // Trainer name (post title)
+        $location = $data['location']; // City or state name
+        
+        // Get template file
+        $template_path = $this->get_template_path($rank_label);
+        
+        // Check if template exists
+        if (!file_exists($template_path)) {
+            // Fallback to old SVG generation if template doesn't exist
+            return $this->generate_badge_svg_legacy($data, $active);
+        }
+        
+        // Read template
+        $svg = file_get_contents($template_path);
+        
+        // Replace placeholders
+        $svg = str_replace('{LOCATION}', esc_attr($location), $svg);
+        $svg = str_replace('{TRAINER_NAME}', esc_attr($name), $svg);
+        
+        return $svg;
+    }
+    
+    /**
+     * Legacy SVG generation (fallback)
+     *
+     * @param array $data Badge data
+     * @param bool $active Whether to strip internal <a> tag (for nested embeds)
+     * @return string SVG markup
+     */
+    private function generate_badge_svg_legacy($data, $active = false) {
         // Escape data for SVG output
         $rank_label = esc_attr($data['rank_label']);
         $niche = esc_attr($data['niche']);
