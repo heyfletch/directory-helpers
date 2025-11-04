@@ -494,12 +494,12 @@ class DH_Profile_Badges {
         
         $lines = array();
         if (!empty($rank_label)) {
-            $lines[] = array('text' => $rank_label, 'weight' => 'bold', 'size' => 18);
+            $lines[] = array('text' => $rank_label, 'weight' => 'bold', 'size' => 12);
         }
-        $lines[] = array('text' => $niche, 'weight' => 'normal', 'size' => 14);
-        $lines[] = array('text' => $name, 'weight' => 'bold', 'size' => 16);
-        $lines[] = array('text' => $site, 'weight' => 'normal', 'size' => 14);
-        $lines[] = array('text' => $location, 'weight' => 'normal', 'size' => 14);
+        $lines[] = array('text' => $niche, 'weight' => 'normal', 'size' => 12);
+        $lines[] = array('text' => $name, 'weight' => 'bold', 'size' => 12);
+        $lines[] = array('text' => $site, 'weight' => 'normal', 'size' => 12);
+        $lines[] = array('text' => $location, 'weight' => 'normal', 'size' => 12);
         
         $total_lines = count($lines);
         $height = ($total_lines * $line_height) + ($padding * 2);
@@ -513,10 +513,7 @@ class DH_Profile_Badges {
         $svg .= '<title>' . esc_attr($name . ' - ' . $niche) . '</title>';
         $svg .= '<desc>Badge for ' . esc_attr($name) . ' in ' . esc_attr($location) . '</desc>';
         
-        // Add clickable link wrapper (only if not active mode)
-        if (!$active) {
-            $svg .= '<a href="' . $url . '" target="_parent">';
-        }
+        // No clickable link in SVG (badges displayed on page should not be hyperlinked)
         
         // Background with rounded corners and border
         $svg .= '<rect x="1" y="1" width="' . ($width - 2) . '" height="' . ($height - 2) . '" rx="8" ry="8" fill="' . $bg_color . '" stroke="' . $border_color . '" stroke-width="2"/>';
@@ -535,10 +532,7 @@ class DH_Profile_Badges {
             $y += $line_height;
         }
         
-        // Close link (only if not active mode) and SVG
-        if (!$active) {
-            $svg .= '</a>';
-        }
+        // Close SVG
         $svg .= '</svg>';
         
         return $svg;
@@ -607,6 +601,7 @@ class DH_Profile_Badges {
     
     /**
      * Celebration shortcode - displays badges with embed code copy buttons
+     * INLINES SVG for instant rendering (no HTTP requests)
      *
      * @param array $atts Shortcode attributes
      * @return string HTML output
@@ -624,28 +619,61 @@ class DH_Profile_Badges {
         $badge_types = array('city', 'state', 'profile');
         foreach ($badge_types as $type) {
             if ($eligible[$type]) {
-                $badge_data = $this->get_badge_data($post_id, $type);
-                $badge_url = home_url('/badge/' . $post_id . '/' . $type . '.svg');
-                $badge_url_active = home_url('/badge/' . $post_id . '/' . $type . '.svg?active=1');
-                $alt_text = ucfirst($type) . ' Badge for ' . get_the_title($post_id);
+                // Get cached SVG directly and inline it (no HTTP request!)
+                $cache_key = 'dh_badge_' . $post_id . '_' . $type;
+                $svg = wp_cache_get($cache_key, 'dh_badges');
                 
-                // Determine target URL based on badge type
-                $target_url = $badge_data['profile_url'];
-                if ($type === 'city' && !empty($badge_data['city_url'])) {
-                    $target_url = $badge_data['city_url'];
-                } elseif ($type === 'state' && !empty($badge_data['state_url'])) {
-                    $target_url = $badge_data['state_url'];
+                if ($svg === false) {
+                    // Generate if not cached
+                    $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $type;
+                    $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
+                    
+                    if ($badge_data === false) {
+                        $badge_data = $this->get_badge_data($post_id, $type);
+                        if ($badge_data) {
+                            wp_cache_set($data_cache_key, $badge_data, 'dh_badges', $this->cache_ttl);
+                        }
+                    }
+                    
+                    if ($badge_data) {
+                        $svg = $this->generate_badge_svg($badge_data, false);
+                        wp_cache_set($cache_key, $svg, 'dh_badges', $this->cache_ttl);
+                    }
+                } else {
+                    // Also need badge data for embed code
+                    $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $type;
+                    $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
+                    
+                    if ($badge_data === false) {
+                        $badge_data = $this->get_badge_data($post_id, $type);
+                        if ($badge_data) {
+                            wp_cache_set($data_cache_key, $badge_data, 'dh_badges', $this->cache_ttl);
+                        }
+                    }
                 }
                 
-                // Generate embed code with active=1 to prevent nested links
-                $embed_code = '<a href="' . esc_url($target_url) . '">' . "\n";
-                $embed_code .= '  <img src="' . esc_url($badge_url_active) . '" alt="' . esc_attr($alt_text) . '" width="250" height="auto" />' . "\n";
-                $embed_code .= '</a>';
-                
-                $output .= '<div class="dh-badge-wrap">';
-                $output .= '<img src="' . esc_url($badge_url) . '" alt="' . esc_attr($alt_text) . '" class="dh-badge dh-badge-' . esc_attr($type) . '" width="250" height="auto" />';
-                $output .= '<button type="button" class="dh-copy-embed button" data-embed-code="' . esc_attr($embed_code) . '">Copy Embed Code</button>';
-                $output .= '</div>';
+                if ($svg && $badge_data) {
+                    // Determine target URL based on badge type
+                    $target_url = $badge_data['profile_url'];
+                    if ($type === 'city' && !empty($badge_data['city_url'])) {
+                        $target_url = $badge_data['city_url'];
+                    } elseif ($type === 'state' && !empty($badge_data['state_url'])) {
+                        $target_url = $badge_data['state_url'];
+                    }
+                    
+                    $badge_url_active = home_url('/badge/' . $post_id . '/' . $type . '.svg?active=1');
+                    $alt_text = ucfirst($type) . ' Badge for ' . get_the_title($post_id);
+                    
+                    // Generate embed code with active=1 to prevent nested links
+                    $embed_code = '<a href="' . esc_url($target_url) . '">' . "\n";
+                    $embed_code .= '  <img src="' . esc_url($badge_url_active) . '" alt="' . esc_attr($alt_text) . '" width="250" height="auto" />' . "\n";
+                    $embed_code .= '</a>';
+                    
+                    $output .= '<div class="dh-badge-wrap">';
+                    $output .= '<div class="dh-badge dh-badge-' . esc_attr($type) . '" style="display: inline-block;">' . $svg . '</div>';
+                    $output .= '<button type="button" class="dh-copy-embed button" data-embed-code="' . esc_attr($embed_code) . '">Copy Embed Code</button>';
+                    $output .= '</div>';
+                }
             }
         }
         
