@@ -199,21 +199,31 @@ class DH_Profile_Badges {
             exit('Badge not available');
         }
         
-        // Try to get cached SVG using wp_cache (APCu/Memcached if available)
+        // Try to get cached SVG (use wp_cache which uses Redis/Memcached when available)
         $cache_key = 'dh_badge_' . $post_id . '_' . $badge_type . ($active ? '_active' : '');
         $svg = wp_cache_get($cache_key, 'dh_badges');
         
         if ($svg === false) {
-            // Generate new SVG
-            $badge_data = $this->get_badge_data($post_id, $badge_type);
-            if (!$badge_data) {
-                status_header(500);
-                exit('Failed to generate badge');
+            // Try to get cached badge data (separate cache to avoid regenerating data)
+            $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $badge_type;
+            $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
+            
+            if ($badge_data === false) {
+                // Generate badge data (expensive queries here)
+                $badge_data = $this->get_badge_data($post_id, $badge_type);
+                if (!$badge_data) {
+                    status_header(500);
+                    exit('Failed to generate badge');
+                }
+                
+                // Cache badge data in wp_cache (Redis/Memcached)
+                wp_cache_set($data_cache_key, $badge_data, 'dh_badges', $this->cache_ttl);
             }
             
+            // Generate SVG from cached data
             $svg = $this->generate_badge_svg($badge_data, $active);
             
-            // Cache using wp_cache (uses APCu/Memcached if available)
+            // Cache final SVG in wp_cache (Redis/Memcached)
             wp_cache_set($cache_key, $svg, 'dh_badges', $this->cache_ttl);
         }
         
@@ -537,6 +547,7 @@ class DH_Profile_Badges {
     /**
      * Accolades shortcode - displays badges without embed code
      * Excludes "recognized" (profile) badge
+     * INLINES SVG for instant rendering (no HTTP requests)
      *
      * @param array $atts Shortcode attributes
      * @return string HTML output
@@ -557,10 +568,32 @@ class DH_Profile_Badges {
         foreach ($badge_types as $type) {
             if ($eligible[$type]) {
                 $has_badges = true;
-                $badge_url = home_url('/badge/' . $post_id . '/' . $type . '.svg');
-                $alt_text = ucfirst($type) . ' Badge for ' . get_the_title($post_id);
                 
-                $output .= '<img src="' . esc_url($badge_url) . '" alt="' . esc_attr($alt_text) . '" class="dh-badge dh-badge-' . esc_attr($type) . '" width="250" height="auto" />';
+                // Get cached SVG directly and inline it (no HTTP request!)
+                $cache_key = 'dh_badge_' . $post_id . '_' . $type;
+                $svg = wp_cache_get($cache_key, 'dh_badges');
+                
+                if ($svg === false) {
+                    // Generate if not cached
+                    $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $type;
+                    $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
+                    
+                    if ($badge_data === false) {
+                        $badge_data = $this->get_badge_data($post_id, $type);
+                        if ($badge_data) {
+                            wp_cache_set($data_cache_key, $badge_data, 'dh_badges', $this->cache_ttl);
+                        }
+                    }
+                    
+                    if ($badge_data) {
+                        $svg = $this->generate_badge_svg($badge_data, false);
+                        wp_cache_set($cache_key, $svg, 'dh_badges', $this->cache_ttl);
+                    }
+                }
+                
+                if ($svg) {
+                    $output .= '<div class="dh-badge dh-badge-' . esc_attr($type) . '" style="display: inline-block;">' . $svg . '</div>';
+                }
             }
         }
         
@@ -679,11 +712,14 @@ class DH_Profile_Badges {
             return;
         }
         
-        // Clear wp_cache for all badge types
+        // Clear wp_cache for all badge types (SVG + data cache)
         $badge_types = array('city', 'state', 'profile');
         foreach ($badge_types as $type) {
+            // Clear SVG cache
             wp_cache_delete('dh_badge_' . $post_id . '_' . $type, 'dh_badges');
             wp_cache_delete('dh_badge_' . $post_id . '_' . $type . '_active', 'dh_badges');
+            // Clear badge data cache
+            wp_cache_delete('dh_badge_data_' . $post_id . '_' . $type, 'dh_badges');
         }
     }
 }
