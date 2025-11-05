@@ -663,7 +663,28 @@ class DH_Profile_Badges {
             return '';
         }
         
-        return '<div class="dh-accolades">' . $output . '</div>';
+        // Get niche for container aria-label (use first available badge_data)
+        $container_aria_label = '';
+        foreach ($badge_types as $type) {
+            if ($eligible[$type]) {
+                $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $type;
+                $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
+                if ($badge_data === false) {
+                    $badge_data = $this->get_badge_data($post_id, $type);
+                }
+                if ($badge_data && !empty($badge_data['niche'])) {
+                    $container_aria_label = esc_attr($badge_data['niche'] . ' rankings and recognition');
+                    break;
+                }
+            }
+        }
+        
+        $container_attrs = 'class="dh-accolades" role="list"';
+        if ($container_aria_label) {
+            $container_attrs .= ' aria-label="' . $container_aria_label . '"';
+        }
+        
+        return '<div ' . $container_attrs . '>' . $output . '</div>';
     }
     
     /**
@@ -681,7 +702,37 @@ class DH_Profile_Badges {
         $post_id = get_the_ID();
         $eligible = $this->get_eligible_badges($post_id);
         
-        $output = '<div class="dh-celebration">';
+        // Get niche for container aria-label (use first available badge_data)
+        $container_aria_label = '';
+        $badge_types_for_label = array('city', 'state');
+        // Include profile badge if featured, or if recognized and no other badges
+        $profile_data = $this->get_badge_data($post_id, 'profile');
+        if ($profile_data) {
+            $has_other_badges = $eligible['city'] || $eligible['state'];
+            if ($profile_data['rank_label'] === 'Featured' || (!$has_other_badges && $profile_data['rank_label'] === 'Recognized')) {
+                $badge_types_for_label[] = 'profile';
+            }
+        }
+        foreach ($badge_types_for_label as $type) {
+            if ($eligible[$type]) {
+                $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $type;
+                $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
+                if ($badge_data === false) {
+                    $badge_data = $this->get_badge_data($post_id, $type);
+                }
+                if ($badge_data && !empty($badge_data['niche'])) {
+                    $container_aria_label = esc_attr($badge_data['niche'] . ' recognition badge embed code');
+                    break;
+                }
+            }
+        }
+        
+        $container_attrs = 'class="dh-celebration" role="list"';
+        if ($container_aria_label) {
+            $container_attrs .= ' aria-label="' . $container_aria_label . '"';
+        }
+        
+        $output = '<div ' . $container_attrs . '>';
         
         $badge_types = array('city', 'state');
         
