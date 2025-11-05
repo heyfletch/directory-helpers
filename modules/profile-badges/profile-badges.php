@@ -615,8 +615,13 @@ class DH_Profile_Badges {
         $post_id = get_the_ID();
         $eligible = $this->get_eligible_badges($post_id);
         
-        // Only show city and state badges (exclude profile/recognized badge)
         $badge_types = array('city', 'state');
+        
+        // Include profile badge only if featured
+        $profile_data = $this->get_badge_data($post_id, 'profile');
+        if ($profile_data && $profile_data['rank_label'] === 'Featured') {
+            $badge_types[] = 'profile';
+        }
         $has_badges = false;
         $output = '';
         
@@ -677,7 +682,16 @@ class DH_Profile_Badges {
         
         $output = '<div class="dh-celebration">';
         
-        $badge_types = array('city', 'state', 'profile');
+        $badge_types = array('city', 'state');
+        
+        // Include profile badge if featured, or if recognized and no other badges
+        $profile_data = $this->get_badge_data($post_id, 'profile');
+        if ($profile_data) {
+            $has_other_badges = $eligible['city'] || $eligible['state'];
+            if ($profile_data['rank_label'] === 'Featured' || (!$has_other_badges && $profile_data['rank_label'] === 'Recognized')) {
+                $badge_types[] = 'profile';
+            }
+        }
         foreach ($badge_types as $type) {
             if ($eligible[$type]) {
                 // Get cached SVG directly and inline it (no HTTP request!)
