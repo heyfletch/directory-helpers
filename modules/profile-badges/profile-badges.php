@@ -477,7 +477,7 @@ class DH_Profile_Badges {
         
         // Map rank labels to template files
         $template_map = array(
-            'Top 1'      => 'top-1-template.svg',
+            '#1 Ranked'      => 'top-1-template.svg',
             'Top 3'      => 'top-3-template.svg',
             'Top 5'      => 'top-5-template.svg',
             'Top 10'     => 'top-10-template.svg',
