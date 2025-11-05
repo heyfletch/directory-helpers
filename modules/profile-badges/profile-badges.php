@@ -1082,6 +1082,9 @@ class DH_Profile_Badges {
         
         $output .= '</div>';
         
+        // Add help text div underneath the celebration container
+        $output .= '<div class="dh-embed-help" style="display: none; margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; line-height: 1.4; max-width: 600px;">Paste the embed code into your website / CMS wherever it accepts HTML code. For example, in WordPress, add an HTML block and paste the code there. If there\'s no HTML option, look for text boxes or code boxes that accept simple HTML. To change the size, simply increase or decrease the width="250" value in the embed code.</div>';
+        
         return $output;
     }
     
@@ -1140,6 +1143,10 @@ class DH_Profile_Badges {
                     e.preventDefault();
                     var button = $(this);
                     var embedCode = button.attr('data-embed-code');
+                    var helpDiv = button.closest('.dh-celebration').siblings('.dh-embed-help');
+                    
+                    // Show help text
+                    helpDiv.slideDown(300);
                     
                     // Try modern Clipboard API first
                     if (navigator.clipboard && navigator.clipboard.writeText) {
