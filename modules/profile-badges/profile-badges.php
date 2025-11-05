@@ -222,9 +222,22 @@ class DH_Profile_Badges {
      * Show admin notice to flush rewrite rules after activation
      */
     public function activation_notice() {
+        // Handle dismissal with nonce verification
+        if (isset($_GET['dh_dismiss_badge_notice']) && isset($_GET['_wpnonce'])) {
+            if (wp_verify_nonce($_GET['_wpnonce'], 'dh_dismiss_badge_notice') && current_user_can('manage_options')) {
+                update_option('dh_badges_rewrite_flushed', true);
+                wp_safe_redirect(remove_query_arg(array('dh_dismiss_badge_notice', '_wpnonce')));
+                exit;
+            }
+        }
+        
         $dismissed = get_option('dh_badges_rewrite_flushed', false);
         
         if (!$dismissed && current_user_can('manage_options')) {
+            $dismiss_url = wp_nonce_url(
+                add_query_arg('dh_dismiss_badge_notice', '1'),
+                'dh_dismiss_badge_notice'
+            );
             ?>
             <div class="notice notice-warning is-dismissible">
                 <p>
@@ -232,14 +245,10 @@ class DH_Profile_Badges {
                     Rewrite rules need to be flushed. Please visit 
                     <a href="<?php echo esc_url(admin_url('options-permalink.php')); ?>">Settings > Permalinks</a> 
                     and click "Save Changes" to activate badge URLs.
-                    <a href="<?php echo esc_url(add_query_arg('dh_dismiss_badge_notice', '1')); ?>" style="float:right;">Dismiss</a>
+                    <a href="<?php echo esc_url($dismiss_url); ?>" style="float:right;">Dismiss</a>
                 </p>
             </div>
             <?php
-        }
-        
-        if (isset($_GET['dh_dismiss_badge_notice'])) {
-            update_option('dh_badges_rewrite_flushed', true);
         }
     }
     
@@ -647,11 +656,22 @@ class DH_Profile_Badges {
         }
         
         // Read template
-        $svg = file_get_contents($template_path);
+        $svg = @file_get_contents($template_path);
+        if ($svg === false) {
+            // File read failed, use legacy fallback
+            return $this->generate_badge_svg_legacy($data, $active);
+        }
         
         // Use DOM to modify SVG: add title/desc and replace text elements with foreignObject
         $dom = new DOMDocument();
-        $dom->loadXML($svg);
+        libxml_use_internal_errors(true); // Suppress XML warnings
+        $load_result = $dom->loadXML($svg);
+        libxml_clear_errors();
+        
+        if ($load_result === false) {
+            // XML parsing failed, use legacy fallback
+            return $this->generate_badge_svg_legacy($data, $active);
+        }
         
         // Find the root SVG element
         $svgElement = $dom->getElementsByTagName('svg')->item(0);
