@@ -520,7 +520,7 @@ class DH_Profile_Badges {
         // Read template
         $svg = file_get_contents($template_path);
         
-        // Use DOM to add title and desc elements to SVG
+        // Use DOM to modify SVG: add title/desc and replace text elements with foreignObject
         $dom = new DOMDocument();
         $dom->loadXML($svg);
         
@@ -538,13 +538,67 @@ class DH_Profile_Badges {
             $descElement->textContent = 'Award badge indicating recognition level for ' . $data['niche'] . ' services';
             $svgElement->insertBefore($descElement, $titleElement->nextSibling);
             
+            // Find and replace text elements with foreignObject
+            $xpath = new DOMXPath($dom);
+            
+            // Replace LOCATION text element
+            $locationGroup = $xpath->query("//*[local-name()='g' and @id='CITY-DYNAMIC-TEXT']")->item(0);
+            
+            if ($locationGroup) {
+                $foreignObjectLocation = $dom->createElement('foreignObject');
+                $foreignObjectLocation->setAttribute('x', '20');
+                $foreignObjectLocation->setAttribute('y', '79');
+                $foreignObjectLocation->setAttribute('width', '115');
+                $foreignObjectLocation->setAttribute('height', '50');
+                
+                $divLocation = $dom->createElement('div');
+                $divLocation->setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+                $divLocation->setAttribute('lang', 'en');
+                $divLocation->setAttribute('style', '
+                    font-family: Tahoma, sans-serif;
+                    font-weight: 700;
+                    font-size: 11px;
+                    text-align: center;
+                    text-transform: uppercase;
+                    letter-spacing: -0.05em;
+                    line-height: 1.1;
+                    word-wrap: break-word;
+                ');
+                $divLocation->textContent = $location;
+                
+                $foreignObjectLocation->appendChild($divLocation);
+                $locationGroup->parentNode->replaceChild($foreignObjectLocation, $locationGroup);
+            }
+            
+            // Replace TRAINER_NAME text element
+            $trainerGroup = $xpath->query("//*[local-name()='g' and @id='Trainer-Name-Dynamic-Text']")->item(0);
+            
+            if ($trainerGroup) {
+                $foreignObjectTrainer = $dom->createElement('foreignObject');
+                $foreignObjectTrainer->setAttribute('x', '15');
+                $foreignObjectTrainer->setAttribute('y', '124');
+                $foreignObjectTrainer->setAttribute('width', '125');
+                $foreignObjectTrainer->setAttribute('height', '50');
+                
+                $divTrainer = $dom->createElement('div');
+                $divTrainer->setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+                $divTrainer->setAttribute('lang', 'en');
+                $divTrainer->setAttribute('style', '
+                    font-family: Tahoma, sans-serif;
+                    font-size: 10px;
+                    text-align: center;
+                    line-height: 1.1;
+                    word-wrap: break-word;
+                ');
+                $divTrainer->textContent = $name;
+                
+                $foreignObjectTrainer->appendChild($divTrainer);
+                $trainerGroup->parentNode->replaceChild($foreignObjectTrainer, $trainerGroup);
+            }
+            
             // Save modified SVG
             $svg = $dom->saveXML();
         }
-        
-        // Replace remaining placeholders
-        $svg = str_replace('{LOCATION}', esc_attr($location), $svg);
-        $svg = str_replace('{TRAINER_NAME}', esc_attr($name), $svg);
         
         return $svg;
     }
