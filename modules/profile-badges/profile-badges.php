@@ -63,6 +63,134 @@ class DH_Profile_Badges {
         
         // Clear badge cache when profile is updated
         add_action('acf/save_post', array($this, 'clear_badge_cache_on_save'), 25);
+        
+        // Add Bricks dynamic data integration
+        add_action('init', array($this, 'init_bricks_integration'));
+    }
+    
+    /**
+     * Initialize Bricks Builder integration
+     */
+    public function init_bricks_integration() {
+        if (class_exists('Bricks\Integrations\Dynamic_Data\Providers')) {
+            add_filter('bricks/dynamic_tags_list', array($this, 'add_bricks_badge_tags'));
+            add_filter('bricks/dynamic_data/render_tag', array($this, 'render_bricks_badge_tags'), 20, 3);
+            add_filter('bricks/dynamic_data/render_content', array($this, 'render_bricks_badge_content'), 20, 3);
+            add_filter('bricks/frontend/render_data', array($this, 'render_bricks_badge_content'), 20, 2);
+        }
+    }
+    
+    /**
+     * Add badge-related dynamic data tags to Bricks Builder
+     */
+    public function add_bricks_badge_tags($tags) {
+        $badge_tags = [
+            'profile_badge_status' => [
+                'name'  => '{profile_badge_status}',
+                'label' => 'Profile Badge Status',
+                'group' => 'Profile Badges',
+            ],
+            'profile_has_ranking_badge' => [
+                'name'  => '{profile_has_ranking_badge}',
+                'label' => 'Has Ranking Badge',
+                'group' => 'Profile Badges',
+            ],
+            'profile_has_featured_badge' => [
+                'name'  => '{profile_has_featured_badge}',
+                'label' => 'Has Featured Badge',
+                'group' => 'Profile Badges',
+            ],
+        ];
+        
+        // Check for existing tags to prevent duplicates
+        $existing_names = array_column($tags, 'name');
+        
+        foreach ($badge_tags as $key => $tag) {
+            if (!in_array($tag['name'], $existing_names)) {
+                $tags[] = $tag;
+            }
+        }
+        
+        return $tags;
+    }
+    
+    /**
+     * Render individual badge dynamic data tags
+     */
+    public function render_bricks_badge_tags($tag, $post, $context = 'text') {
+        if (!is_string($tag)) {
+            return $tag;
+        }
+        
+        $clean_tag = str_replace(['{', '}'], '', $tag);
+        
+        if (!is_singular('profile')) {
+            return '';
+        }
+        
+        $post_id = get_the_ID();
+        
+        switch ($clean_tag) {
+            case 'profile_badge_status':
+                return $this->get_profile_badge_status($post_id);
+                
+            case 'profile_has_ranking_badge':
+                return $this->has_ranking_badge($post_id) ? '1' : '0';
+                
+            case 'profile_has_featured_badge':
+                return $this->has_featured_badge($post_id) ? '1' : '0';
+        }
+        
+        return $tag;
+    }
+    
+    /**
+     * Render badge tags in content
+     */
+    public function render_bricks_badge_content($content, $post, $context = 'text') {
+        if (!is_singular('profile') || 
+            strpos($content, '{profile_badge_status}') === false &&
+            strpos($content, '{profile_has_ranking_badge}') === false &&
+            strpos($content, '{profile_has_featured_badge}') === false) {
+            return $content;
+        }
+        
+        $post_id = get_the_ID();
+        
+        $content = str_replace('{profile_badge_status}', $this->get_profile_badge_status($post_id), $content);
+        $content = str_replace('{profile_has_ranking_badge}', $this->has_ranking_badge($post_id) ? '1' : '0', $content);
+        $content = str_replace('{profile_has_featured_badge}', $this->has_featured_badge($post_id) ? '1' : '0', $content);
+        
+        return $content;
+    }
+    
+    /**
+     * Get profile badge status string
+     */
+    public function get_profile_badge_status($post_id) {
+        if ($this->has_ranking_badge($post_id)) {
+            return 'ranking';
+        } elseif ($this->has_featured_badge($post_id)) {
+            return 'featured';
+        } else {
+            return 'recognized';
+        }
+    }
+    
+    /**
+     * Check if profile has ranking badge
+     */
+    public function has_ranking_badge($post_id) {
+        $eligible = $this->get_eligible_badges($post_id);
+        return $eligible['city'] || $eligible['state'];
+    }
+    
+    /**
+     * Check if profile has featured badge
+     */
+    public function has_featured_badge($post_id) {
+        $featured = get_field('featured', $post_id);
+        return $featured && $featured > 0;
     }
     
     /**
