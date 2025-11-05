@@ -488,10 +488,10 @@ class DH_Profile_Badges {
         
         // For development, use top-1-template.svg for all ranks
         // TODO: Remove this after all templates are created
-        $template_file = 'top-1-template.svg';
+        //$template_file = 'top-3-template.svg';
         
         // Uncomment this when all templates are ready:
-        //$template_file = isset($template_map[$rank_label]) ? $template_map[$rank_label] : 'recognized-template.svg';
+        $template_file = isset($template_map[$rank_label]) ? $template_map[$rank_label] : 'recognized-template.svg';
         
         return $template_dir . $template_file;
     }
