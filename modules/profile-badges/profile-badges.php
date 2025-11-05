@@ -520,7 +520,29 @@ class DH_Profile_Badges {
         // Read template
         $svg = file_get_contents($template_path);
         
-        // Replace placeholders
+        // Use DOM to add title and desc elements to SVG
+        $dom = new DOMDocument();
+        $dom->loadXML($svg);
+        
+        // Find the root SVG element
+        $svgElement = $dom->getElementsByTagName('svg')->item(0);
+        
+        if ($svgElement) {
+            // Create title element
+            $titleElement = $dom->createElement('title');
+            $titleElement->textContent = $data['rank_label'] . ' ' . $data['niche'] . ' Badge - ' . $location . ' - ' . $name;
+            $svgElement->insertBefore($titleElement, $svgElement->firstChild);
+            
+            // Create desc element
+            $descElement = $dom->createElement('desc');
+            $descElement->textContent = 'Award badge indicating recognition level for ' . $data['niche'] . ' services';
+            $svgElement->insertBefore($descElement, $titleElement->nextSibling);
+            
+            // Save modified SVG
+            $svg = $dom->saveXML();
+        }
+        
+        // Replace remaining placeholders
         $svg = str_replace('{LOCATION}', esc_attr($location), $svg);
         $svg = str_replace('{TRAINER_NAME}', esc_attr($name), $svg);
         
@@ -571,8 +593,8 @@ class DH_Profile_Badges {
         $svg .= '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '">';
         
         // Add title and description for accessibility
-        $svg .= '<title>' . esc_attr($name . ' - ' . $niche) . '</title>';
-        $svg .= '<desc>Badge for ' . esc_attr($name) . ' in ' . esc_attr($location) . '</desc>';
+        $svg .= '<title>' . esc_attr($data['rank_label'] . ' ' . $data['niche'] . ' Badge - ' . $data['location'] . ' - ' . $data['name']) . '</title>';
+        $svg .= '<desc>' . esc_attr('Award badge indicating recognition level for ' . $data['niche'] . ' services') . '</desc>';
         
         // No clickable link in SVG (badges displayed on page should not be hyperlinked)
         
