@@ -95,8 +95,15 @@
 }
 
 .dh-copy-embed {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  background: none;
+  border: none;
+  font-size: var(--text-xs);
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 0.22rem;
+}
+
+.dh-copy-embed:hover {
+  color: var(--primary);
 }

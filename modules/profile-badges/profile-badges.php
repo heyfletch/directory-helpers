@@ -875,7 +875,7 @@ class DH_Profile_Badges {
                     $output .= '<div class="dh-badge-wrap">';
                     $aria_label = esc_attr($badge_data['rank_label'] . ' ' . $badge_data['niche'] . ' in ' . $badge_data['location'] . ' - ' . $badge_data['name']);
                     $output .= '<div class="dh-badge dh-badge-' . esc_attr($type) . '" style="display: inline-block;" role="img" aria-label="' . $aria_label . '">' . $svg . '</div>';
-                    $output .= '<button type="button" class="dh-copy-embed button" data-embed-code="' . esc_attr($embed_code) . '">Copy Embed Code</button>';
+                    $output .= '<button type="button" class="dh-copy-embed" data-embed-code="' . esc_attr($embed_code) . '">Copy Embed Code</button>';
                     $output .= '</div>';
                 }
             }
