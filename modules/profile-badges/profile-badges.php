@@ -25,11 +25,28 @@ class DH_Profile_Badges {
     private $text_domain = 'directory-helpers';
     
     /**
-     * Cache TTL in seconds (24 hours)
+     * Internal cache TTL for badge data and eligibility (30 days)
+     * Cleared automatically when profile is saved
      *
      * @var int
      */
-    private $cache_ttl = 86400;
+    private $cache_ttl = 2592000; // 30 days
+    
+    /**
+     * HTTP Cache-Control header for external badge embeds (6 hours)
+     * Shorter duration ensures external sites see rank updates within reasonable time
+     *
+     * @var int
+     */
+    private $http_cache_ttl = 21600; // 6 hours
+    
+    /**
+     * Cache TTL for city/state listing lookups (60 days)
+     * These rarely change and are cleared when listings are updated
+     *
+     * @var int
+     */
+    private $listing_cache_ttl = 5184000; // 60 days
     
     /**
      * Rate limit per IP (requests per minute)
@@ -42,7 +59,6 @@ class DH_Profile_Badges {
      * Constructor
      */
     public function __construct() {
-        $this->text_domain = 'directory-helpers';
         
         // Register rewrite rules
         add_action('init', array($this, 'register_rewrite_rules'));
@@ -149,18 +165,27 @@ class DH_Profile_Badges {
      * Render badge tags in content
      */
     public function render_bricks_badge_content($content, $post, $context = 'text') {
-        if (!is_singular('profile') || 
-            strpos($content, '{profile_badge_status}') === false &&
-            strpos($content, '{profile_has_ranking_badge}') === false &&
-            strpos($content, '{profile_has_featured_badge}') === false) {
+        if (!is_singular('profile')) {
+            return $content;
+        }
+        
+        // Quick check if any badge tags exist (single strpos for efficiency)
+        if (strpos($content, '{profile_') === false) {
             return $content;
         }
         
         $post_id = get_the_ID();
         
-        $content = str_replace('{profile_badge_status}', $this->get_profile_badge_status($post_id), $content);
-        $content = str_replace('{profile_has_ranking_badge}', $this->has_ranking_badge($post_id) ? '1' : '0', $content);
-        $content = str_replace('{profile_has_featured_badge}', $this->has_featured_badge($post_id) ? '1' : '0', $content);
+        // Only replace tags that actually exist in content
+        if (strpos($content, '{profile_badge_status}') !== false) {
+            $content = str_replace('{profile_badge_status}', $this->get_profile_badge_status($post_id), $content);
+        }
+        if (strpos($content, '{profile_has_ranking_badge}') !== false) {
+            $content = str_replace('{profile_has_ranking_badge}', $this->has_ranking_badge($post_id) ? '1' : '0', $content);
+        }
+        if (strpos($content, '{profile_has_featured_badge}') !== false) {
+            $content = str_replace('{profile_has_featured_badge}', $this->has_featured_badge($post_id) ? '1' : '0', $content);
+        }
         
         return $content;
     }
@@ -322,7 +347,7 @@ class DH_Profile_Badges {
         $badge_type = sanitize_key(get_query_var('badge_type'));
         
         // Check for active parameter (strips internal <a> tag for nested embed)
-        $active = isset($_GET['active']) && $_GET['active'] == '1';
+        $active = isset($_GET['active']) && $_GET['active'] === '1';
         
         // Validate post exists and is published profile
         $post = get_post($post_id);
@@ -374,7 +399,7 @@ class DH_Profile_Badges {
         
         // Serve SVG with appropriate headers
         header('Content-Type: image/svg+xml');
-        header('Cache-Control: public, max-age=' . $this->cache_ttl);
+        header('Cache-Control: public, max-age=' . $this->http_cache_ttl);
         header('Access-Control-Allow-Origin: *');
         header('X-Content-Type-Options: nosniff');
         
@@ -413,7 +438,7 @@ class DH_Profile_Badges {
             ));
             
             $city_post_id = !empty($city_posts) ? $city_posts[0] : 0;
-            wp_cache_set($cache_key, $city_post_id, 'dh_badges', $this->cache_ttl);
+            wp_cache_set($cache_key, $city_post_id, 'dh_badges', $this->listing_cache_ttl);
         }
         
         return $city_post_id ? $city_post_id : false;
@@ -450,7 +475,7 @@ class DH_Profile_Badges {
             ));
             
             $state_post_id = !empty($state_posts) ? $state_posts[0] : 0;
-            wp_cache_set($cache_key, $state_post_id, 'dh_badges', $this->cache_ttl);
+            wp_cache_set($cache_key, $state_post_id, 'dh_badges', $this->listing_cache_ttl);
         }
         
         return $state_post_id ? $state_post_id : false;
@@ -463,6 +488,14 @@ class DH_Profile_Badges {
      * @return array Array of badge eligibility [city => bool, state => bool, profile => bool]
      */
     public function get_eligible_badges($post_id) {
+        // Check cache first
+        $cache_key = 'dh_badge_eligible_' . $post_id;
+        $eligible = wp_cache_get($cache_key, 'dh_badges');
+        
+        if ($eligible !== false) {
+            return $eligible;
+        }
+        
         $eligible = array(
             'city' => false,
             'state' => false,
@@ -506,6 +539,9 @@ class DH_Profile_Badges {
                 }
             }
         }
+        
+        // Cache the result
+        wp_cache_set($cache_key, $eligible, 'dh_badges', $this->cache_ttl);
         
         return $eligible;
     }
@@ -655,11 +691,6 @@ class DH_Profile_Badges {
             'Recognized' => 'recognized-template.svg',
         );
         
-        // For development, use top-1-template.svg for all ranks
-        // TODO: Remove this after all templates are created
-        //$template_file = 'top-3-template.svg';
-        
-        // Uncomment this when all templates are ready:
         $template_file = isset($template_map[$rank_label]) ? $template_map[$rank_label] : 'recognized-template.svg';
         
         return $template_dir . $template_file;
@@ -1160,6 +1191,20 @@ class DH_Profile_Badges {
             wp_cache_delete('dh_badge_' . $post_id . '_' . $type . '_active', 'dh_badges');
             // Clear badge data cache
             wp_cache_delete('dh_badge_data_' . $post_id . '_' . $type, 'dh_badges');
+        }
+        
+        // Clear eligibility cache
+        wp_cache_delete('dh_badge_eligible_' . $post_id, 'dh_badges');
+        
+        // Clear city/state listing caches if they might have changed
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+        if ($primary_area_term) {
+            wp_cache_delete('dh_city_listing_' . $primary_area_term->term_id, 'dh_badges');
+        }
+        
+        $state_terms = get_the_terms($post_id, 'state');
+        if (!empty($state_terms) && !is_wp_error($state_terms)) {
+            wp_cache_delete('dh_state_listing_' . $state_terms[0]->slug, 'dh_badges');
         }
     }
 }
