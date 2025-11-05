@@ -362,24 +362,35 @@
                     </tr>
                     <tr>
                         <td><code>[dh_niche_name]</code></td>
-                        <td><?php esc_html_e('Display niche name', 'directory-helpers'); ?></td>
+                        <td><?php esc_html_e('Display niche name (lowercase by default)', 'directory-helpers'); ?></td>
+                        <td><em>dog trainer</em></td>
+                    </tr>
+                    <tr>
+                        <td><code>[dh_niche_name case="title"]</code></td>
+                        <td><?php esc_html_e('Display niche name in title case', 'directory-helpers'); ?></td>
                         <td><em>Dog Trainer</em></td>
                     </tr>
                     <tr>
                         <td><code>[dh_niche_name plural="true"]</code></td>
                         <td><?php esc_html_e('Display pluralized niche name', 'directory-helpers'); ?></td>
-                        <td><em>Dog Trainers</em></td>
+                        <td><em>dog trainers</em></td>
                     </tr>
                 </tbody>
             </table>
             
             <h4 style="margin-top: 20px;"><?php esc_html_e('Usage Examples', 'directory-helpers'); ?></h4>
-            <pre style="background: #f5f5f5; padding: 15px; border-left: 4px solid #2271b1; overflow-x: auto;"><code>&lt;h1&gt;Meet [dh_niche_name] in [dh_city_name]&lt;/h1&gt;
+            <pre style="background: #f5f5f5; padding: 15px; border-left: 4px solid #2271b1; overflow-x: auto;"><code>&lt;h1&gt;Meet [dh_niche_name case="title"] in [dh_city_name]&lt;/h1&gt;
 &lt;p&gt;Serving [dh_city_name], [dh_state_name]&lt;/p&gt;
 
 Output:
 &lt;h1&gt;Meet Dog Trainer in Milwaukee&lt;/h1&gt;
-&lt;p&gt;Serving Milwaukee, Wisconsin&lt;/p&gt;</code></pre>
+&lt;p&gt;Serving Milwaukee, Wisconsin&lt;/p&gt;
+
+&lt;!-- Use lowercase for consistency --&gt;
+&lt;h2&gt;[dh_niche_name] services&lt;/h2&gt;
+
+Output:
+&lt;h2&gt;dog trainer services&lt;/h2&gt;</code></pre>
         </div>
         
         <div class="card" style="max-width: none; margin-top: 20px;">

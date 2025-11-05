@@ -99,6 +99,7 @@ class DH_Taxonomy_Display {
             array(
                 'post_id' => get_the_ID(),
                 'plural' => 'false', // Simple pluralization (add 's')
+                'case' => 'lower', // 'lower' or 'title'
             ),
             $atts,
             'dh_niche_name'
@@ -106,12 +107,21 @@ class DH_Taxonomy_Display {
         
         $post_id = absint($atts['post_id']);
         $plural = filter_var($atts['plural'], FILTER_VALIDATE_BOOLEAN);
+        $case = sanitize_key($atts['case']);
         
         if (!$post_id) {
             return '';
         }
         
         $niche_name = DH_Taxonomy_Helpers::get_niche_name($post_id, $plural);
+        
+        // Apply case transformation
+        if ($case === 'title') {
+            $niche_name = ucwords(strtolower($niche_name));
+        } else {
+            $niche_name = strtolower($niche_name);
+        }
+        
         return esc_html($niche_name);
     }
 }

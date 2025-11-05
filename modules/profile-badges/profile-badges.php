@@ -54,6 +54,7 @@ class DH_Profile_Badges {
         // Register shortcodes
         add_shortcode('dh_accolades', array($this, 'accolades_shortcode'));
         add_shortcode('dh_celebration', array($this, 'celebration_shortcode'));
+        add_shortcode('dh_best_location_ranked_name', array($this, 'best_location_ranked_name_shortcode'));
         
         // Enqueue frontend scripts for celebration shortcode
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_scripts'));
@@ -1012,6 +1013,46 @@ class DH_Profile_Badges {
         $output .= '</div>';
         
         return $output;
+    }
+    
+    /**
+     * Best location ranked name shortcode
+     * Returns city name if ranked in city, otherwise state name if ranked in state,
+     * otherwise falls back to city name
+     *
+     * @param array $atts Shortcode attributes
+     * @return string Location name
+     */
+    public function best_location_ranked_name_shortcode($atts) {
+        if (!is_singular('profile')) {
+            return '';
+        }
+        
+        $post_id = get_the_ID();
+        $eligible = $this->get_eligible_badges($post_id);
+        
+        // Priority: City first, then State, then fallback to City
+        if ($eligible['city']) {
+            // Return city name
+            $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+            if ($primary_area_term) {
+                return esc_html($primary_area_term->name);
+            }
+        } elseif ($eligible['state']) {
+            // Return state name
+            $state_terms = get_the_terms($post_id, 'state');
+            if (!empty($state_terms) && !is_wp_error($state_terms)) {
+                return esc_html($state_terms[0]->name);
+            }
+        }
+        
+        // No ranking badges - fallback to city name
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+        if ($primary_area_term) {
+            return esc_html($primary_area_term->name);
+        }
+        
+        return '';
     }
     
     /**
