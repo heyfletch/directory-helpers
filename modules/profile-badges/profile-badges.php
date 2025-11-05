@@ -279,19 +279,26 @@ class DH_Profile_Badges {
     
     /**
      * Get client IP address
+     * Uses REMOTE_ADDR as primary source to prevent spoofing
      *
      * @return string IP address
      */
     private function get_client_ip() {
-        $ip = '';
+        // Use REMOTE_ADDR as it cannot be spoofed (set by web server)
+        // Only use forwarded headers if behind a trusted proxy
+        $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
         
-        if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-            $ip = $_SERVER['HTTP_CLIENT_IP'];
-        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-        } else {
-            $ip = $_SERVER['REMOTE_ADDR'];
+        // Optional: If you're behind a trusted proxy (CloudFlare, etc.),
+        // uncomment and configure this section:
+        /*
+        if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+            // CloudFlare
+            $ip = $_SERVER['HTTP_CF_CONNECTING_IP'];
+        } elseif (!empty($_SERVER['HTTP_X_REAL_IP'])) {
+            // Nginx proxy
+            $ip = $_SERVER['HTTP_X_REAL_IP'];
         }
+        */
         
         return sanitize_text_field($ip);
     }
@@ -376,6 +383,80 @@ class DH_Profile_Badges {
     }
     
     /**
+     * Get city listing post ID for a profile (cached)
+     *
+     * @param int $post_id Profile post ID
+     * @param WP_Term $primary_area_term Primary area term
+     * @return int|false City listing post ID or false
+     */
+    private function get_city_listing_id($post_id, $primary_area_term) {
+        if (!$primary_area_term) {
+            return false;
+        }
+        
+        $cache_key = 'dh_city_listing_' . $primary_area_term->term_id;
+        $city_post_id = wp_cache_get($cache_key, 'dh_badges');
+        
+        if ($city_post_id === false) {
+            $city_posts = get_posts(array(
+                'post_type' => 'city-listing',
+                'post_status' => 'publish',
+                'posts_per_page' => 1,
+                'tax_query' => array(
+                    array(
+                        'taxonomy' => 'area',
+                        'field' => 'term_id',
+                        'terms' => $primary_area_term->term_id,
+                    ),
+                ),
+                'fields' => 'ids',
+            ));
+            
+            $city_post_id = !empty($city_posts) ? $city_posts[0] : 0;
+            wp_cache_set($cache_key, $city_post_id, 'dh_badges', $this->cache_ttl);
+        }
+        
+        return $city_post_id ? $city_post_id : false;
+    }
+    
+    /**
+     * Get state listing post ID for a profile (cached)
+     *
+     * @param int $post_id Profile post ID
+     * @param WP_Term $state_term State term
+     * @return int|false State listing post ID or false
+     */
+    private function get_state_listing_id($post_id, $state_term) {
+        if (!$state_term) {
+            return false;
+        }
+        
+        $cache_key = 'dh_state_listing_' . $state_term->slug;
+        $state_post_id = wp_cache_get($cache_key, 'dh_badges');
+        
+        if ($state_post_id === false) {
+            $state_posts = get_posts(array(
+                'post_type' => 'state-listing',
+                'post_status' => 'publish',
+                'posts_per_page' => 1,
+                'tax_query' => array(
+                    array(
+                        'taxonomy' => 'state',
+                        'field' => 'slug',
+                        'terms' => $state_term->slug,
+                    ),
+                ),
+                'fields' => 'ids',
+            ));
+            
+            $state_post_id = !empty($state_posts) ? $state_posts[0] : 0;
+            wp_cache_set($cache_key, $state_post_id, 'dh_badges', $this->cache_ttl);
+        }
+        
+        return $state_post_id ? $state_post_id : false;
+    }
+    
+    /**
      * Get eligible badges for a profile
      *
      * @param int $post_id Profile post ID
@@ -393,23 +474,11 @@ class DH_Profile_Badges {
         $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
         
         if ($primary_area_term && $city_rank && $city_rank != 99999) {
-            // Get profile count for this city
-            $city_posts = get_posts(array(
-                'post_type' => 'city-listing',
-                'post_status' => 'publish',
-                'posts_per_page' => 1,
-                'tax_query' => array(
-                    array(
-                        'taxonomy' => 'area',
-                        'field' => 'term_id',
-                        'terms' => $primary_area_term->term_id,
-                    ),
-                ),
-                'fields' => 'ids',
-            ));
+            // Get city listing post (cached)
+            $city_post_id = $this->get_city_listing_id($post_id, $primary_area_term);
             
-            if (!empty($city_posts)) {
-                $profile_count = (int) get_post_meta($city_posts[0], '_profile_count', true);
+            if ($city_post_id) {
+                $profile_count = (int) get_post_meta($city_post_id, '_profile_count', true);
                 
                 // Use ranking logic to determine if badge should show
                 $tier_label = $this->get_ranking_tier_label($city_rank, $profile_count);
@@ -424,23 +493,11 @@ class DH_Profile_Badges {
         $state_terms = get_the_terms($post_id, 'state');
         
         if (!empty($state_terms) && !is_wp_error($state_terms) && $state_rank && $state_rank != 99999) {
-            // Get profile count for this state
-            $state_posts = get_posts(array(
-                'post_type' => 'state-listing',
-                'post_status' => 'publish',
-                'posts_per_page' => 1,
-                'tax_query' => array(
-                    array(
-                        'taxonomy' => 'state',
-                        'field' => 'slug',
-                        'terms' => $state_terms[0]->slug,
-                    ),
-                ),
-                'fields' => 'ids',
-            ));
+            // Get state listing post (cached)
+            $state_post_id = $this->get_state_listing_id($post_id, $state_terms[0]);
             
-            if (!empty($state_posts)) {
-                $profile_count = (int) get_post_meta($state_posts[0], '_profile_count', true);
+            if ($state_post_id) {
+                $profile_count = (int) get_post_meta($state_post_id, '_profile_count', true);
                 
                 // Use ranking logic to determine if badge should show
                 $tier_label = $this->get_ranking_tier_label($state_rank, $profile_count);
@@ -526,32 +583,18 @@ class DH_Profile_Badges {
             $city_rank = get_field('city_rank', $post_id);
             
             if ($city_rank && $city_rank != 99999) {
-                // Get profile count
-                if ($primary_area_term) {
-                    $city_posts = get_posts(array(
-                        'post_type' => 'city-listing',
-                        'post_status' => 'publish',
-                        'posts_per_page' => 1,
-                        'tax_query' => array(
-                            array(
-                                'taxonomy' => 'area',
-                                'field' => 'term_id',
-                                'terms' => $primary_area_term->term_id,
-                            ),
-                        ),
-                        'fields' => 'ids',
-                    ));
+                // Get city listing post (cached)
+                $city_post_id = $this->get_city_listing_id($post_id, $primary_area_term);
+                
+                if ($city_post_id) {
+                    $profile_count = (int) get_post_meta($city_post_id, '_profile_count', true);
+                    $tier_label = $this->get_ranking_tier_label($city_rank, $profile_count);
                     
-                    if (!empty($city_posts)) {
-                        $profile_count = (int) get_post_meta($city_posts[0], '_profile_count', true);
-                        $tier_label = $this->get_ranking_tier_label($city_rank, $profile_count);
-                        
-                        // Set rank label (may be empty if dropped out of tier)
-                        $data['rank_label'] = $tier_label ? $tier_label : '';
-                        
-                        // Link to city-listing page
-                        $data['profile_url'] = get_permalink($city_posts[0]);
-                    }
+                    // Set rank label (may be empty if dropped out of tier)
+                    $data['rank_label'] = $tier_label ? $tier_label : '';
+                    
+                    // Link to city-listing page
+                    $data['profile_url'] = get_permalink($city_post_id);
                 }
             }
             
@@ -567,31 +610,19 @@ class DH_Profile_Badges {
             }
             
             if ($state_rank && $state_rank != 99999) {
-                // Get profile count
+                // Get state listing post (cached)
                 if (!empty($state_terms) && !is_wp_error($state_terms)) {
-                    $state_posts = get_posts(array(
-                        'post_type' => 'state-listing',
-                        'post_status' => 'publish',
-                        'posts_per_page' => 1,
-                        'tax_query' => array(
-                            array(
-                                'taxonomy' => 'state',
-                                'field' => 'slug',
-                                'terms' => $state_terms[0]->slug,
-                            ),
-                        ),
-                        'fields' => 'ids',
-                    ));
+                    $state_post_id = $this->get_state_listing_id($post_id, $state_terms[0]);
                     
-                    if (!empty($state_posts)) {
-                        $profile_count = (int) get_post_meta($state_posts[0], '_profile_count', true);
+                    if ($state_post_id) {
+                        $profile_count = (int) get_post_meta($state_post_id, '_profile_count', true);
                         $tier_label = $this->get_ranking_tier_label($state_rank, $profile_count);
                         
                         // Set rank label (may be empty if dropped out of tier)
                         $data['rank_label'] = $tier_label ? $tier_label : '';
                         
                         // Link to state-listing page
-                        $data['profile_url'] = get_permalink($state_posts[0]);
+                        $data['profile_url'] = get_permalink($state_post_id);
                     }
                 }
             }
@@ -858,25 +889,26 @@ class DH_Profile_Badges {
                 $cache_key = 'dh_badge_' . $post_id . '_' . $type;
                 $svg = wp_cache_get($cache_key, 'dh_badges');
                 
-                if ($svg === false) {
-                    // Generate if not cached
-                    $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $type;
-                    $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
-                    
-                    if ($badge_data === false) {
-                        $badge_data = $this->get_badge_data($post_id, $type);
-                        if ($badge_data) {
-                            wp_cache_set($data_cache_key, $badge_data, 'dh_badges', $this->cache_ttl);
-                        }
-                    }
-                    
+                // Always get badge data (needed for aria-label)
+                $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $type;
+                $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
+                
+                if ($badge_data === false) {
+                    $badge_data = $this->get_badge_data($post_id, $type);
                     if ($badge_data) {
-                        $svg = $this->generate_badge_svg($badge_data, false);
+                        wp_cache_set($data_cache_key, $badge_data, 'dh_badges', $this->cache_ttl);
+                    }
+                }
+                
+                if ($svg === false && $badge_data) {
+                    // Generate SVG if not cached
+                    $svg = $this->generate_badge_svg($badge_data, false);
+                    if ($svg) {
                         wp_cache_set($cache_key, $svg, 'dh_badges', $this->cache_ttl);
                     }
                 }
                 
-                if ($svg) {
+                if ($svg && $badge_data) {
                     $aria_label = esc_attr($badge_data['rank_label'] . ' ' . $badge_data['niche'] . ' in ' . $badge_data['location'] . ' - ' . $badge_data['name']);
                     $output .= '<div class="dh-badge dh-badge-' . esc_attr($type) . '" style="display: inline-block;" role="img" aria-label="' . $aria_label . '">' . $svg . '</div>';
                 }
@@ -927,18 +959,21 @@ class DH_Profile_Badges {
         $post_id = get_the_ID();
         $eligible = $this->get_eligible_badges($post_id);
         
-        // Get niche for container aria-label (use first available badge_data)
-        $container_aria_label = '';
-        $badge_types_for_label = array('city', 'state');
+        // Determine badge types to display (do this once)
+        $badge_types = array('city', 'state');
+        
         // Include profile badge if featured, or if recognized and no other badges
         $profile_data = $this->get_badge_data($post_id, 'profile');
         if ($profile_data) {
             $has_other_badges = $eligible['city'] || $eligible['state'];
             if ($profile_data['rank_label'] === 'Featured' || (!$has_other_badges && $profile_data['rank_label'] === 'Recognized')) {
-                $badge_types_for_label[] = 'profile';
+                $badge_types[] = 'profile';
             }
         }
-        foreach ($badge_types_for_label as $type) {
+        
+        // Get niche for container aria-label (use first available badge_data)
+        $container_aria_label = '';
+        foreach ($badge_types as $type) {
             if ($eligible[$type]) {
                 $data_cache_key = 'dh_badge_data_' . $post_id . '_' . $type;
                 $badge_data = wp_cache_get($data_cache_key, 'dh_badges');
@@ -958,17 +993,6 @@ class DH_Profile_Badges {
         }
         
         $output = '<div ' . $container_attrs . '>';
-        
-        $badge_types = array('city', 'state');
-        
-        // Include profile badge if featured, or if recognized and no other badges
-        $profile_data = $this->get_badge_data($post_id, 'profile');
-        if ($profile_data) {
-            $has_other_badges = $eligible['city'] || $eligible['state'];
-            if ($profile_data['rank_label'] === 'Featured' || (!$has_other_badges && $profile_data['rank_label'] === 'Recognized')) {
-                $badge_types[] = 'profile';
-            }
-        }
         foreach ($badge_types as $type) {
             if ($eligible[$type]) {
                 // Get cached SVG directly and inline it (no HTTP request!)
@@ -1005,13 +1029,8 @@ class DH_Profile_Badges {
                 }
                 
                 if ($svg && $badge_data) {
-                    // Determine target URL based on badge type
+                    // Use profile_url from badge data (already set to city/state listing URL in get_badge_data)
                     $target_url = $badge_data['profile_url'];
-                    if ($type === 'city' && !empty($badge_data['city_url'])) {
-                        $target_url = $badge_data['city_url'];
-                    } elseif ($type === 'state' && !empty($badge_data['state_url'])) {
-                        $target_url = $badge_data['state_url'];
-                    }
                     
                     $badge_url_active = home_url('/badge/' . $post_id . '/' . $type . '.svg?active=1');
                     $alt_text = ucfirst($type) . ' Badge for ' . get_the_title($post_id);
