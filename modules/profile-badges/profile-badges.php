@@ -851,7 +851,7 @@ class DH_Profile_Badges {
         
         $total_lines = count($lines);
         $height = ($total_lines * $line_height) + ($padding * 2);
-        $width = 250;
+        $width = 125;
         
         // Start SVG
         $svg = '<?xml version="1.0" encoding="UTF-8"?>';
@@ -1076,9 +1076,8 @@ class DH_Profile_Badges {
                     }
                     
                     // Generate embed code with active=1 to prevent nested links
-                    $embed_code = '<a href="' . esc_url($target_url) . '">' . "\n";
-                    $embed_code .= '  <img src="' . esc_url($badge_url_active) . '" alt="' . esc_attr($alt_text) . '" width="250" height="auto" />' . "\n";
-                    $embed_code .= '</a>';
+                    $embed_code = '<a style="display: inline-block; margin: 3px; vertical-align: middle;" href="' . esc_url($target_url) . '" target="_blank" rel="noopener">';
+                    $embed_code .= '  <img src="' . esc_url($badge_url_active) . '" alt="' . esc_attr($alt_text) . '" width="125" height="auto" /></a>';
                     
                     $output .= '<div class="dh-badge-wrap">';
                     $aria_label = esc_attr($badge_data['rank_label'] . ' ' . $badge_data['niche'] . ' in ' . $badge_data['location'] . ' - ' . $badge_data['name']);
@@ -1092,7 +1091,7 @@ class DH_Profile_Badges {
         $output .= '</div>';
         
         // Add help text div underneath the celebration container
-        $output .= '<div class="dh-embed-help" style="display: none; margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; line-height: 1.4; max-width: 600px;">Paste the embed code into your website / CMS wherever it accepts HTML code. For example, in WordPress, add an HTML block and paste the code there. If there\'s no HTML option, look for text boxes or code boxes that accept simple HTML. To change the size, simply increase or decrease the width="250" value in the embed code.</div>';
+        $output .= '<div class="dh-embed-help" style="display: none; margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; line-height: 1.4; max-width: 600px;">Paste the embed code into your website / CMS wherever it accepts HTML code. For example, in WordPress, add an HTML block and paste the code there. If there\'s no HTML option, look for text boxes or code boxes that accept simple HTML. To change the size, simply increase or decrease the width="125" value in the embed code.</div>';
         
         return $output;
     }
