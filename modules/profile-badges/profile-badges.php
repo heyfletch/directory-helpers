@@ -1064,7 +1064,16 @@ class DH_Profile_Badges {
                     $target_url = $badge_data['profile_url'];
                     
                     $badge_url_active = home_url('/badge/' . $post_id . '/' . $type . '.svg?active=1');
-                    $alt_text = ucfirst($type) . ' Badge for ' . get_the_title($post_id);
+                    
+                    // Generate alt text based on badge type
+                    $site_title = get_bloginfo('name');
+                    if ($badge_data['rank_label'] === 'Featured' || $badge_data['rank_label'] === 'Recognized') {
+                        // Featured/Recognized badge format: site_title rank_label niche in location - name
+                        $alt_text = $site_title . ' ' . $badge_data['rank_label'] . ' ' . $badge_data['niche'] . ' in ' . $badge_data['location'] . ' - ' . $badge_data['name'];
+                    } else {
+                        // City/State ranking badge format: site_title Top niches in location
+                        $alt_text = $site_title . ' Top ' . $badge_data['niche'] . 's in ' . $badge_data['location'];
+                    }
                     
                     // Generate embed code with active=1 to prevent nested links
                     $embed_code = '<a href="' . esc_url($target_url) . '">' . "\n";
