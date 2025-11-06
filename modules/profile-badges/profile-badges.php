@@ -64,6 +64,14 @@ class DH_Profile_Badges {
         add_action('init', array($this, 'register_rewrite_rules'));
         add_filter('query_vars', array($this, 'register_query_vars'));
         
+        // Automatically re-flush rewrite rules when WordPress flushes them
+        add_action('wp_loaded', array($this, 'maybe_flush_rewrite_rules'));
+        
+        // Flush rewrite rules on plugin activation/deactivation to prevent issues
+        register_activation_hook(__FILE__, array($this, 'flush_rewrites_on_activation'));
+        add_action('activated_plugin', array($this, 'flush_rewrites_after_plugin_change'));
+        add_action('deactivated_plugin', array($this, 'flush_rewrites_after_plugin_change'));
+        
         // Handle badge requests
         add_action('template_redirect', array($this, 'handle_badge_request'));
         
@@ -228,6 +236,50 @@ class DH_Profile_Badges {
             'index.php?badge_request=1&badge_post_id=$matches[1]&badge_type=$matches[2]',
             'top'
         );
+    }
+    
+    /**
+     * Automatically flush rewrite rules if our badge rule is missing
+     * This ensures badge URLs always work even after WordPress flushes rewrites
+     */
+    public function maybe_flush_rewrite_rules() {
+        // Check if our rewrite rule exists in the current rules
+        $rules = get_option('rewrite_rules');
+        
+        // Look for our badge pattern in the rules
+        $badge_rule_exists = false;
+        if (is_array($rules)) {
+            foreach ($rules as $pattern => $rewrite) {
+                if (strpos($pattern, 'badge/') === 0 && strpos($rewrite, 'badge_request') !== false) {
+                    $badge_rule_exists = true;
+                    break;
+                }
+            }
+        }
+        
+        // If our rule is missing, flush rewrites to re-register it
+        if (!$badge_rule_exists) {
+            flush_rewrite_rules(false);
+        }
+    }
+    
+    /**
+     * Flush rewrite rules on plugin activation
+     */
+    public function flush_rewrites_on_activation() {
+        $this->register_rewrite_rules();
+        flush_rewrite_rules(false);
+    }
+    
+    /**
+     * Flush rewrite rules after any plugin activation/deactivation
+     * This prevents badge URLs from breaking when other plugins change rewrites
+     */
+    public function flush_rewrites_after_plugin_change() {
+        // Delay flush to ensure all plugins have registered their rules
+        add_action('shutdown', function() {
+            flush_rewrite_rules(false);
+        });
     }
     
     /**
