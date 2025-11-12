@@ -33,12 +33,12 @@ class DH_Profile_Badges {
     private $cache_ttl = 2592000; // 30 days
     
     /**
-     * HTTP Cache-Control header for external badge embeds (6 hours)
-     * Shorter duration ensures external sites see rank updates within reasonable time
+     * HTTP Cache-Control header for external badge embeds (24 hours)
+     * Balances server load reduction with timely rank updates for embedded badges
      *
      * @var int
      */
-    private $http_cache_ttl = 21600; // 6 hours
+    private $http_cache_ttl = 86400; // 24 hours
     
     /**
      * Cache TTL for city/state listing lookups (60 days)
