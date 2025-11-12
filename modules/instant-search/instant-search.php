@@ -30,10 +30,10 @@ if (!class_exists('DH_Instant_Search')) {
             add_action('rest_api_init', array($this, 'register_rest_routes'));
 
             // Invalidate index when relevant posts change
-            add_action('save_post', array($this, 'maybe_invalidate_index'), 10, 3);
-            add_action('deleted_post', array($this, 'invalidate_index'));
-            add_action('trashed_post', array($this, 'invalidate_index'));
-            add_action('untrashed_post', array($this, 'invalidate_index'));
+            add_action('transition_post_status', array($this, 'maybe_invalidate_on_transition'), 10, 3);
+            add_action('deleted_post', array($this, 'invalidate_and_rebuild_index'));
+            add_action('trashed_post', array($this, 'invalidate_and_rebuild_index'));
+            add_action('untrashed_post', array($this, 'invalidate_and_rebuild_index'));
         }
 
         public function register_shortcodes() {
@@ -195,30 +195,54 @@ if (!class_exists('DH_Instant_Search')) {
         }
 
         /**
-         * Hooked to 'save_post' to invalidate the index when a target post type
-         * is published/trashed. Target post types are controlled via the
-         * 'dh_instant_search_post_types' filter.
+         * Hooked to 'transition_post_status' to invalidate the index ONLY when
+         * a post transitions TO or FROM publish status. This prevents cache clearing
+         * on every save and only triggers when content actually becomes visible/invisible.
          */
-        public function maybe_invalidate_index($post_ID, $post, $update) {
+        public function maybe_invalidate_on_transition($new_status, $old_status, $post) {
             if (!($post instanceof WP_Post)) {
                 return;
             }
-            if ($post->post_status !== 'publish' && $post->post_status !== 'trash') {
+            
+            // Only invalidate if transitioning TO or FROM publish
+            $is_becoming_published = ($new_status === 'publish' && $old_status !== 'publish');
+            $is_becoming_unpublished = ($old_status === 'publish' && $new_status !== 'publish');
+            
+            if (!$is_becoming_published && !$is_becoming_unpublished) {
                 return;
             }
+            
             // Allow site-wide control of which post types are indexed.
             $target_pts = apply_filters('dh_instant_search_post_types', $this->default_post_types);
             if (in_array($post->post_type, $target_pts, true)) {
-                $this->invalidate_index();
+                $this->invalidate_and_rebuild_index();
             }
         }
 
-        public function invalidate_index($maybe_id = null) {
+        /**
+         * Invalidate the cache and immediately rebuild it in the background.
+         * This ensures the cache is always ready and users never experience
+         * the slow rebuild delay.
+         */
+        public function invalidate_and_rebuild_index($maybe_id = null) {
             // Delete the server-side cached index and bump the version so
             // browsers drop their localStorage cache.
             delete_transient(self::TRANSIENT_INDEX);
             $version = (string) ((int) get_option(self::OPTION_VERSION, 0) + 1);
             update_option(self::OPTION_VERSION, $version, false);
+            
+            // Immediately rebuild the cache in the background so it's ready
+            // for the next request. This prevents users from experiencing
+            // the 10-second rebuild delay.
+            $this->get_index_data();
+        }
+        
+        /**
+         * Legacy method - kept for backwards compatibility.
+         * Now calls the new invalidate_and_rebuild_index method.
+         */
+        public function invalidate_index($maybe_id = null) {
+            $this->invalidate_and_rebuild_index($maybe_id);
         }
 
         // Retrieves cached index (12h transient). If missing/stale, rebuilds and caches.
@@ -234,8 +258,9 @@ if (!class_exists('DH_Instant_Search')) {
                 'items'   => $items,
             );
 
-            // Cache for 12 hours; external invalidation bumps version and deletes transient
-            set_transient(self::TRANSIENT_INDEX, $data, HOUR_IN_SECONDS * 12);
+            // Cache for 7 days; only invalidated when posts are published/unpublished
+            // Longer cache duration prevents unnecessary rebuilds and ensures fast search
+            set_transient(self::TRANSIENT_INDEX, $data, WEEK_IN_SECONDS);
             return $data;
         }
 
