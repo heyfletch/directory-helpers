@@ -72,6 +72,9 @@ class DH_Profile_Badges {
         add_action('activated_plugin', array($this, 'flush_rewrites_after_plugin_change'));
         add_action('deactivated_plugin', array($this, 'flush_rewrites_after_plugin_change'));
         
+        // Prevent WordPress from adding trailing slashes to badge URLs
+        add_filter('redirect_canonical', array($this, 'prevent_badge_url_redirect'), 10, 2);
+        
         // Handle badge requests
         add_action('template_redirect', array($this, 'handle_badge_request'));
         
@@ -225,6 +228,21 @@ class DH_Profile_Badges {
     public function has_featured_badge($post_id) {
         $featured = get_field('featured', $post_id);
         return $featured && $featured > 0;
+    }
+    
+    /**
+     * Prevent WordPress from redirecting badge URLs with trailing slashes
+     *
+     * @param string $redirect_url The redirect URL
+     * @param string $requested_url The requested URL
+     * @return string|false Modified redirect URL or false to prevent redirect
+     */
+    public function prevent_badge_url_redirect($redirect_url, $requested_url) {
+        // Check if this is a badge URL
+        if (strpos($requested_url, '/badge/') !== false && strpos($requested_url, '.svg') !== false) {
+            return false; // Prevent redirect
+        }
+        return $redirect_url;
     }
     
     /**
@@ -398,9 +416,6 @@ class DH_Profile_Badges {
         $post_id = absint(get_query_var('badge_post_id'));
         $badge_type = sanitize_key(get_query_var('badge_type'));
         
-        // Check for active parameter (strips internal <a> tag for nested embed)
-        $active = isset($_GET['active']) && $_GET['active'] === '1';
-        
         // Validate post exists and is published profile
         $post = get_post($post_id);
         if (!$post || $post->post_type !== 'profile' || $post->post_status !== 'publish') {
@@ -422,7 +437,7 @@ class DH_Profile_Badges {
         }
         
         // Try to get cached SVG (use wp_cache which uses Redis/Memcached when available)
-        $cache_key = 'dh_badge_' . $post_id . '_' . $badge_type . ($active ? '_active' : '');
+        $cache_key = 'dh_badge_' . $post_id . '_' . $badge_type;
         $svg = wp_cache_get($cache_key, 'dh_badges');
         
         if ($svg === false) {
@@ -443,7 +458,7 @@ class DH_Profile_Badges {
             }
             
             // Generate SVG from cached data
-            $svg = $this->generate_badge_svg($badge_data, $active);
+            $svg = $this->generate_badge_svg($badge_data);
             
             // Cache final SVG in wp_cache (Redis/Memcached)
             wp_cache_set($cache_key, $svg, 'dh_badges', $this->cache_ttl);
@@ -752,10 +767,9 @@ class DH_Profile_Badges {
      * Generate SVG badge from template
      *
      * @param array $data Badge data
-     * @param bool $active Whether to strip internal <a> tag (for nested embeds)
      * @return string SVG markup
      */
-    private function generate_badge_svg($data, $active = false) {
+    private function generate_badge_svg($data) {
         $rank_label = $data['rank_label'];
         $name = $data['name']; // Trainer name (post title)
         $location = $data['location']; // City or state name
@@ -766,14 +780,14 @@ class DH_Profile_Badges {
         // Check if template exists
         if (!file_exists($template_path)) {
             // Fallback to old SVG generation if template doesn't exist
-            return $this->generate_badge_svg_legacy($data, $active);
+            return $this->generate_badge_svg_legacy($data);
         }
         
         // Read template
         $svg = @file_get_contents($template_path);
         if ($svg === false) {
             // File read failed, use legacy fallback
-            return $this->generate_badge_svg_legacy($data, $active);
+            return $this->generate_badge_svg_legacy($data);
         }
         
         // Use DOM to modify SVG: add title/desc and replace text elements with foreignObject
@@ -784,7 +798,7 @@ class DH_Profile_Badges {
         
         if ($load_result === false) {
             // XML parsing failed, use legacy fallback
-            return $this->generate_badge_svg_legacy($data, $active);
+            return $this->generate_badge_svg_legacy($data);
         }
         
         // Find the root SVG element
@@ -870,10 +884,9 @@ class DH_Profile_Badges {
      * Legacy SVG generation (fallback)
      *
      * @param array $data Badge data
-     * @param bool $active Whether to strip internal <a> tag (for nested embeds)
      * @return string SVG markup
      */
-    private function generate_badge_svg_legacy($data, $active = false) {
+    private function generate_badge_svg_legacy($data) {
         // Escape data for SVG output
         $rank_label = esc_attr($data['rank_label']);
         $niche = esc_attr($data['niche']);
@@ -985,7 +998,7 @@ class DH_Profile_Badges {
                 
                 if ($svg === false && $badge_data) {
                     // Generate SVG if not cached
-                    $svg = $this->generate_badge_svg($badge_data, false);
+                    $svg = $this->generate_badge_svg($badge_data);
                     if ($svg) {
                         wp_cache_set($cache_key, $svg, 'dh_badges', $this->cache_ttl);
                     }
@@ -1095,7 +1108,7 @@ class DH_Profile_Badges {
                     }
                     
                     if ($badge_data) {
-                        $svg = $this->generate_badge_svg($badge_data, false);
+                        $svg = $this->generate_badge_svg($badge_data);
                         wp_cache_set($cache_key, $svg, 'dh_badges', $this->cache_ttl);
                     }
                 } else {
@@ -1115,7 +1128,7 @@ class DH_Profile_Badges {
                     // Use profile_url from badge data (already set to city/state listing URL in get_badge_data)
                     $target_url = $badge_data['profile_url'];
                     
-                    $badge_url_active = home_url('/badge/' . $post_id . '/' . $type . '.svg?active=1');
+                    $badge_url = home_url('/badge/' . $post_id . '/' . $type . '.svg');
                     
                     // Generate alt text based on badge type
                     $site_title = get_bloginfo('name');
@@ -1127,8 +1140,8 @@ class DH_Profile_Badges {
                         $alt_text = $site_title . ' Top ' . $badge_data['niche'] . 's in ' . $badge_data['location'];
                     }
                     
-                    // Generate embed code with active=1 to prevent nested links
-                    $embed_code = '<a style="display: inline-block; margin: 3px; vertical-align: middle;" href="' . esc_url($target_url) . '" target="_blank" rel="noopener"><img src="' . esc_url($badge_url_active) . '" alt="' . esc_attr($alt_text) . '" width="125" height="auto" /></a>';
+                    // Generate embed code
+                    $embed_code = '<a style="display: inline-block; margin: 3px; vertical-align: middle;" href="' . esc_url($target_url) . '" target="_blank" rel="noopener"><img src="' . esc_url($badge_url) . '" alt="' . esc_attr($alt_text) . '" width="125" height="auto" /></a>';
                     
                     $output .= '<div class="dh-badge-wrap">';
                     $aria_label = esc_attr($badge_data['rank_label'] . ' ' . $badge_data['niche'] . ' in ' . $badge_data['location'] . ' - ' . $badge_data['name']);
