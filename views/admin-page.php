@@ -161,6 +161,25 @@
                                 <input type="text" id="instant_search_label_s" name="directory_helpers_options[instant_search_label_s]" value="<?php echo esc_attr($options['instant_search_label_s'] ?? ''); ?>" class="regular-text" placeholder="<?php echo esc_attr__('States', 'directory-helpers'); ?>">
                             </td>
                         </tr>
+                        <tr>
+                            <th scope="row">
+                                <?php esc_html_e('Cache Management', 'directory-helpers'); ?>
+                            </th>
+                            <td>
+                                <?php
+                                $rebuild_url = wp_nonce_url(
+                                    admin_url('admin-post.php?action=dh_rebuild_search_cache'),
+                                    'dh_rebuild_search_cache'
+                                );
+                                ?>
+                                <a href="<?php echo esc_url($rebuild_url); ?>" class="button button-secondary">
+                                    <?php esc_html_e('Rebuild Search Cache Now', 'directory-helpers'); ?>
+                                </a>
+                                <p class="description">
+                                    <?php esc_html_e('Manually rebuild the search index. The cache automatically rebuilds when posts are published/unpublished and lasts 7 days.', 'directory-helpers'); ?>
+                                </p>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>

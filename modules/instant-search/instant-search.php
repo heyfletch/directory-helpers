@@ -34,6 +34,15 @@ if (!class_exists('DH_Instant_Search')) {
             add_action('deleted_post', array($this, 'invalidate_and_rebuild_index'));
             add_action('trashed_post', array($this, 'invalidate_and_rebuild_index'));
             add_action('untrashed_post', array($this, 'invalidate_and_rebuild_index'));
+            
+            // Admin actions
+            add_action('admin_post_dh_rebuild_search_cache', array($this, 'handle_manual_cache_rebuild'));
+            add_action('admin_notices', array($this, 'show_cache_rebuild_notice'));
+            
+            // WP-CLI command
+            if (defined('WP_CLI') && WP_CLI) {
+                WP_CLI::add_command('dh search rebuild-cache', array($this, 'cli_rebuild_cache'));
+            }
         }
 
         public function register_shortcodes() {
@@ -344,6 +353,65 @@ if (!class_exists('DH_Instant_Search')) {
             // Collapse spaces
             $s = preg_replace('/\s+/', ' ', $s);
             return trim($s);
+        }
+        
+        /**
+         * Handle manual cache rebuild from admin page
+         */
+        public function handle_manual_cache_rebuild() {
+            // Check permissions
+            if (!current_user_can('manage_options')) {
+                wp_die(__('You do not have permission to perform this action.', 'directory-helpers'));
+            }
+            
+            // Verify nonce
+            if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'dh_rebuild_search_cache')) {
+                wp_die(__('Security check failed.', 'directory-helpers'));
+            }
+            
+            // Rebuild the cache
+            $this->invalidate_and_rebuild_index();
+            
+            // Set transient for success message
+            set_transient('dh_search_cache_rebuilt', true, 30);
+            
+            // Redirect back to settings page
+            wp_safe_redirect(admin_url('admin.php?page=directory-helpers'));
+            exit;
+        }
+        
+        /**
+         * Show admin notice after cache rebuild
+         */
+        public function show_cache_rebuild_notice() {
+            if (get_transient('dh_search_cache_rebuilt')) {
+                delete_transient('dh_search_cache_rebuilt');
+                ?>
+                <div class="notice notice-success is-dismissible">
+                    <p><?php _e('Search cache has been successfully rebuilt!', 'directory-helpers'); ?></p>
+                </div>
+                <?php
+            }
+        }
+        
+        /**
+         * WP-CLI command to rebuild search cache
+         * 
+         * ## EXAMPLES
+         * 
+         *     wp dh search rebuild-cache
+         */
+        public function cli_rebuild_cache($args, $assoc_args) {
+            WP_CLI::log('Rebuilding instant search cache...');
+            
+            $start = microtime(true);
+            $this->invalidate_and_rebuild_index();
+            $elapsed = round(microtime(true) - $start, 2);
+            
+            $cached = get_transient(self::TRANSIENT_INDEX);
+            $count = isset($cached['items']) ? count($cached['items']) : 0;
+            
+            WP_CLI::success("Search cache rebuilt in {$elapsed}s with {$count} items indexed.");
         }
     }
 }
