@@ -25,13 +25,17 @@ class DH_Bricks_Query_Helpers {
      * @param int $radius Radius in miles. Default 20.
      * @return array WP_Query arguments.
      */
-    public static function get_nearby_profiles_query_args( $radius = 20 ) {
+    public static function get_nearby_profiles_query_args( $radius = null ) {
         // Configuration
         $meta_lat = 'latitude';
         $meta_lng = 'longitude';
         $niche_tax = 'niche';
         $area_tax = 'area';
         $city_rank_meta = 'city_rank';
+        
+        // Get plugin settings
+        $options = get_option('directory_helpers_options', []);
+        $min_threshold = isset($options['min_profiles_threshold']) ? (int) $options['min_profiles_threshold'] : 10;
 
         // 1. Get Context
         $object = get_queried_object();
@@ -58,10 +62,98 @@ class DH_Bricks_Query_Helpers {
         if ( ! $target_term || ! isset( $target_term->term_id ) || empty( $niche_ids ) ) {
             return [ 'post__in' => [0] ];
         }
+        
+        // Determine radius: custom_radius > recommended_radius > 10 miles default
+        if ( $radius === null ) {
+            $custom_radius = get_term_meta( $target_term->term_id, 'custom_radius', true );
+            if ( $custom_radius ) {
+                $radius = (int) $custom_radius;
+            } else {
+                $recommended_radius = get_term_meta( $target_term->term_id, 'recommended_radius', true );
+                $radius = $recommended_radius ? (int) $recommended_radius : 10;
+            }
+        }
 
         global $wpdb;
         
-        // 2. Get proximity results (profiles within radius with coordinates)
+        // 2. Quick check: if area has enough profiles, skip proximity query
+        $area_query_quick = new WP_Query([
+            'post_type' => 'profile',
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'fields' => 'ids',
+            'tax_query' => [
+                'relation' => 'AND',
+                [
+                    'taxonomy' => $area_tax,
+                    'field' => 'term_id',
+                    'terms' => $target_term->term_id,
+                ],
+                [
+                    'taxonomy' => $niche_tax,
+                    'field' => 'term_id',
+                    'terms' => $niche_ids,
+                ]
+            ]
+        ]);
+        
+        // If threshold met, skip proximity and return area-tagged only
+        if ( $area_query_quick->found_posts >= $min_threshold ) {
+            $area_only_query = new WP_Query([
+                'post_type' => 'profile',
+                'post_status' => 'publish',
+                'posts_per_page' => -1,
+                'fields' => 'ids',
+                'tax_query' => [
+                    'relation' => 'AND',
+                    [
+                        'taxonomy' => $area_tax,
+                        'field' => 'term_id',
+                        'terms' => $target_term->term_id,
+                    ],
+                    [
+                        'taxonomy' => $niche_tax,
+                        'field' => 'term_id',
+                        'terms' => $niche_ids,
+                    ]
+                ]
+            ]);
+            
+            // Fetch city_rank for sorting
+            if ( ! empty( $area_only_query->posts ) ) {
+                $rank_sql = $wpdb->prepare( "
+                    SELECT post_id, meta_value 
+                    FROM {$wpdb->postmeta} 
+                    WHERE post_id IN (" . implode(',', array_map('intval', $area_only_query->posts)) . ")
+                    AND meta_key = %s
+                ", $city_rank_meta );
+                
+                $rank_results = $wpdb->get_results( $rank_sql );
+                $city_ranks = [];
+                foreach ( $rank_results as $row ) {
+                    $city_ranks[ $row->post_id ] = (int) $row->meta_value;
+                }
+                
+                // Sort by city_rank
+                $sorted_ids = $area_only_query->posts;
+                usort( $sorted_ids, function( $a, $b ) use ( $city_ranks ) {
+                    $rank_a = isset( $city_ranks[ $a ] ) ? $city_ranks[ $a ] : 999999;
+                    $rank_b = isset( $city_ranks[ $b ] ) ? $city_ranks[ $b ] : 999999;
+                    return $rank_a - $rank_b;
+                });
+                
+                return [
+                    'post_type' => 'profile',
+                    'post__in'  => $sorted_ids,
+                    'orderby'   => 'post__in',
+                    'posts_per_page' => -1,
+                ];
+            }
+            
+            return [ 'post__in' => [0] ];
+        }
+        
+        // 3. Get proximity results (profiles within radius with coordinates)
         $proximity_data = [];
         $city_lat = get_term_meta( $target_term->term_id, 'latitude', true );
         $city_lng = get_term_meta( $target_term->term_id, 'longitude', true );
@@ -90,7 +182,7 @@ class DH_Bricks_Query_Helpers {
             }
         }
 
-        // 3. Get area term match results (all profiles tagged with this area)
+        // 4. Get area term match results (all profiles tagged with this area)
         $area_query = new WP_Query([
             'post_type' => 'profile',
             'post_status' => 'publish',
@@ -111,7 +203,7 @@ class DH_Bricks_Query_Helpers {
             ]
         ]);
 
-        // 4. Merge results (proximity OR area term)
+        // 5. Merge results (proximity OR area term)
         $all_post_ids = array_unique( array_merge( array_keys( $proximity_data ), $area_query->posts ) );
 
         if ( empty( $all_post_ids ) ) {
@@ -121,7 +213,7 @@ class DH_Bricks_Query_Helpers {
         // Track which profiles have the area term (for prioritization)
         $area_tagged_ids = $area_query->posts;
 
-        // 5. Fetch city_rank for all posts
+        // 6. Fetch city_rank for all posts
         $rank_sql = $wpdb->prepare( "
             SELECT post_id, meta_value 
             FROM {$wpdb->postmeta} 
@@ -135,7 +227,7 @@ class DH_Bricks_Query_Helpers {
             $city_ranks[ $row->post_id ] = (int) $row->meta_value;
         }
 
-        // 6. Build sortable data structure
+        // 7. Build sortable data structure
         $profiles = [];
         foreach ( $all_post_ids as $post_id ) {
             $profiles[] = [
@@ -146,7 +238,7 @@ class DH_Bricks_Query_Helpers {
             ];
         }
 
-        // 7. Sort: Area-tagged profiles first, then by city_rank, then by distance
+        // 8. Sort: Area-tagged profiles first, then by city_rank, then by distance
         usort( $profiles, function( $a, $b ) {
             // Primary: Area term match (true before false)
             if ( $a['has_area_term'] !== $b['has_area_term'] ) {
@@ -162,7 +254,7 @@ class DH_Bricks_Query_Helpers {
 
         $sorted_ids = wp_list_pluck( $profiles, 'id' );
 
-        // 8. Return query args with sorted IDs
+        // 9. Return query args with sorted IDs
         return [
             'post_type' => 'profile',
             'post__in'  => $sorted_ids,

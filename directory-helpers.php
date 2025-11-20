@@ -26,6 +26,7 @@ define('DIRECTORY_HELPERS_BASENAME', plugin_basename(__FILE__));
 // Load shared utility classes
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-taxonomy-helpers.php';
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-bricks-query-helpers.php';
+require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-acf-fields.php';
 
 /**
  * Main plugin class
@@ -232,9 +233,11 @@ class Directory_Helpers {
     public function register_cli_commands() {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-deduplicate-area-terms-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-geocode-area-terms-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-analyze-radius-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_state_listing_titles', 'DH_Deduplicate_Area_Terms_Command' );
+        WP_CLI::add_command( 'directory-helpers analyze-radius', 'DH_Analyze_Radius_Command' );
     }
 
     /**
@@ -389,6 +392,13 @@ class Directory_Helpers {
                 if ($min < 1) { $min = 1; }
                 if ($min > 5) { $min = 5; }
                 $options['instant_search_zip_min_digits'] = $min;
+            }
+            // Handle Proximity Query Settings
+            if (isset($submitted_options['min_profiles_threshold'])) {
+                $threshold = (int) $submitted_options['min_profiles_threshold'];
+                if ($threshold < 1) { $threshold = 1; }
+                if ($threshold > 100) { $threshold = 100; }
+                $options['min_profiles_threshold'] = $threshold;
             }
         }
 

@@ -185,6 +185,60 @@
             </div>
 
             <div class="directory-helpers-settings" style="margin-top: 20px;">
+                <h2><?php esc_html_e('Proximity Query Settings', 'directory-helpers'); ?></h2>
+                <p class="description"><?php esc_html_e('Configure proximity-based profile queries for city listing pages.', 'directory-helpers'); ?></p>
+                <table class="form-table">
+                    <tbody>
+                        <tr>
+                            <th scope="row">
+                                <label for="min_profiles_threshold"><?php esc_html_e('Minimum Profiles Threshold', 'directory-helpers'); ?></label>
+                            </th>
+                            <td>
+                                <?php $min_profiles = isset($options['min_profiles_threshold']) ? (int) $options['min_profiles_threshold'] : 10; ?>
+                                <input type="number" id="min_profiles_threshold" name="directory_helpers_options[min_profiles_threshold]" value="<?php echo (int)$min_profiles; ?>" min="1" max="100" step="1" class="small-text">
+                                <p class="description"><?php esc_html_e('Minimum number of profiles to show on a city listing page. If fewer area-tagged profiles exist, proximity search will be used. Default: 10', 'directory-helpers'); ?></p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #f0f6fc; border-left: 4px solid #2271b1;">
+                    <h3 style="margin-top: 0;"><?php esc_html_e('WP-CLI: Analyze Radius Command', 'directory-helpers'); ?></h3>
+                    <p><?php esc_html_e('Use WP-CLI to analyze all area terms and calculate recommended radius values based on profile density. This command tests radii from 2-30 miles and finds the smallest radius that reaches your minimum threshold.', 'directory-helpers'); ?></p>
+                    
+                    <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
+                    <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview results without updating)
+wp directory-helpers analyze-radius --dry-run
+
+# Analyze and update recommended_radius term meta
+wp directory-helpers analyze-radius --update-meta
+
+# Analyze specific niche only
+wp directory-helpers analyze-radius --niche=123 --update-meta
+
+# Custom thresholds
+wp directory-helpers analyze-radius --min-profiles=15 --max-radius=40 --update-meta</code></pre>
+                    
+                    <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
+                    <ul style="list-style: disc; margin-left: 20px;">
+                        <li><?php esc_html_e('Tests radii: 2, 5, 10, 15, 20, 25, 30 miles', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Finds smallest radius that reaches your minimum threshold', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Updates <code>recommended_radius</code> term meta for each area', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Areas with sufficient direct profiles are marked as not needing proximity', 'directory-helpers'); ?></li>
+                    </ul>
+                    
+                    <h4><?php esc_html_e('Radius Priority:', 'directory-helpers'); ?></h4>
+                    <ol style="margin-left: 20px;">
+                        <li><strong><?php esc_html_e('Custom Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(set manually in area term edit screen)', 'directory-helpers'); ?></li>
+                        <li><strong><?php esc_html_e('Recommended Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(calculated by WP-CLI command)', 'directory-helpers'); ?></li>
+                        <li><strong><?php esc_html_e('Default: 10 miles', 'directory-helpers'); ?></strong> <?php esc_html_e('(fallback if neither is set)', 'directory-helpers'); ?></li>
+                    </ol>
+                    
+                    <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command quarterly or when you add 100+ new profiles to keep radius values optimized.', 'directory-helpers'); ?></p>
+                </div>
+            </div>
+
+            <div class="directory-helpers-settings" style="margin-top: 20px;">
                 <h2><?php esc_html_e('AI Prompts', 'directory-helpers'); ?></h2>
                 <p class="description"><?php esc_html_e('Save named prompts. They will be available on post edit screens via window.DH_PROMPTS and helper functions dh_get_prompt()/dh_get_prompts().', 'directory-helpers'); ?></p>
                 <table class="form-table">
