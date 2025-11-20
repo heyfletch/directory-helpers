@@ -4,10 +4,23 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+/**
+ * Bricks Query Helpers for Directory Profiles
+ * 
+ * CACHING STRATEGY (for future implementation):
+ * - Cache key format: "dh_nearby_profiles_{area_term_id}_{niche_id}_{radius}"
+ * - Cache the final sorted post IDs array
+ * - TTL: 1 hour (3600 seconds)
+ * - Invalidate on: profile save/update, area term update, city_rank meta change
+ * - Implementation options:
+ *   1. Redis Object Cache (wp_cache_get/set) - best performance
+ *   2. WordPress Transients (get_transient/set_transient) - native fallback
+ */
 class DH_Bricks_Query_Helpers {
 
     /**
-     * Get query arguments for profiles within a certain radius of the current city term.
+     * Get query arguments for profiles within a certain radius OR tagged with area term.
+     * Sorted by city_rank (ASC), then proximity.
      * 
      * @param int $radius Radius in miles. Default 20.
      * @return array WP_Query arguments.
@@ -17,6 +30,8 @@ class DH_Bricks_Query_Helpers {
         $meta_lat = 'latitude';
         $meta_lng = 'longitude';
         $niche_tax = 'niche';
+        $area_tax = 'area';
+        $city_rank_meta = 'city_rank';
 
         // 1. Get Context
         $object = get_queried_object();
@@ -24,83 +39,125 @@ class DH_Bricks_Query_Helpers {
 
         // Determine the target term (Area)
         if ( $object instanceof WP_Term ) {
-            // We are on a taxonomy archive
             $target_term = $object;
         } elseif ( $object instanceof WP_Post ) {
-            // We are on a post (e.g., city-listing), need to find the attached 'area' term
-            $terms = get_the_terms( $object->ID, 'area' );
+            $terms = get_the_terms( $object->ID, $area_tax );
             if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
-                $target_term = $terms[0]; // Use the first assigned area term
+                $target_term = $terms[0];
             }
         }
 
-        // Get Niche from Bricks dynamic data if available
+        // Get Niche from Bricks dynamic data
         $niche_ids = [];
         if ( function_exists( 'bricks_render_dynamic_data' ) ) {
              $niche_string = bricks_render_dynamic_data('{post_terms_niche:term_id:plain}');
              $niche_ids = !empty($niche_string) ? explode(',', $niche_string) : [];
         }
 
-        // Safety checks: Must have a valid term and niche(s)
-        if ( ! $target_term || ! isset( $target_term->term_id ) ) {
-            return [ 'post__in' => [0] ];
-        }
-        
-        if ( empty( $niche_ids ) ) {
+        // Safety checks
+        if ( ! $target_term || ! isset( $target_term->term_id ) || empty( $niche_ids ) ) {
             return [ 'post__in' => [0] ];
         }
 
+        global $wpdb;
+        
+        // 2. Get proximity results (profiles within radius with coordinates)
+        $proximity_data = [];
         $city_lat = get_term_meta( $target_term->term_id, 'latitude', true );
         $city_lng = get_term_meta( $target_term->term_id, 'longitude', true );
 
-        if ( ! $city_lat || ! $city_lng ) {
-             return [ 'post__in' => [0] ];
+        if ( $city_lat && $city_lng ) {
+            $sql = $wpdb->prepare( "
+                SELECT p.ID, 
+                    ( 3959 * acos(
+                        cos( radians(%f) ) *
+                        cos( radians( lat.meta_value ) ) *
+                        cos( radians( lng.meta_value ) - radians(%f) ) +
+                        sin( radians(%f) ) *
+                        sin( radians( lat.meta_value ) )
+                    ) ) AS distance
+                FROM {$wpdb->posts} p
+                INNER JOIN {$wpdb->postmeta} lat ON p.ID = lat.post_id AND lat.meta_key = %s
+                INNER JOIN {$wpdb->postmeta} lng ON p.ID = lng.post_id AND lng.meta_key = %s
+                WHERE p.post_type = 'profile'
+                AND p.post_status = 'publish'
+                HAVING distance < %d
+            ", $city_lat, $city_lng, $city_lat, $meta_lat, $meta_lng, $radius );
+            
+            $proximity_results = $wpdb->get_results( $sql );
+            foreach ( $proximity_results as $row ) {
+                $proximity_data[ $row->ID ] = (float) $row->distance;
+            }
         }
 
-        // 2. SQL for Proximity
-        global $wpdb;
-        
-        $sql = $wpdb->prepare( "
-            SELECT $wpdb->posts.ID,
-                ( 3959 * acos(
-                    cos( radians(%f) ) *
-                    cos( radians( lat.meta_value ) ) *
-                    cos( radians( lng.meta_value ) - radians(%f) ) +
-                    sin( radians(%f) ) *
-                    sin( radians( lat.meta_value ) )
-                ) ) AS distance
-            FROM $wpdb->posts
-            INNER JOIN $wpdb->postmeta AS lat ON $wpdb->posts.ID = lat.post_id
-            INNER JOIN $wpdb->postmeta AS lng ON $wpdb->posts.ID = lng.post_id
-            WHERE 1=1
-            AND $wpdb->posts.post_type = 'profile'
-            AND $wpdb->posts.post_status = 'publish'
-            AND lat.meta_key = %s
-            AND lng.meta_key = %s
-            HAVING distance < %d
-            ORDER BY distance ASC
-        ", $city_lat, $city_lng, $city_lat, $meta_lat, $meta_lng, $radius );
-        
-        $results = $wpdb->get_results( $sql );
-        $post_ids = wp_list_pluck( $results, 'ID' );
+        // 3. Get area term match results (all profiles tagged with this area)
+        $area_query = new WP_Query([
+            'post_type' => 'profile',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'fields' => 'ids',
+            'tax_query' => [
+                'relation' => 'AND',
+                [
+                    'taxonomy' => $area_tax,
+                    'field' => 'term_id',
+                    'terms' => $target_term->term_id,
+                ],
+                [
+                    'taxonomy' => $niche_tax,
+                    'field' => 'term_id',
+                    'terms' => $niche_ids,
+                ]
+            ]
+        ]);
 
-        if ( empty( $post_ids ) ) {
+        // 4. Merge results (proximity OR area term)
+        $all_post_ids = array_unique( array_merge( array_keys( $proximity_data ), $area_query->posts ) );
+
+        if ( empty( $all_post_ids ) ) {
             return [ 'post__in' => [0] ];
         }
 
-        // 3. Return Args
+        // 5. Fetch city_rank for all posts
+        $rank_sql = $wpdb->prepare( "
+            SELECT post_id, meta_value 
+            FROM {$wpdb->postmeta} 
+            WHERE post_id IN (" . implode(',', array_map('intval', $all_post_ids)) . ")
+            AND meta_key = %s
+        ", $city_rank_meta );
+        
+        $rank_results = $wpdb->get_results( $rank_sql );
+        $city_ranks = [];
+        foreach ( $rank_results as $row ) {
+            $city_ranks[ $row->post_id ] = (int) $row->meta_value;
+        }
+
+        // 6. Build sortable data structure
+        $profiles = [];
+        foreach ( $all_post_ids as $post_id ) {
+            $profiles[] = [
+                'id' => $post_id,
+                'city_rank' => isset( $city_ranks[ $post_id ] ) ? $city_ranks[ $post_id ] : 999999,
+                'distance' => isset( $proximity_data[ $post_id ] ) ? $proximity_data[ $post_id ] : 999999,
+            ];
+        }
+
+        // 7. Sort by city_rank ASC, then distance ASC
+        usort( $profiles, function( $a, $b ) {
+            if ( $a['city_rank'] !== $b['city_rank'] ) {
+                return $a['city_rank'] - $b['city_rank'];
+            }
+            return $a['distance'] <=> $b['distance'];
+        });
+
+        $sorted_ids = wp_list_pluck( $profiles, 'id' );
+
+        // 8. Return query args with sorted IDs
         return [
             'post_type' => 'profile',
-            'post__in'  => $post_ids,
-            'orderby'   => 'post__in', // Preserve distance order
+            'post__in'  => $sorted_ids,
+            'orderby'   => 'post__in',
             'posts_per_page' => -1,
-            'tax_query' => [
-                [
-                    'taxonomy' => $niche_tax,
-                    'field'    => 'term_id',
-                    'terms'    => $niche_ids,
-                ]
-            ]
         ];
     }
 }
