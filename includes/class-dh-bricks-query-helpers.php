@@ -118,6 +118,9 @@ class DH_Bricks_Query_Helpers {
             return [ 'post__in' => [0] ];
         }
 
+        // Track which profiles have the area term (for prioritization)
+        $area_tagged_ids = $area_query->posts;
+
         // 5. Fetch city_rank for all posts
         $rank_sql = $wpdb->prepare( "
             SELECT post_id, meta_value 
@@ -137,16 +140,23 @@ class DH_Bricks_Query_Helpers {
         foreach ( $all_post_ids as $post_id ) {
             $profiles[] = [
                 'id' => $post_id,
+                'has_area_term' => in_array( $post_id, $area_tagged_ids ),
                 'city_rank' => isset( $city_ranks[ $post_id ] ) ? $city_ranks[ $post_id ] : 999999,
                 'distance' => isset( $proximity_data[ $post_id ] ) ? $proximity_data[ $post_id ] : 999999,
             ];
         }
 
-        // 7. Sort by city_rank ASC, then distance ASC
+        // 7. Sort: Area-tagged profiles first, then by city_rank, then by distance
         usort( $profiles, function( $a, $b ) {
+            // Primary: Area term match (true before false)
+            if ( $a['has_area_term'] !== $b['has_area_term'] ) {
+                return $b['has_area_term'] - $a['has_area_term'];
+            }
+            // Secondary: city_rank (ascending)
             if ( $a['city_rank'] !== $b['city_rank'] ) {
                 return $a['city_rank'] - $b['city_rank'];
             }
+            // Tertiary: distance (ascending)
             return $a['distance'] <=> $b['distance'];
         });
 
