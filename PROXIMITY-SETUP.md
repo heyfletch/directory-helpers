@@ -61,15 +61,17 @@ Remove any hardcoded radius parameter and let the system use:
 ## Radius Analysis (Recommended)
 
 ### Run WP-CLI Command
-After initial setup, analyze all areas to calculate optimal radius values:
+After initial setup, analyze areas for a specific niche to calculate optimal radius values:
 
 ```bash
-# Preview results (dry run)
-wp directory-helpers analyze-radius --dry-run
+# Preview results (dry run) - niche slug is required
+wp directory-helpers analyze-radius dog-trainer --dry-run
 
 # Update term meta with recommended values
-wp directory-helpers analyze-radius --update-meta
+wp directory-helpers analyze-radius dog-trainer --update-meta
 ```
+
+**Note:** The command only analyzes areas that have published city-listing pages with the specified niche.
 
 ### What This Does
 - Tests radii: 2, 5, 10, 15, 20, 25, 30 miles
@@ -101,11 +103,14 @@ The system uses this priority order:
 - **Area has <10 profiles:** Proximity query **runs** with configured radius
 
 ### Important Notes
-- The threshold is a **trigger**, not a guarantee
-- If Bethesda has 6 area-tagged profiles and proximity finds 2 more within 10 miles, you'll see **8 total** (not 10)
-- To guarantee 10+ profiles, you need to either:
+- The threshold is now a **minimum guarantee** (with automatic radius expansion)
+- If Bethesda has 6 area-tagged profiles and proximity finds 2 more within 10 miles (total: 8 < threshold of 10):
+  - System automatically expands radius by +5, +10, +15, +20 miles
+  - Stops when threshold is reached or max expansion (30 miles total) is hit
+- If even the expanded radius doesn't reach threshold, you'll see fewer than the minimum
+- To guarantee more profiles in sparse areas:
   - Tag more profiles with the area term, OR
-  - Increase the radius (manually or via WP-CLI analysis)
+  - Manually set higher custom_radius for that area
 
 ### Sorting Order
 Results are sorted:

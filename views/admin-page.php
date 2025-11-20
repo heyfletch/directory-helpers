@@ -204,20 +204,17 @@
                 
                 <div style="margin-top: 20px; padding: 15px; background: #f0f6fc; border-left: 4px solid #2271b1;">
                     <h3 style="margin-top: 0;"><?php esc_html_e('WP-CLI: Analyze Radius Command', 'directory-helpers'); ?></h3>
-                    <p><?php esc_html_e('Use WP-CLI to analyze all area terms and calculate recommended radius values based on profile density. This command tests radii from 2-30 miles and finds the smallest radius that reaches your minimum threshold.', 'directory-helpers'); ?></p>
+                    <p><?php esc_html_e('Use WP-CLI to analyze area terms for published city-listing pages and calculate recommended radius values. Requires a niche slug (e.g., dog-trainer). Only analyzes areas that have published city-listing pages with that niche.', 'directory-helpers'); ?></p>
                     
                     <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
                     <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview results without updating)
-wp directory-helpers analyze-radius --dry-run
+wp directory-helpers analyze-radius dog-trainer --dry-run
 
 # Analyze and update recommended_radius term meta
-wp directory-helpers analyze-radius --update-meta
-
-# Analyze specific niche only
-wp directory-helpers analyze-radius --niche=123 --update-meta
+wp directory-helpers analyze-radius dog-trainer --update-meta
 
 # Custom thresholds
-wp directory-helpers analyze-radius --min-profiles=15 --max-radius=40 --update-meta</code></pre>
+wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --max-radius=40 --update-meta</code></pre>
                     
                     <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
                     <ul style="list-style: disc; margin-left: 20px;">

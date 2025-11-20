@@ -10,15 +10,15 @@ if ( ! defined( 'WP_CLI' ) ) {
 class DH_Analyze_Radius_Command extends WP_CLI_Command {
 
     /**
-     * Analyze all area terms to calculate recommended radius based on profile density
+     * Analyze area terms for published city-listing pages to calculate recommended radius
      *
      * ## OPTIONS
      *
      * [--dry-run]
      * : Show analysis without updating term meta
      *
-     * [--niche=<term_id>]
-     * : Limit analysis to specific niche (default: all niches)
+     * <niche>
+     * : Niche taxonomy slug (required, e.g., dog-trainer)
      *
      * [--min-profiles=<number>]
      * : Target minimum number of profiles (default: from settings or 10)
@@ -31,17 +31,31 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
      *
      * ## EXAMPLES
      *
-     *     wp directory-helpers analyze-radius
-     *     wp directory-helpers analyze-radius --dry-run
-     *     wp directory-helpers analyze-radius --niche=123 --min-profiles=15
-     *     wp directory-helpers analyze-radius --update-meta
+     *     wp directory-helpers analyze-radius dog-trainer --dry-run
+     *     wp directory-helpers analyze-radius dog-trainer --update-meta
+     *     wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --update-meta
      *
      * @when after_wp_load
      */
     public function __invoke( $args, $assoc_args ) {
+        // Niche is now required
+        if ( empty( $args[0] ) ) {
+            WP_CLI::error( "Niche slug is required. Example: wp directory-helpers analyze-radius dog-trainer" );
+            return;
+        }
+        
+        $niche_slug = sanitize_title( $args[0] );
+        $niche_term = get_term_by( 'slug', $niche_slug, 'niche' );
+        
+        if ( ! $niche_term ) {
+            WP_CLI::error( "Niche term '{$niche_slug}' not found in 'niche' taxonomy." );
+            return;
+        }
+        
+        $niche_id = $niche_term->term_id;
+        
         $dry_run = isset( $assoc_args['dry-run'] );
         $update_meta = isset( $assoc_args['update-meta'] );
-        $niche_id = isset( $assoc_args['niche'] ) ? intval( $assoc_args['niche'] ) : null;
         
         // Get settings
         $options = get_option('directory_helpers_options', []);
@@ -51,6 +65,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         $max_radius = isset( $assoc_args['max-radius'] ) ? intval( $assoc_args['max-radius'] ) : 30;
 
         WP_CLI::line( "=== Area Radius Analysis ===" );
+        WP_CLI::line( "Niche: {$niche_term->name} (slug: {$niche_slug})" );
         WP_CLI::line( "Target minimum profiles: $min_profiles" );
         WP_CLI::line( "Maximum radius to test: $max_radius miles" );
         WP_CLI::line( "Dry run: " . ( $dry_run ? 'Yes' : 'No' ) );
@@ -59,15 +74,53 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
 
         global $wpdb;
 
-        // Get all area terms with coordinates
-        $terms = get_terms([
-            'taxonomy' => 'area',
-            'hide_empty' => false,
+        // Get published city-listing pages that have this niche term
+        $city_listings = get_posts([
+            'post_type' => 'city-listing',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'tax_query' => [
+                [
+                    'taxonomy' => 'niche',
+                    'field' => 'term_id',
+                    'terms' => $niche_id,
+                ]
+            ]
         ]);
 
-        if ( empty( $terms ) || is_wp_error( $terms ) ) {
-            WP_CLI::error( "No area terms found." );
+        if ( empty( $city_listings ) ) {
+            WP_CLI::error( "No published city-listing pages found with niche '{$niche_slug}'." );
             return;
+        }
+
+        WP_CLI::line( "Found " . count( $city_listings ) . " published city-listing pages with this niche." );
+        WP_CLI::line( "" );
+
+        // Extract area terms from these city-listing pages
+        $area_term_ids = [];
+        foreach ( $city_listings as $post ) {
+            $area_terms = get_the_terms( $post->ID, 'area' );
+            if ( ! empty( $area_terms ) && ! is_wp_error( $area_terms ) ) {
+                foreach ( $area_terms as $term ) {
+                    $area_term_ids[] = $term->term_id;
+                }
+            }
+        }
+
+        $area_term_ids = array_unique( $area_term_ids );
+
+        if ( empty( $area_term_ids ) ) {
+            WP_CLI::error( "No area terms found on these city-listing pages." );
+            return;
+        }
+
+        // Get the actual term objects
+        $terms = [];
+        foreach ( $area_term_ids as $term_id ) {
+            $term = get_term( $term_id, 'area' );
+            if ( $term && ! is_wp_error( $term ) ) {
+                $terms[] = $term;
+            }
         }
 
         $progress = \WP_CLI\Utils\make_progress_bar( 'Analyzing areas', count( $terms ) );
@@ -91,31 +144,25 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                 continue;
             }
 
-            // Build tax query
-            $tax_query = [
-                'relation' => 'AND',
-                [
-                    'taxonomy' => 'area',
-                    'field' => 'term_id',
-                    'terms' => $term->term_id,
-                ]
-            ];
-
-            if ( $niche_id ) {
-                $tax_query[] = [
-                    'taxonomy' => 'niche',
-                    'field' => 'term_id',
-                    'terms' => $niche_id,
-                ];
-            }
-
-            // Check direct area-tagged profiles
+            // Check direct area-tagged profiles with this niche
             $area_count_query = new WP_Query([
                 'post_type' => 'profile',
                 'post_status' => 'publish',
                 'posts_per_page' => 1,
                 'fields' => 'ids',
-                'tax_query' => $tax_query,
+                'tax_query' => [
+                    'relation' => 'AND',
+                    [
+                        'taxonomy' => 'area',
+                        'field' => 'term_id',
+                        'terms' => $term->term_id,
+                    ],
+                    [
+                        'taxonomy' => 'niche',
+                        'field' => 'term_id',
+                        'terms' => $niche_id,
+                    ]
+                ],
             ]);
 
             $area_count = $area_count_query->found_posts;
@@ -143,17 +190,15 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                     break;
                 }
 
-                // Query proximity profiles
-                $niche_join = $niche_id ? " INNER JOIN {$wpdb->term_relationships} tr_niche ON p.ID = tr_niche.object_id
-                    INNER JOIN {$wpdb->term_taxonomy} tt_niche ON tr_niche.term_taxonomy_id = tt_niche.term_taxonomy_id 
-                    AND tt_niche.taxonomy = 'niche' AND tt_niche.term_id = " . intval($niche_id) : '';
-
+                // Query proximity profiles with niche filter
                 $sql = $wpdb->prepare( "
                     SELECT COUNT(DISTINCT p.ID) as total
                     FROM {$wpdb->posts} p
                     INNER JOIN {$wpdb->postmeta} lat ON p.ID = lat.post_id AND lat.meta_key = 'latitude'
                     INNER JOIN {$wpdb->postmeta} lng ON p.ID = lng.post_id AND lng.meta_key = 'longitude'
-                    {$niche_join}
+                    INNER JOIN {$wpdb->term_relationships} tr_niche ON p.ID = tr_niche.object_id
+                    INNER JOIN {$wpdb->term_taxonomy} tt_niche ON tr_niche.term_taxonomy_id = tt_niche.term_taxonomy_id 
+                        AND tt_niche.taxonomy = 'niche' AND tt_niche.term_id = %d
                     WHERE p.post_type = 'profile'
                     AND p.post_status = 'publish'
                     HAVING ( 3959 * acos(
@@ -163,7 +208,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                         sin( radians(%f) ) *
                         sin( radians( lat.meta_value ) )
                     ) ) < %d
-                ", $lat, $lng, $lat, $radius );
+                ", $niche_id, $lat, $lng, $lat, $radius );
 
                 $proximity_result = $wpdb->get_var( $sql );
                 $proximity_count = $proximity_result ? intval( $proximity_result ) : 0;
