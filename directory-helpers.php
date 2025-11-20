@@ -25,6 +25,7 @@ define('DIRECTORY_HELPERS_BASENAME', plugin_basename(__FILE__));
 
 // Load shared utility classes
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-taxonomy-helpers.php';
+require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-bricks-query-helpers.php';
 
 /**
  * Main plugin class
