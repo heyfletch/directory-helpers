@@ -76,11 +76,11 @@ class DH_Bricks_Query_Helpers {
 
         global $wpdb;
         
-        // 2. Quick check: if area has enough profiles, skip proximity query
-        $area_query_quick = new WP_Query([
+        // 2. Get area term match results (all profiles tagged with this area)
+        $area_query = new WP_Query([
             'post_type' => 'profile',
             'post_status' => 'publish',
-            'posts_per_page' => 1,
+            'posts_per_page' => -1,
             'fields' => 'ids',
             'tax_query' => [
                 'relation' => 'AND',
@@ -96,63 +96,7 @@ class DH_Bricks_Query_Helpers {
                 ]
             ]
         ]);
-        
-        // If threshold met, skip proximity and return area-tagged only
-        if ( $area_query_quick->found_posts >= $min_threshold ) {
-            $area_only_query = new WP_Query([
-                'post_type' => 'profile',
-                'post_status' => 'publish',
-                'posts_per_page' => -1,
-                'fields' => 'ids',
-                'tax_query' => [
-                    'relation' => 'AND',
-                    [
-                        'taxonomy' => $area_tax,
-                        'field' => 'term_id',
-                        'terms' => $target_term->term_id,
-                    ],
-                    [
-                        'taxonomy' => $niche_tax,
-                        'field' => 'term_id',
-                        'terms' => $niche_ids,
-                    ]
-                ]
-            ]);
-            
-            // Fetch city_rank for sorting
-            if ( ! empty( $area_only_query->posts ) ) {
-                $rank_sql = $wpdb->prepare( "
-                    SELECT post_id, meta_value 
-                    FROM {$wpdb->postmeta} 
-                    WHERE post_id IN (" . implode(',', array_map('intval', $area_only_query->posts)) . ")
-                    AND meta_key = %s
-                ", $city_rank_meta );
-                
-                $rank_results = $wpdb->get_results( $rank_sql );
-                $city_ranks = [];
-                foreach ( $rank_results as $row ) {
-                    $city_ranks[ $row->post_id ] = (int) $row->meta_value;
-                }
-                
-                // Sort by city_rank
-                $sorted_ids = $area_only_query->posts;
-                usort( $sorted_ids, function( $a, $b ) use ( $city_ranks ) {
-                    $rank_a = isset( $city_ranks[ $a ] ) ? $city_ranks[ $a ] : 999999;
-                    $rank_b = isset( $city_ranks[ $b ] ) ? $city_ranks[ $b ] : 999999;
-                    return $rank_a - $rank_b;
-                });
-                
-                return [
-                    'post_type' => 'profile',
-                    'post__in'  => $sorted_ids,
-                    'orderby'   => 'post__in',
-                    'posts_per_page' => -1,
-                ];
-            }
-            
-            return [ 'post__in' => [0] ];
-        }
-        
+
         // 3. Get proximity results (profiles within radius with coordinates)
         $proximity_data = [];
         $city_lat = get_term_meta( $target_term->term_id, 'latitude', true );
@@ -182,29 +126,47 @@ class DH_Bricks_Query_Helpers {
             }
         }
 
-        // 4. Get area term match results (all profiles tagged with this area)
-        $area_query = new WP_Query([
-            'post_type' => 'profile',
-            'post_status' => 'publish',
-            'posts_per_page' => -1,
-            'fields' => 'ids',
-            'tax_query' => [
-                'relation' => 'AND',
-                [
-                    'taxonomy' => $area_tax,
-                    'field' => 'term_id',
-                    'terms' => $target_term->term_id,
-                ],
-                [
-                    'taxonomy' => $niche_tax,
-                    'field' => 'term_id',
-                    'terms' => $niche_ids,
-                ]
-            ]
-        ]);
-
-        // 5. Merge results (proximity OR area term)
+        // 4. Merge results (proximity OR area term)
         $all_post_ids = array_unique( array_merge( array_keys( $proximity_data ), $area_query->posts ) );
+
+        // 5. Check if merged results meet threshold; if not, expand radius
+        if ( count( $all_post_ids ) < $min_threshold && $city_lat && $city_lng ) {
+            // Try expanding radius in increments: +5, +10, +15, +20 miles
+            $test_radii = [5, 10, 15, 20];
+            foreach ( $test_radii as $increment ) {
+                $expanded_radius = $radius + $increment;
+                $sql = $wpdb->prepare( "
+                    SELECT p.ID, 
+                        ( 3959 * acos(
+                            cos( radians(%f) ) *
+                            cos( radians( lat.meta_value ) ) *
+                            cos( radians( lng.meta_value ) - radians(%f) ) +
+                            sin( radians(%f) ) *
+                            sin( radians( lat.meta_value ) )
+                        ) ) AS distance
+                    FROM {$wpdb->posts} p
+                    INNER JOIN {$wpdb->postmeta} lat ON p.ID = lat.post_id AND lat.meta_key = %s
+                    INNER JOIN {$wpdb->postmeta} lng ON p.ID = lng.post_id AND lng.meta_key = %s
+                    WHERE p.post_type = 'profile'
+                    AND p.post_status = 'publish'
+                    HAVING distance < %d
+                ", $city_lat, $city_lng, $city_lat, $meta_lat, $meta_lng, $expanded_radius );
+                
+                $expanded_results = $wpdb->get_results( $sql );
+                foreach ( $expanded_results as $row ) {
+                    if ( ! isset( $proximity_data[ $row->ID ] ) ) {
+                        $proximity_data[ $row->ID ] = (float) $row->distance;
+                    }
+                }
+                
+                $all_post_ids = array_unique( array_merge( array_keys( $proximity_data ), $area_query->posts ) );
+                
+                // Stop expanding if threshold is met
+                if ( count( $all_post_ids ) >= $min_threshold ) {
+                    break;
+                }
+            }
+        }
 
         if ( empty( $all_post_ids ) ) {
             return [ 'post__in' => [0] ];
