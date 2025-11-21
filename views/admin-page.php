@@ -206,7 +206,7 @@
                             <td>
                                 <?php $default_radius = isset($options['default_city_radius']) ? (int) $options['default_city_radius'] : 5; ?>
                                 <input type="number" id="default_city_radius" name="directory_helpers_options[default_city_radius]" value="<?php echo (int)$default_radius; ?>" min="1" max="50" step="1" class="small-text"> miles
-                                <p class="description"><?php esc_html_e('Default radius in miles when no custom or recommended radius is set. This is the fallback radius for proximity searches. Default: 5', 'directory-helpers'); ?></p>
+                                <p class="description"><?php esc_html_e('Default radius in miles when no custom or recommended radius is set. This is the absolute fallback radius for proximity searches (no expansion). Default: 5', 'directory-helpers'); ?></p>
                             </td>
                         </tr>
                     </tbody>
@@ -236,10 +236,11 @@ wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --max-radius=4
                     
                     <h4><?php esc_html_e('Radius Priority:', 'directory-helpers'); ?></h4>
                     <ol style="margin-left: 20px;">
-                        <li><strong><?php esc_html_e('Custom Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(set manually in area term edit screen - absolute, no expansion)', 'directory-helpers'); ?></li>
-                        <li><strong><?php esc_html_e('Recommended Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(calculated by WP-CLI command - absolute, no expansion)', 'directory-helpers'); ?></li>
-                        <li><strong><?php esc_html_e('Default City Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(from settings above - flexible, allows expansion if under threshold)', 'directory-helpers'); ?></li>
+                        <li><strong><?php esc_html_e('Custom Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(set manually in area term edit screen - absolute)', 'directory-helpers'); ?></li>
+                        <li><strong><?php esc_html_e('Recommended Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(calculated by WP-CLI command - absolute)', 'directory-helpers'); ?></li>
+                        <li><strong><?php esc_html_e('Default City Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(from settings above - absolute)', 'directory-helpers'); ?></li>
                     </ol>
+                    <p><em><?php esc_html_e('All radius values are absolute - no automatic expansion. Use the WP-CLI command to calculate optimal radius values.', 'directory-helpers'); ?></em></p>
                     
                     <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command quarterly or when you add 100+ new profiles to keep radius values optimized.', 'directory-helpers'); ?></p>
                 </div>

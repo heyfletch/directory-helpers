@@ -35,11 +35,16 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
      * [--update-meta]
      * : Update recommended_radius term meta for areas needing proximity
      *
+     * [--unset]
+     * : Clear recommended_radius term meta for all analyzed areas
+     *
      * ## EXAMPLES
      *
      *     wp directory-helpers analyze-radius dog-trainer --dry-run --limit=10
      *     wp directory-helpers analyze-radius dog-trainer bethesda-md --update-meta
      *     wp directory-helpers analyze-radius dog-trainer --update-meta
+     *     wp directory-helpers analyze-radius dog-trainer --unset
+     *     wp directory-helpers analyze-radius dog-trainer bethesda-md --unset
      *     wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --limit=50 --update-meta
      *
      * @when after_wp_load
@@ -77,6 +82,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         
         $dry_run = isset( $assoc_args['dry-run'] );
         $update_meta = isset( $assoc_args['update-meta'] );
+        $unset = isset( $assoc_args['unset'] );
         
         // Get settings
         $options = get_option('directory_helpers_options', []);
@@ -98,6 +104,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         }
         WP_CLI::line( "Dry run: " . ( $dry_run ? 'Yes' : 'No' ) );
         WP_CLI::line( "Update meta: " . ( $update_meta ? 'Yes' : 'No' ) );
+        WP_CLI::line( "Unset mode: " . ( $unset ? 'Yes (clearing recommended_radius)' : 'No' ) );
         WP_CLI::line( "" );
 
         global $wpdb;
@@ -183,6 +190,14 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             $count++;
             if ( $count % 50 == 0 || $count == 1 ) {
                 WP_CLI::line( "Processed {$count}/{$total} areas..." );
+            }
+
+            // If unset mode, delete recommended_radius and skip analysis
+            if ( $unset ) {
+                if ( ! $dry_run ) {
+                    delete_term_meta( $term->term_id, 'recommended_radius' );
+                }
+                continue;
             }
 
             $lat = get_term_meta( $term->term_id, 'latitude', true );
@@ -373,12 +388,21 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         ) );
         
         WP_CLI::line( "" );
-        WP_CLI::line( "Results saved to: {$log_file}" );
         
-        if ( $dry_run ) {
-            WP_CLI::line( "To update term meta with recommended radius values, run with --update-meta flag." );
-        } else if ( $update_meta ) {
-            WP_CLI::success( "Term meta updated successfully." );
+        if ( $unset ) {
+            if ( $dry_run ) {
+                WP_CLI::line( "Dry run: Would have cleared recommended_radius for " . count( $terms ) . " areas." );
+            } else {
+                WP_CLI::success( "Cleared recommended_radius for " . count( $terms ) . " areas." );
+            }
+        } else {
+            WP_CLI::line( "Results saved to: {$log_file}" );
+            
+            if ( $dry_run ) {
+                WP_CLI::line( "To update term meta with recommended radius values, run with --update-meta flag." );
+            } else if ( $update_meta ) {
+                WP_CLI::success( "Term meta updated successfully." );
+            }
         }
     }
 }

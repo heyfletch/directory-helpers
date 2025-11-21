@@ -35,7 +35,6 @@ class DH_Bricks_Query_Helpers {
         
         // Get plugin settings
         $options = get_option('directory_helpers_options', []);
-        $min_threshold = isset($options['min_profiles_threshold']) ? (int) $options['min_profiles_threshold'] : 10;
         $default_radius = isset($options['default_city_radius']) ? (int) $options['default_city_radius'] : 5;
 
         // 1. Get Context
@@ -135,49 +134,6 @@ class DH_Bricks_Query_Helpers {
 
         // 4. Merge results (proximity OR area term)
         $all_post_ids = array_unique( array_merge( array_keys( $proximity_data ), $area_query->posts ) );
-
-        // 5. Check if merged results meet threshold; if not, expand radius
-        // BUT: Do NOT expand if custom_radius OR recommended_radius is set (explicit values must be respected)
-        if ( count( $all_post_ids ) < $min_threshold && $city_lat && $city_lng && ! $custom_radius && ! $recommended_radius ) {
-            // Try expanding radius in increments: +5, +10, +15, +20 miles
-            $test_radii = [5, 10, 15, 20];
-            foreach ( $test_radii as $increment ) {
-                $expanded_radius = $radius + $increment;
-                $sql = $wpdb->prepare( "
-                    SELECT p.ID, 
-                        ( 3959 * acos(
-                            cos( radians(%f) ) *
-                            cos( radians( lat.meta_value ) ) *
-                            cos( radians( lng.meta_value ) - radians(%f) ) +
-                            sin( radians(%f) ) *
-                            sin( radians( lat.meta_value ) )
-                        ) ) AS distance
-                    FROM {$wpdb->posts} p
-                    INNER JOIN {$wpdb->postmeta} lat ON p.ID = lat.post_id AND lat.meta_key = %s
-                    INNER JOIN {$wpdb->postmeta} lng ON p.ID = lng.post_id AND lng.meta_key = %s
-                    INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
-                    INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id 
-                        AND tt.taxonomy = 'niche' AND tt.term_id IN ({$niche_ids_sql})
-                    WHERE p.post_type = 'profile'
-                    AND p.post_status = 'publish'
-                    HAVING distance < %d
-                ", $city_lat, $city_lng, $city_lat, $meta_lat, $meta_lng, $expanded_radius );
-                
-                $expanded_results = $wpdb->get_results( $sql );
-                foreach ( $expanded_results as $row ) {
-                    if ( ! isset( $proximity_data[ $row->ID ] ) ) {
-                        $proximity_data[ $row->ID ] = (float) $row->distance;
-                    }
-                }
-                
-                $all_post_ids = array_unique( array_merge( array_keys( $proximity_data ), $area_query->posts ) );
-                
-                // Stop expanding if threshold is met
-                if ( count( $all_post_ids ) >= $min_threshold ) {
-                    break;
-                }
-            }
-        }
 
         if ( empty( $all_post_ids ) ) {
             return [ 'post__in' => [0] ];
