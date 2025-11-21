@@ -26,18 +26,23 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
      * [--max-radius=<number>]
      * : Maximum radius to test in miles (default: 30)
      *
+     * [--limit=<number>]
+     * : Limit analysis to first N areas (default: all)
+     *
      * [--update-meta]
      * : Update recommended_radius term meta for areas needing proximity
      *
      * ## EXAMPLES
      *
-     *     wp directory-helpers analyze-radius dog-trainer --dry-run
+     *     wp directory-helpers analyze-radius dog-trainer --dry-run --limit=10
      *     wp directory-helpers analyze-radius dog-trainer --update-meta
-     *     wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --update-meta
+     *     wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --limit=50 --update-meta
      *
      * @when after_wp_load
      */
     public function __invoke( $args, $assoc_args ) {
+        WP_CLI::line( "Starting..." );
+        
         // Niche is now required
         if ( empty( $args[0] ) ) {
             WP_CLI::error( "Niche slug is required. Example: wp directory-helpers analyze-radius dog-trainer" );
@@ -63,18 +68,24 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             ? intval( $assoc_args['min-profiles'] )
             : ( isset( $options['min_profiles_threshold'] ) ? intval( $options['min_profiles_threshold'] ) : 10 );
         $max_radius = isset( $assoc_args['max-radius'] ) ? intval( $assoc_args['max-radius'] ) : 30;
+        $limit = isset( $assoc_args['limit'] ) ? intval( $assoc_args['limit'] ) : null;
 
         WP_CLI::line( "=== Area Radius Analysis ===" );
         WP_CLI::line( "Niche: {$niche_term->name} (slug: {$niche_slug})" );
         WP_CLI::line( "Target minimum profiles: $min_profiles" );
         WP_CLI::line( "Maximum radius to test: $max_radius miles" );
+        if ( $limit ) {
+            WP_CLI::line( "Limit: First $limit areas only" );
+        }
         WP_CLI::line( "Dry run: " . ( $dry_run ? 'Yes' : 'No' ) );
         WP_CLI::line( "Update meta: " . ( $update_meta ? 'Yes' : 'No' ) );
         WP_CLI::line( "" );
 
         global $wpdb;
 
-        // Get published city-listing pages that have this niche term
+        WP_CLI::line( "Fetching city-listing pages..." );
+        
+        // Get published city-listing pages that have this niche term  
         $city_listings = get_posts([
             'post_type' => 'city-listing',
             'post_status' => 'publish',
@@ -123,7 +134,14 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             }
         }
 
-        $progress = \WP_CLI\Utils\make_progress_bar( 'Analyzing areas', count( $terms ) );
+        // Apply limit if specified
+        if ( $limit && count( $terms ) > $limit ) {
+            $terms = array_slice( $terms, 0, $limit );
+            WP_CLI::line( "Limiting to first $limit areas." );
+        }
+
+        WP_CLI::line( "Analyzing " . count( $terms ) . " areas..." );
+        WP_CLI::line( "" );
         
         $summary = [
             'sufficient' => 0,
@@ -133,14 +151,20 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         ];
 
         $results = [];
+        $count = 0;
+        $total = count( $terms );
 
         foreach ( $terms as $term ) {
+            $count++;
+            if ( $count % 50 == 0 || $count == 1 ) {
+                WP_CLI::line( "Processed {$count}/{$total} areas..." );
+            }
+
             $lat = get_term_meta( $term->term_id, 'latitude', true );
             $lng = get_term_meta( $term->term_id, 'longitude', true );
 
             if ( ! $lat || ! $lng ) {
                 $summary['no_coordinates']++;
-                $progress->tick();
                 continue;
             }
 
@@ -167,7 +191,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
 
             $area_count = $area_count_query->found_posts;
 
-            // If sufficient, no proximity needed
+            // If sufficient, no proximity needed - skip expensive proximity testing
             if ( $area_count >= $min_profiles ) {
                 $summary['sufficient']++;
                 $results[] = [
@@ -177,20 +201,24 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                     'status' => 'sufficient',
                     'recommended_radius' => 0,
                 ];
-                $progress->tick();
                 continue;
             }
 
-            // Test increasing radii
-            $test_radii = [2, 5, 10, 15, 20, 25, 30];
+            // Fast incremental radius expansion starting at 2 miles
+            $radius = 2;
             $recommended_radius = null;
+            $radius_increment = 3; // Start with 3-mile increments
 
-            foreach ( $test_radii as $radius ) {
-                if ( $radius > $max_radius ) {
-                    break;
-                }
+            while ( $radius <= $max_radius ) {
+                // Use simple bounding box approximation (MUCH faster than Haversine)
+                $lat_offset = $radius / 69.0; // 1 degree latitude ≈ 69 miles
+                $lng_offset = $radius / (69.0 * cos(deg2rad($lat))); // Adjust for latitude
+                $lat_min = $lat - $lat_offset;
+                $lat_max = $lat + $lat_offset;
+                $lng_min = $lng - $lng_offset;
+                $lng_max = $lng + $lng_offset;
 
-                // Query proximity profiles with niche filter
+                // Fast bounding box count (no Haversine calculation)
                 $sql = $wpdb->prepare( "
                     SELECT COUNT(DISTINCT p.ID) as total
                     FROM {$wpdb->posts} p
@@ -201,25 +229,26 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                         AND tt_niche.taxonomy = 'niche' AND tt_niche.term_id = %d
                     WHERE p.post_type = 'profile'
                     AND p.post_status = 'publish'
-                    HAVING ( 3959 * acos(
-                        cos( radians(%f) ) *
-                        cos( radians( lat.meta_value ) ) *
-                        cos( radians( lng.meta_value ) - radians(%f) ) +
-                        sin( radians(%f) ) *
-                        sin( radians( lat.meta_value ) )
-                    ) ) < %d
-                ", $niche_id, $lat, $lng, $lat, $radius );
+                    AND CAST(lat.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
+                    AND CAST(lng.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
+                ", $niche_id, $lat_min, $lat_max, $lng_min, $lng_max );
 
-                $proximity_result = $wpdb->get_var( $sql );
-                $proximity_count = $proximity_result ? intval( $proximity_result ) : 0;
+                $proximity_count = intval( $wpdb->get_var( $sql ) );
 
-                // Combine area-tagged + proximity (dedupe will happen in actual query)
-                // For analysis, estimate combined count
+                // Combine area-tagged + proximity
                 $estimated_total = $area_count + $proximity_count;
 
                 if ( $estimated_total >= $min_profiles ) {
                     $recommended_radius = $radius;
                     break;
+                }
+
+                // Increase radius and try again
+                $radius += $radius_increment;
+                
+                // Use larger increments as we go higher
+                if ( $radius > 15 ) {
+                    $radius_increment = 5;
                 }
             }
 
@@ -253,15 +282,62 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                     update_term_meta( $term->term_id, 'recommended_radius', $max_radius );
                 }
             }
-
-            $progress->tick();
         }
+        
+        WP_CLI::line( "Processed {$total}/{$total} areas." );
 
-        $progress->finish();
-
+        // Write results to log file
+        $upload_dir = wp_upload_dir();
+        $log_dir = $upload_dir['basedir'] . '/radius-analysis';
+        
+        // Create directory if it doesn't exist
+        if ( ! file_exists( $log_dir ) ) {
+            wp_mkdir_p( $log_dir );
+        }
+        
+        $log_file = $log_dir . '/radius-analysis-' . $niche_slug . '-' . date('Y-m-d-His') . '.log';
+        $log_content = [];
+        
+        $log_content[] = "=== Radius Analysis for {$niche_term->name} ===";
+        $log_content[] = "Date: " . date('Y-m-d H:i:s');
+        $log_content[] = "Minimum profiles threshold: {$min_profiles}";
+        $log_content[] = "Maximum radius tested: {$max_radius} miles";
+        $log_content[] = "";
+        $log_content[] = "=== Summary ===";
+        $log_content[] = sprintf(
+            "Total areas: %d | Sufficient: %d | Needs proximity: %d | Insufficient: %d | No coords: %d",
+            count( $terms ),
+            $summary['sufficient'],
+            $summary['needs_proximity'],
+            $summary['no_profiles'],
+            $summary['no_coordinates']
+        );
+        $log_content[] = "";
+        
+        if ( ! empty( $results ) ) {
+            $log_content[] = "=== Areas Needing Proximity Search ===";
+            $log_content[] = sprintf( "%-10s %-30s %-10s %-15s %-10s", 'Term ID', 'Name', 'Direct', 'Status', 'Radius' );
+            $log_content[] = str_repeat( '-', 80 );
+            
+            foreach ( $results as $result ) {
+                if ( $result['status'] === 'sufficient' ) {
+                    continue;
+                }
+                $log_content[] = sprintf(
+                    "%-10s %-30s %-10s %-15s %-10s",
+                    $result['term_id'],
+                    substr( $result['name'], 0, 30 ),
+                    $result['area_profiles'],
+                    $result['status'],
+                    $result['recommended_radius'] . ' mi'
+                );
+            }
+        }
+        
+        file_put_contents( $log_file, implode( "\n", $log_content ) );
+        
         // Output summary
         WP_CLI::line( "" );
-        WP_CLI::line( "=== Analysis Summary ===" );
         WP_CLI::success( sprintf( 
             "Total areas: %d | Sufficient: %d | Needs proximity: %d | Insufficient: %d | No coords: %d",
             count( $terms ),
@@ -270,37 +346,14 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             $summary['no_profiles'],
             $summary['no_coordinates']
         ) );
-
-        // Output detailed results for areas needing attention
-        if ( ! empty( $results ) ) {
-            WP_CLI::line( "" );
-            WP_CLI::line( "=== Areas Needing Proximity Search ===" );
-            
-            $needs_proximity = array_filter( $results, function( $r ) { 
-                return $r['status'] === 'needs_proximity' || $r['status'] === 'insufficient'; 
-            });
-
-            if ( ! empty( $needs_proximity ) ) {
-                $table_data = [];
-                foreach ( $needs_proximity as $result ) {
-                    $table_data[] = [
-                        'Term ID' => $result['term_id'],
-                        'Name' => $result['name'],
-                        'Direct' => $result['area_profiles'],
-                        'Status' => $result['status'],
-                        'Radius' => $result['recommended_radius'] . ' mi',
-                    ];
-                }
-
-                \WP_CLI\Utils\format_items( 'table', $table_data, ['Term ID', 'Name', 'Direct', 'Status', 'Radius'] );
-            }
-
-            if ( $update_meta && ! $dry_run ) {
-                WP_CLI::success( "Term meta 'recommended_radius' has been updated for areas needing proximity search." );
-            } elseif ( $dry_run || ! $update_meta ) {
-                WP_CLI::line( "" );
-                WP_CLI::line( "To update term meta with recommended radius values, run with --update-meta flag." );
-            }
+        
+        WP_CLI::line( "" );
+        WP_CLI::line( "Results saved to: {$log_file}" );
+        
+        if ( $dry_run ) {
+            WP_CLI::line( "To update term meta with recommended radius values, run with --update-meta flag." );
+        } else if ( $update_meta ) {
+            WP_CLI::success( "Term meta updated successfully." );
         }
     }
 }

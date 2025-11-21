@@ -63,15 +63,15 @@ class DH_Bricks_Query_Helpers {
             return [ 'post__in' => [0] ];
         }
         
-        // Determine radius: custom_radius > recommended_radius > 10 miles default
-        if ( $radius === null ) {
-            $custom_radius = get_term_meta( $target_term->term_id, 'custom_radius', true );
-            if ( $custom_radius ) {
-                $radius = (int) $custom_radius;
-            } else {
-                $recommended_radius = get_term_meta( $target_term->term_id, 'recommended_radius', true );
-                $radius = $recommended_radius ? (int) $recommended_radius : 10;
-            }
+        // 1. Determine radius to use
+        $radius = 10; // Default fallback
+        $custom_radius = get_term_meta( $target_term->term_id, 'custom_radius', true );
+        $recommended_radius = get_term_meta( $target_term->term_id, 'recommended_radius', true );
+        
+        if ( $custom_radius ) {
+            $radius = intval( $custom_radius );
+        } elseif ( $recommended_radius ) {
+            $radius = intval( $recommended_radius );
         }
 
         global $wpdb;
@@ -103,6 +103,9 @@ class DH_Bricks_Query_Helpers {
         $city_lng = get_term_meta( $target_term->term_id, 'longitude', true );
 
         if ( $city_lat && $city_lng ) {
+            // Build niche filter for SQL
+            $niche_ids_sql = implode( ',', array_map( 'intval', $niche_ids ) );
+            
             $sql = $wpdb->prepare( "
                 SELECT p.ID, 
                     ( 3959 * acos(
@@ -115,6 +118,9 @@ class DH_Bricks_Query_Helpers {
                 FROM {$wpdb->posts} p
                 INNER JOIN {$wpdb->postmeta} lat ON p.ID = lat.post_id AND lat.meta_key = %s
                 INNER JOIN {$wpdb->postmeta} lng ON p.ID = lng.post_id AND lng.meta_key = %s
+                INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
+                INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id 
+                    AND tt.taxonomy = 'niche' AND tt.term_id IN ({$niche_ids_sql})
                 WHERE p.post_type = 'profile'
                 AND p.post_status = 'publish'
                 HAVING distance < %d
@@ -130,7 +136,8 @@ class DH_Bricks_Query_Helpers {
         $all_post_ids = array_unique( array_merge( array_keys( $proximity_data ), $area_query->posts ) );
 
         // 5. Check if merged results meet threshold; if not, expand radius
-        if ( count( $all_post_ids ) < $min_threshold && $city_lat && $city_lng ) {
+        // BUT: Do NOT expand if custom_radius is set (user's explicit choice must be respected)
+        if ( count( $all_post_ids ) < $min_threshold && $city_lat && $city_lng && ! $custom_radius ) {
             // Try expanding radius in increments: +5, +10, +15, +20 miles
             $test_radii = [5, 10, 15, 20];
             foreach ( $test_radii as $increment ) {
@@ -147,6 +154,9 @@ class DH_Bricks_Query_Helpers {
                     FROM {$wpdb->posts} p
                     INNER JOIN {$wpdb->postmeta} lat ON p.ID = lat.post_id AND lat.meta_key = %s
                     INNER JOIN {$wpdb->postmeta} lng ON p.ID = lng.post_id AND lng.meta_key = %s
+                    INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
+                    INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id 
+                        AND tt.taxonomy = 'niche' AND tt.term_id IN ({$niche_ids_sql})
                     WHERE p.post_type = 'profile'
                     AND p.post_status = 'publish'
                     HAVING distance < %d
