@@ -100,6 +100,11 @@ class Directory_Helpers {
         // Change ACF image field preview size for body images to medium
         add_filter('acf/load_field/name=body_image_1', array($this, 'set_body_image_preview_size'));
         add_filter('acf/load_field/name=body_image_2', array($this, 'set_body_image_preview_size'));
+        
+        // Cache invalidation hooks for proximity queries
+        add_action('save_post_profile', array($this, 'invalidate_proximity_cache_on_profile_save'), 10, 1);
+        add_action('updated_term_meta', array($this, 'invalidate_proximity_cache_on_term_meta_update'), 10, 4);
+        add_action('added_term_meta', array($this, 'invalidate_proximity_cache_on_term_meta_update'), 10, 4);
     }
 
     /**
@@ -930,6 +935,58 @@ class Directory_Helpers {
     public function set_body_image_preview_size($field) {
         $field['preview_size'] = 'medium';
         return $field;
+    }
+    
+    /**
+     * Invalidate proximity cache when a profile is saved
+     * Clears cache for all areas the profile is tagged with
+     * 
+     * @param int $post_id Profile post ID
+     */
+    public function invalidate_proximity_cache_on_profile_save( $post_id ) {
+        // Get area terms for this profile
+        $area_terms = get_the_terms( $post_id, 'area' );
+        if ( empty( $area_terms ) || is_wp_error( $area_terms ) ) {
+            return;
+        }
+        
+        // Get niche terms for this profile
+        $niche_terms = get_the_terms( $post_id, 'niche' );
+        $niche_ids = [];
+        if ( ! empty( $niche_terms ) && ! is_wp_error( $niche_terms ) ) {
+            $niche_ids = wp_list_pluck( $niche_terms, 'term_id' );
+        }
+        
+        // Clear cache for each area this profile is tagged with
+        foreach ( $area_terms as $area_term ) {
+            DH_Bricks_Query_Helpers::clear_proximity_cache( $area_term->term_id, $niche_ids );
+        }
+    }
+    
+    /**
+     * Invalidate proximity cache when area term meta is updated
+     * Only clears if the meta key is relevant (latitude, longitude, custom_radius, recommended_radius)
+     * 
+     * @param int $meta_id Meta ID
+     * @param int $term_id Term ID
+     * @param string $meta_key Meta key
+     * @param mixed $meta_value Meta value
+     */
+    public function invalidate_proximity_cache_on_term_meta_update( $meta_id, $term_id, $meta_key, $meta_value ) {
+        // Only care about area taxonomy
+        $term = get_term( $term_id );
+        if ( ! $term || is_wp_error( $term ) || $term->taxonomy !== 'area' ) {
+            return;
+        }
+        
+        // Only invalidate for relevant meta keys
+        $relevant_keys = [ 'latitude', 'longitude', 'custom_radius', 'recommended_radius' ];
+        if ( ! in_array( $meta_key, $relevant_keys, true ) ) {
+            return;
+        }
+        
+        // Clear all cache for this area (all niches, all radii)
+        DH_Bricks_Query_Helpers::clear_proximity_cache( $term_id );
     }
 }
 

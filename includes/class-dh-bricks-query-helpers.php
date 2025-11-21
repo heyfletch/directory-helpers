@@ -7,14 +7,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Bricks Query Helpers for Directory Profiles
  * 
- * CACHING STRATEGY (for future implementation):
- * - Cache key format: "dh_nearby_profiles_{area_term_id}_{niche_id}_{radius}"
- * - Cache the final sorted post IDs array
- * - TTL: 1 hour (3600 seconds)
- * - Invalidate on: profile save/update, area term update, city_rank meta change
- * - Implementation options:
- *   1. Redis Object Cache (wp_cache_get/set) - best performance
- *   2. WordPress Transients (get_transient/set_transient) - native fallback
+ * CACHING STRATEGY (IMPLEMENTED):
+ * - Cache key format: "dh_nearby_profiles_{area_term_id}_{niche_ids}_{radius}"
+ * - Caches the final WP_Query arguments array (with sorted post__in IDs)
+ * - TTL: 30 days (2592000 seconds) - long-lived, event-driven invalidation
+ * - Cache group: 'directory_helpers'
+ * - Uses wp_cache_* functions (Redis Object Cache when available)
+ * 
+ * AUTOMATIC INVALIDATION:
+ * - Profile save/update: Clears cache for all areas the profile is tagged with
+ * - Area term meta update: Clears when latitude, longitude, custom_radius, or recommended_radius changes
+ * - Manual: Use DH_Bricks_Query_Helpers::clear_proximity_cache()
  */
 class DH_Bricks_Query_Helpers {
 
@@ -81,6 +84,15 @@ class DH_Bricks_Query_Helpers {
             $radius = intval( $custom_radius );
         } elseif ( $recommended_radius ) {
             $radius = intval( $recommended_radius );
+        }
+        
+        // 2. Check cache before expensive queries
+        $niche_ids_str = implode( '_', array_map( 'intval', $niche_ids ) );
+        $cache_key = "dh_nearby_profiles_{$target_term->term_id}_{$niche_ids_str}_{$radius}";
+        $cached_result = wp_cache_get( $cache_key, 'directory_helpers' );
+        
+        if ( false !== $cached_result && is_array( $cached_result ) ) {
+            return $cached_result;
         }
 
         global $wpdb;
@@ -192,12 +204,38 @@ class DH_Bricks_Query_Helpers {
 
         $sorted_ids = wp_list_pluck( $profiles, 'id' );
 
-        // 9. Return query args with sorted IDs
-        return [
+        // 9. Build final query args
+        $query_args = [
             'post_type' => 'profile',
             'post__in'  => $sorted_ids,
             'orderby'   => 'post__in',
             'posts_per_page' => -1,
         ];
+        
+        // 10. Cache the result (30 days = 2592000 seconds)
+        wp_cache_set( $cache_key, $query_args, 'directory_helpers', 2592000 );
+        
+        return $query_args;
+    }
+    
+    /**
+     * Clear proximity cache for a specific area and niche combination
+     * 
+     * @param int $area_term_id Area term ID
+     * @param array $niche_ids Array of niche term IDs (optional, clears all if empty)
+     */
+    public static function clear_proximity_cache( $area_term_id, $niche_ids = [] ) {
+        // If specific niches provided, clear those
+        if ( ! empty( $niche_ids ) ) {
+            $radii = [ 2, 5, 8, 10, 15, 20, 25, 30 ]; // Common radii to clear
+            foreach ( $radii as $radius ) {
+                $niche_ids_str = implode( '_', array_map( 'intval', $niche_ids ) );
+                $cache_key = "dh_nearby_profiles_{$area_term_id}_{$niche_ids_str}_{$radius}";
+                wp_cache_delete( $cache_key, 'directory_helpers' );
+            }
+        } else {
+            // Clear all cache for this area (flush entire group would be better but not all object caches support it)
+            wp_cache_flush(); // Nuclear option - only use when necessary
+        }
     }
 }
