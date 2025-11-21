@@ -36,6 +36,7 @@ class DH_Bricks_Query_Helpers {
         // Get plugin settings
         $options = get_option('directory_helpers_options', []);
         $min_threshold = isset($options['min_profiles_threshold']) ? (int) $options['min_profiles_threshold'] : 10;
+        $default_radius = isset($options['default_city_radius']) ? (int) $options['default_city_radius'] : 5;
 
         // 1. Get Context
         $object = get_queried_object();
@@ -64,7 +65,7 @@ class DH_Bricks_Query_Helpers {
         }
         
         // 1. Determine radius to use
-        $radius = 10; // Default fallback
+        $radius = $default_radius; // Default fallback from settings
         $custom_radius = get_term_meta( $target_term->term_id, 'custom_radius', true );
         $recommended_radius = get_term_meta( $target_term->term_id, 'recommended_radius', true );
         

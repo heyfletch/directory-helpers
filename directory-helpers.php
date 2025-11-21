@@ -109,7 +109,9 @@ class Directory_Helpers {
         // Set default options
         $default_options = array(
             'active_modules' => array(),
-            'prompts' => array()
+            'prompts' => array(),
+            'min_profiles_threshold' => 10,
+            'default_city_radius' => 5
         );
         
         if (!get_option('directory_helpers_options')) {
@@ -399,6 +401,12 @@ class Directory_Helpers {
                 if ($threshold < 1) { $threshold = 1; }
                 if ($threshold > 100) { $threshold = 100; }
                 $options['min_profiles_threshold'] = $threshold;
+            }
+            if (isset($submitted_options['default_city_radius'])) {
+                $default_radius = (int) $submitted_options['default_city_radius'];
+                if ($default_radius < 1) { $default_radius = 1; }
+                if ($default_radius > 50) { $default_radius = 50; }
+                $options['default_city_radius'] = $default_radius;
             }
         }
 
