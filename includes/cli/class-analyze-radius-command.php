@@ -297,6 +297,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                 $results[] = [
                     'term_id' => $term->term_id,
                     'name' => $term->name,
+                    'slug' => $term->slug,
                     'area_profiles' => $area_count,
                     'status' => 'needs_proximity',
                     'recommended_radius' => $recommended_radius,
@@ -312,6 +313,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                 $results[] = [
                     'term_id' => $term->term_id,
                     'name' => $term->name,
+                    'slug' => $term->slug,
                     'area_profiles' => $area_count,
                     'status' => 'insufficient',
                     'recommended_radius' => $max_radius,
@@ -357,17 +359,18 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             
             if ( ! empty( $results ) ) {
                 $log_content[] = "=== Areas Needing Proximity Search ===";
-                $log_content[] = sprintf( "%-10s %-30s %-10s %-15s %-10s", 'Term ID', 'Name', 'Direct', 'Status', 'Radius' );
-                $log_content[] = str_repeat( '-', 80 );
+                $log_content[] = sprintf( "%-10s %-30s %-20s %-10s %-15s %-10s", 'Term ID', 'Name', 'Slug', 'Direct', 'Status', 'Radius' );
+                $log_content[] = str_repeat( '-', 100 );
                 
                 foreach ( $results as $result ) {
                     if ( $result['status'] === 'sufficient' ) {
                         continue;
                     }
                     $log_content[] = sprintf(
-                        "%-10s %-30s %-10s %-15s %-10s",
+                        "%-10s %-30s %-20s %-10s %-15s %-10s",
                         $result['term_id'],
                         substr( $result['name'], 0, 30 ),
+                        substr( $result['slug'], 0, 20 ),
                         $result['area_profiles'],
                         $result['status'],
                         $result['recommended_radius'] . ' mi'
