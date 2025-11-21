@@ -114,8 +114,14 @@ class Directory_Helpers {
             'default_city_radius' => 5
         );
         
-        if (!get_option('directory_helpers_options')) {
+        $existing_options = get_option('directory_helpers_options');
+        if (!$existing_options) {
+            // New installation
             add_option('directory_helpers_options', $default_options);
+        } else {
+            // Existing installation - merge in any new defaults
+            $updated_options = array_merge($default_options, $existing_options);
+            update_option('directory_helpers_options', $updated_options);
         }
         
         // Flush rewrite rules to register REST API routes

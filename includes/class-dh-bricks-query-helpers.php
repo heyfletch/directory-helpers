@@ -20,10 +20,19 @@ class DH_Bricks_Query_Helpers {
 
     /**
      * Get query arguments for profiles within a certain radius OR tagged with area term.
-     * Sorted by city_rank (ASC), then proximity.
      * 
-     * @param int $radius Radius in miles. Default 20.
-     * @return array WP_Query arguments.
+     * Radius Priority (absolute, no expansion):
+     * 1. Custom Radius (set manually in area term meta)
+     * 2. Recommended Radius (calculated by WP-CLI analyze-radius command)
+     * 3. Default City Radius (from plugin settings, default: 5 miles)
+     * 
+     * Results are sorted by:
+     * 1. Area-tagged profiles first (have the area term)
+     * 2. Within each group: city_rank (ASC)
+     * 3. Within same rank: proximity (closest first)
+     * 
+     * @param int $radius DEPRECATED - now determined automatically from term meta/settings
+     * @return array WP_Query arguments with post__in and orderby
      */
     public static function get_nearby_profiles_query_args( $radius = null ) {
         // Configuration
@@ -102,8 +111,8 @@ class DH_Bricks_Query_Helpers {
         $city_lat = get_term_meta( $target_term->term_id, 'latitude', true );
         $city_lng = get_term_meta( $target_term->term_id, 'longitude', true );
 
-        if ( $city_lat && $city_lng ) {
-            // Build niche filter for SQL
+        if ( $city_lat && $city_lng && ! empty( $niche_ids ) ) {
+            // Build niche filter for SQL (already validated as non-empty above, but double-check)
             $niche_ids_sql = implode( ',', array_map( 'intval', $niche_ids ) );
             
             $sql = $wpdb->prepare( "

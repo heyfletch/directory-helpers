@@ -326,55 +326,59 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         
         WP_CLI::line( "Processed {$total}/{$total} areas." );
 
-        // Write results to log file
-        $upload_dir = wp_upload_dir();
-        $log_dir = $upload_dir['basedir'] . '/radius-analysis';
-        
-        // Create directory if it doesn't exist
-        if ( ! file_exists( $log_dir ) ) {
-            wp_mkdir_p( $log_dir );
-        }
-        
-        $log_file = $log_dir . '/radius-analysis-' . $niche_slug . '-' . date('Y-m-d-His') . '.log';
-        $log_content = [];
-        
-        $log_content[] = "=== Radius Analysis for {$niche_term->name} ===";
-        $log_content[] = "Date: " . date('Y-m-d H:i:s');
-        $log_content[] = "Minimum profiles threshold: {$min_profiles}";
-        $log_content[] = "Maximum radius tested: {$max_radius} miles";
-        $log_content[] = "";
-        $log_content[] = "=== Summary ===";
-        $log_content[] = sprintf(
-            "Total areas: %d | Sufficient: %d | Needs proximity: %d | Insufficient: %d | No coords: %d",
-            count( $terms ),
-            $summary['sufficient'],
-            $summary['needs_proximity'],
-            $summary['no_profiles'],
-            $summary['no_coordinates']
-        );
-        $log_content[] = "";
-        
-        if ( ! empty( $results ) ) {
-            $log_content[] = "=== Areas Needing Proximity Search ===";
-            $log_content[] = sprintf( "%-10s %-30s %-10s %-15s %-10s", 'Term ID', 'Name', 'Direct', 'Status', 'Radius' );
-            $log_content[] = str_repeat( '-', 80 );
+        // Write results to log file (skip in unset mode)
+        if ( ! $unset ) {
+            $upload_dir = wp_upload_dir();
+            $log_dir = $upload_dir['basedir'] . '/radius-analysis';
             
-            foreach ( $results as $result ) {
-                if ( $result['status'] === 'sufficient' ) {
-                    continue;
+            // Create directory if it doesn't exist
+            if ( ! file_exists( $log_dir ) ) {
+                wp_mkdir_p( $log_dir );
+            }
+            
+            $log_file = $log_dir . '/radius-analysis-' . $niche_slug . '-' . date('Y-m-d-His') . '.log';
+            $log_content = [];
+            
+            $log_content[] = "=== Radius Analysis for {$niche_term->name} ===";
+            $log_content[] = "Date: " . date('Y-m-d H:i:s');
+            $log_content[] = "Minimum profiles threshold: {$min_profiles}";
+            $log_content[] = "Maximum radius tested: {$max_radius} miles";
+            $log_content[] = "";
+            $log_content[] = "=== Summary ===";
+            $log_content[] = sprintf(
+                "Total areas: %d | Sufficient: %d | Needs proximity: %d | Insufficient: %d | No coords: %d",
+                count( $terms ),
+                $summary['sufficient'],
+                $summary['needs_proximity'],
+                $summary['no_profiles'],
+                $summary['no_coordinates']
+            );
+            $log_content[] = "";
+            
+            if ( ! empty( $results ) ) {
+                $log_content[] = "=== Areas Needing Proximity Search ===";
+                $log_content[] = sprintf( "%-10s %-30s %-10s %-15s %-10s", 'Term ID', 'Name', 'Direct', 'Status', 'Radius' );
+                $log_content[] = str_repeat( '-', 80 );
+                
+                foreach ( $results as $result ) {
+                    if ( $result['status'] === 'sufficient' ) {
+                        continue;
+                    }
+                    $log_content[] = sprintf(
+                        "%-10s %-30s %-10s %-15s %-10s",
+                        $result['term_id'],
+                        substr( $result['name'], 0, 30 ),
+                        $result['area_profiles'],
+                        $result['status'],
+                        $result['recommended_radius'] . ' mi'
+                    );
                 }
-                $log_content[] = sprintf(
-                    "%-10s %-30s %-10s %-15s %-10s",
-                    $result['term_id'],
-                    substr( $result['name'], 0, 30 ),
-                    $result['area_profiles'],
-                    $result['status'],
-                    $result['recommended_radius'] . ' mi'
-                );
+            }
+            
+            if ( false === file_put_contents( $log_file, implode( "\n", $log_content ) ) ) {
+                WP_CLI::warning( "Could not write log file to: {$log_file}" );
             }
         }
-        
-        file_put_contents( $log_file, implode( "\n", $log_content ) );
         
         // Output summary
         WP_CLI::line( "" );
@@ -396,7 +400,9 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                 WP_CLI::success( "Cleared recommended_radius for " . count( $terms ) . " areas." );
             }
         } else {
-            WP_CLI::line( "Results saved to: {$log_file}" );
+            if ( isset( $log_file ) ) {
+                WP_CLI::line( "Results saved to: {$log_file}" );
+            }
             
             if ( $dry_run ) {
                 WP_CLI::line( "To update term meta with recommended radius values, run with --update-meta flag." );
