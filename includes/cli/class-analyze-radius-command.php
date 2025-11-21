@@ -20,6 +20,9 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
      * <niche>
      * : Niche taxonomy slug (required, e.g., dog-trainer)
      *
+     * [<area>]
+     * : Optional area taxonomy slug to analyze a specific area (e.g., bethesda-md)
+     *
      * [--min-profiles=<number>]
      * : Target minimum number of profiles (default: from settings or 10)
      *
@@ -27,7 +30,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
      * : Maximum radius to test in miles (default: 30)
      *
      * [--limit=<number>]
-     * : Limit analysis to first N areas (default: all)
+     * : Limit analysis to first N areas (default: all). Ignored if area slug is provided.
      *
      * [--update-meta]
      * : Update recommended_radius term meta for areas needing proximity
@@ -35,6 +38,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
      * ## EXAMPLES
      *
      *     wp directory-helpers analyze-radius dog-trainer --dry-run --limit=10
+     *     wp directory-helpers analyze-radius dog-trainer bethesda-md --update-meta
      *     wp directory-helpers analyze-radius dog-trainer --update-meta
      *     wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --limit=50 --update-meta
      *
@@ -59,6 +63,18 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         
         $niche_id = $niche_term->term_id;
         
+        // Check for optional area slug
+        $area_slug = isset( $args[1] ) ? sanitize_title( $args[1] ) : null;
+        $specific_area_term = null;
+        
+        if ( $area_slug ) {
+            $specific_area_term = get_term_by( 'slug', $area_slug, 'area' );
+            if ( ! $specific_area_term ) {
+                WP_CLI::error( "Area term '{$area_slug}' not found in 'area' taxonomy." );
+                return;
+            }
+        }
+        
         $dry_run = isset( $assoc_args['dry-run'] );
         $update_meta = isset( $assoc_args['update-meta'] );
         
@@ -72,9 +88,12 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
 
         WP_CLI::line( "=== Area Radius Analysis ===" );
         WP_CLI::line( "Niche: {$niche_term->name} (slug: {$niche_slug})" );
+        if ( $specific_area_term ) {
+            WP_CLI::line( "Area: {$specific_area_term->name} (slug: {$area_slug})" );
+        }
         WP_CLI::line( "Target minimum profiles: $min_profiles" );
         WP_CLI::line( "Maximum radius to test: $max_radius miles" );
-        if ( $limit ) {
+        if ( $limit && ! $specific_area_term ) {
             WP_CLI::line( "Limit: First $limit areas only" );
         }
         WP_CLI::line( "Dry run: " . ( $dry_run ? 'Yes' : 'No' ) );
@@ -107,37 +126,43 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         WP_CLI::line( "Found " . count( $city_listings ) . " published city-listing pages with this niche." );
         WP_CLI::line( "" );
 
-        // Extract area terms from these city-listing pages
-        $area_term_ids = [];
-        foreach ( $city_listings as $post ) {
-            $area_terms = get_the_terms( $post->ID, 'area' );
-            if ( ! empty( $area_terms ) && ! is_wp_error( $area_terms ) ) {
-                foreach ( $area_terms as $term ) {
-                    $area_term_ids[] = $term->term_id;
+        // If specific area provided, use only that area
+        if ( $specific_area_term ) {
+            $terms = [ $specific_area_term ];
+            WP_CLI::line( "Analyzing specific area: {$specific_area_term->name}" );
+        } else {
+            // Extract area terms from these city-listing pages
+            $area_term_ids = [];
+            foreach ( $city_listings as $post ) {
+                $area_terms = get_the_terms( $post->ID, 'area' );
+                if ( ! empty( $area_terms ) && ! is_wp_error( $area_terms ) ) {
+                    foreach ( $area_terms as $term ) {
+                        $area_term_ids[] = $term->term_id;
+                    }
                 }
             }
-        }
 
-        $area_term_ids = array_unique( $area_term_ids );
+            $area_term_ids = array_unique( $area_term_ids );
 
-        if ( empty( $area_term_ids ) ) {
-            WP_CLI::error( "No area terms found on these city-listing pages." );
-            return;
-        }
-
-        // Get the actual term objects
-        $terms = [];
-        foreach ( $area_term_ids as $term_id ) {
-            $term = get_term( $term_id, 'area' );
-            if ( $term && ! is_wp_error( $term ) ) {
-                $terms[] = $term;
+            if ( empty( $area_term_ids ) ) {
+                WP_CLI::error( "No area terms found on these city-listing pages." );
+                return;
             }
-        }
 
-        // Apply limit if specified
-        if ( $limit && count( $terms ) > $limit ) {
-            $terms = array_slice( $terms, 0, $limit );
-            WP_CLI::line( "Limiting to first $limit areas." );
+            // Get the actual term objects
+            $terms = [];
+            foreach ( $area_term_ids as $term_id ) {
+                $term = get_term( $term_id, 'area' );
+                if ( $term && ! is_wp_error( $term ) ) {
+                    $terms[] = $term;
+                }
+            }
+
+            // Apply limit if specified
+            if ( $limit && count( $terms ) > $limit ) {
+                $terms = array_slice( $terms, 0, $limit );
+                WP_CLI::line( "Limiting to first $limit areas." );
+            }
         }
 
         WP_CLI::line( "Analyzing " . count( $terms ) . " areas..." );
