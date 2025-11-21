@@ -136,8 +136,8 @@ class DH_Bricks_Query_Helpers {
         $all_post_ids = array_unique( array_merge( array_keys( $proximity_data ), $area_query->posts ) );
 
         // 5. Check if merged results meet threshold; if not, expand radius
-        // BUT: Do NOT expand if custom_radius is set (user's explicit choice must be respected)
-        if ( count( $all_post_ids ) < $min_threshold && $city_lat && $city_lng && ! $custom_radius ) {
+        // BUT: Do NOT expand if custom_radius OR recommended_radius is set (explicit values must be respected)
+        if ( count( $all_post_ids ) < $min_threshold && $city_lat && $city_lng && ! $custom_radius && ! $recommended_radius ) {
             // Try expanding radius in increments: +5, +10, +15, +20 miles
             $test_radii = [5, 10, 15, 20];
             foreach ( $test_radii as $increment ) {
