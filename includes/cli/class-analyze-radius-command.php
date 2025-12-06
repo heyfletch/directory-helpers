@@ -50,6 +50,11 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function __invoke( $args, $assoc_args ) {
+        // Disable output buffering for real-time progress
+        while ( ob_get_level() ) {
+            ob_end_flush();
+        }
+        
         WP_CLI::line( "Starting..." );
         
         // Niche is now required
@@ -183,14 +188,16 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
         ];
 
         $results = [];
-        $count = 0;
-        $total = count( $terms );
+        $start_time = microtime( true );
+        $areas_processed = 0;
+        $total_areas = count( $terms );
+
+        \WP_CLI::line( "Processing {$total_areas} areas..." );
+        \WP_CLI::line( "" );
 
         foreach ( $terms as $term ) {
-            $count++;
-            if ( $count % 50 == 0 || $count == 1 ) {
-                WP_CLI::line( "Processed {$count}/{$total} areas..." );
-            }
+            $areas_processed++;
+            \WP_CLI::line( "[{$areas_processed}/{$total_areas}] Processing: {$term->name} ({$term->slug})" );
 
             // If unset mode, delete recommended_radius and skip analysis
             if ( $unset ) {
@@ -205,6 +212,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
 
             if ( ! $lat || ! $lng ) {
                 $summary['no_coordinates']++;
+                \WP_CLI::line( "  → Skipped: No coordinates found" );
                 continue;
             }
 
@@ -234,6 +242,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             // If sufficient, no proximity needed - skip expensive proximity testing
             if ( $area_count >= $min_profiles ) {
                 $summary['sufficient']++;
+                \WP_CLI::line( "  → Sufficient profiles found ({$area_count}) - no proximity needed" );
                 $results[] = [
                     'term_id' => $term->term_id,
                     'name' => $term->name,
@@ -248,8 +257,10 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             $radius = 2;
             $recommended_radius = null;
             $radius_increment = 3; // Start with 3-mile increments
+            $radius_attempts = 0;
 
             while ( $radius <= $max_radius ) {
+                $radius_attempts++;
                 // Use simple bounding box approximation (MUCH faster than Haversine)
                 $lat_offset = $radius / 69.0; // 1 degree latitude ≈ 69 miles
                 $lng_offset = $radius / (69.0 * cos(deg2rad($lat))); // Adjust for latitude
@@ -294,6 +305,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
 
             if ( $recommended_radius ) {
                 $summary['needs_proximity']++;
+                \WP_CLI::line( "  → Needs proximity search: {$recommended_radius}mi radius (found {$area_count} direct profiles)" );
                 $results[] = [
                     'term_id' => $term->term_id,
                     'name' => $term->name,
@@ -310,6 +322,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             } else {
                 // Even max radius doesn't reach threshold
                 $summary['no_profiles']++;
+                \WP_CLI::line( "  → Insufficient profiles even at {$max_radius}mi radius (found {$area_count} direct profiles)" );
                 $results[] = [
                     'term_id' => $term->term_id,
                     'name' => $term->name,
@@ -326,7 +339,9 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
             }
         }
         
-        WP_CLI::line( "Processed {$total}/{$total} areas." );
+        $elapsed = round( microtime( true ) - $start_time, 2 );
+        \WP_CLI::line( "" );
+        \WP_CLI::line( "Analysis completed in {$elapsed}s." );
 
         // Write results to log file (skip in unset mode)
         if ( ! $unset ) {
