@@ -247,10 +247,12 @@ class Directory_Helpers {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-deduplicate-area-terms-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-geocode-area-terms-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-analyze-radius-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-update-rankings-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_state_listing_titles', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers analyze-radius', 'DH_Analyze_Radius_Command' );
+        WP_CLI::add_command( 'directory-helpers update-rankings', 'DH_Update_Rankings_Command' );
     }
 
     /**
