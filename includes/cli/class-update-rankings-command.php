@@ -109,22 +109,26 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
         global $wpdb;
 
         // Get all unique cities that have profiles with this niche
+        // Find cities by area taxonomy terms, not ACF city field
         $cities_query = $wpdb->prepare( "
             SELECT DISTINCT
-                pm.meta_value as city_name,
+                t.term_id,
+                t.name as city_name,
+                t.slug as city_slug,
                 COUNT(p.ID) as profile_count,
                 GROUP_CONCAT(DISTINCT p.ID ORDER BY p.ID SEPARATOR ',') as profile_ids
             FROM {$wpdb->posts} p
-            INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'city'
+            INNER JOIN {$wpdb->term_relationships} tr_area ON p.ID = tr_area.object_id
+            INNER JOIN {$wpdb->term_taxonomy} tt_area ON tr_area.term_taxonomy_id = tt_area.term_taxonomy_id
+                AND tt_area.taxonomy = 'area'
+            INNER JOIN {$wpdb->terms} t ON tt_area.term_id = t.term_id
             INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
             INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
                 AND tt.taxonomy = 'niche' AND tt.term_id = %d
             WHERE p.post_type = 'profile'
             AND p.post_status = 'publish'
-            AND pm.meta_value != ''
-            AND pm.meta_value IS NOT NULL
-            GROUP BY pm.meta_value
-            ORDER BY pm.meta_value
+            GROUP BY t.term_id
+            ORDER BY t.name
         ", $niche_id );
 
         $cities = $wpdb->get_results( $cities_query );
@@ -138,7 +142,7 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
         $completed_cities = $progress['completed_cities'] ?? [];
         if ( ! empty( $completed_cities ) && $resume ) {
             $cities = array_filter( $cities, function( $city ) use ( $completed_cities ) {
-                return ! in_array( $city->city_name, $completed_cities );
+                return ! in_array( $city->term_id, $completed_cities );
             } );
         }
 
@@ -152,9 +156,10 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
                 $profile_ids = explode( ',', $city->profile_ids );
                 $sample_profile_id = $profile_ids[0];
                 WP_CLI::line( sprintf(
-                    "%d. %s (%d profiles) - Would save profile ID: %d",
+                    "%d. %s (%s) (%d profiles) - Would save profile ID: %d",
                     $index + 1,
                     $city->city_name,
+                    $city->city_slug,
                     $city->profile_count,
                     $sample_profile_id
                 ) );
@@ -168,6 +173,8 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
         $processed = 0;
         $errors = 0;
         $start_time = microtime( true );
+        $ranking_times = [];
+        $save_times = [];
 
         $batches = array_chunk( $cities, $batch_size );
 
@@ -201,18 +208,17 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
                         throw new Exception( "Profile ID {$profile_id_to_save} not found or invalid" );
                     }
 
-                    // Save the profile (triggers ACF ranking hooks)
-                    wp_update_post( [
-                        'ID' => $profile_id_to_save,
-                        'post_modified' => current_time( 'mysql' ),
-                        'post_modified_gmt' => current_time( 'mysql', 1 )
-                    ] );
+                    // Explicitly trigger ACF save_post hook to recalculate rankings
+                    $ranking_start = microtime( true );
+                    do_action( 'acf/save_post', $profile_id_to_save );
+                    $ranking_time = microtime( true ) - $ranking_start;
+                    $ranking_times[] = $ranking_time;
 
                     $city_time = round( microtime( true ) - $city_start_time, 2 );
-                    WP_CLI::line( "  → Completed in {$city_time}s" );
+                    WP_CLI::line( "  → Completed in {$city_time}s (ranking: " . round( $ranking_time, 2 ) . "s)" );
 
                     // Update progress
-                    $progress['completed_cities'][] = $city->city_name;
+                    $progress['completed_cities'][] = $city->term_id;
                     $progress['last_updated'] = current_time( 'mysql' );
 
                 } catch ( Exception $e ) {
@@ -263,6 +269,15 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
 
         $total_time = round( microtime( true ) - $start_time, 2 );
 
+        // Calculate performance statistics
+        if ( ! empty( $ranking_times ) ) {
+            $avg_ranking_time = round( array_sum( $ranking_times ) / count( $ranking_times ), 3 );
+            $max_ranking_time = round( max( $ranking_times ), 3 );
+            $min_ranking_time = round( min( $ranking_times ), 3 );
+        } else {
+            $avg_ranking_time = $max_ranking_time = $min_ranking_time = 0;
+        }
+
         WP_CLI::line( "" );
         WP_CLI::success( sprintf(
             "Rankings update completed! Processed %d cities in %.2f seconds (%d errors)",
@@ -270,6 +285,15 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             $total_time,
             $errors
         ) );
+
+        if ( $processed > 0 ) {
+            WP_CLI::line( "Performance Stats:" );
+            WP_CLI::line( "  Total time: {$total_time}s" );
+            WP_CLI::line( "  Cities processed: {$processed}" );
+            WP_CLI::line( "  Average time per city: " . round( $total_time / $processed, 2 ) . "s" );
+            WP_CLI::line( "  Ranking times - Avg: {$avg_ranking_time}s, Min: {$min_ranking_time}s, Max: {$max_ranking_time}s" );
+            WP_CLI::line( "  Cities per minute: " . round( ($processed / $total_time) * 60, 1 ) );
+        }
 
         // Clean up progress file on successful completion
         if ( file_exists( $progress_file ) ) {
