@@ -244,6 +244,50 @@ wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --max-radius=4
                     
                     <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command quarterly or when you add 100+ new profiles to keep radius values optimized.', 'directory-helpers'); ?></p>
                 </div>
+
+                <div style="margin-top: 20px; padding: 15px; background: #f0f8e7; border-left: 4px solid #46b450;">
+                    <h3 style="margin-top: 0;"><?php esc_html_e('WP-CLI: Update Rankings Command', 'directory-helpers'); ?></h3>
+                    <p><?php esc_html_e('Trigger ranking recalculation for ALL profiles across all cities by saving one profile per city. Essential after bulk imports or data changes. Requires a niche slug (e.g., dog-trainer).', 'directory-helpers'); ?></p>
+
+                    <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
+                    <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview cities that would be processed)
+wp directory-helpers update-rankings dog-trainer --dry-run
+
+# Update rankings (smart resume - resumes if progress exists, starts fresh if not)
+wp directory-helpers update-rankings dog-trainer
+
+# Force fresh start (ignore any existing progress)
+wp directory-helpers update-rankings dog-trainer --fresh
+
+# Custom batch settings
+wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1</code></pre>
+
+                    <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
+                    <ul style="list-style: disc; margin-left: 20px;">
+                        <li><?php esc_html_e('Finds all cities with profiles in the specified niche', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Selects one profile per city to save', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Saves profiles in batches with configurable delays', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Each save triggers ranking recalculation for ALL profiles in that city + state', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Updates city_rank and state_rank ACF fields across all affected profiles', 'directory-helpers'); ?></li>
+                    </ul>
+
+                    <h4><?php esc_html_e('Performance Optimized Defaults:', 'directory-helpers'); ?></h4>
+                    <ul style="list-style: disc; margin-left: 20px;">
+                        <li><strong><?php esc_html_e('Batch Size:', 'directory-helpers'); ?></strong> <?php esc_html_e('20 cities (balances speed vs. memory)', 'directory-helpers'); ?></li>
+                        <li><strong><?php esc_html_e('Delay:', 'directory-helpers'); ?></strong> <?php esc_html_e('0.5 seconds (allows ranking hooks to complete)', 'directory-helpers'); ?></li>
+                        <li><strong><?php esc_html_e('Batch Pause:', 'directory-helpers'); ?></strong> <?php esc_html_e('2 seconds (prevents system overload)', 'directory-helpers'); ?></li>
+                    </ul>
+
+                    <h4><?php esc_html_e('Progress Tracking:', 'directory-helpers'); ?></h4>
+                    <ul style="list-style: disc; margin-left: 20px;">
+                        <li><?php esc_html_e('Real-time progress display with city names and profile counts', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Progress files allow resuming interrupted runs', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Estimated completion time based on current progress', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Error handling continues processing even if individual saves fail', 'directory-helpers'); ?></li>
+                    </ul>
+
+                    <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command after bulk profile imports or major data changes. The dry-run mode lets you verify which cities will be processed before committing.', 'directory-helpers'); ?></p>
+                </div>
             </div>
 
             <div class="directory-helpers-settings" style="margin-top: 20px;">

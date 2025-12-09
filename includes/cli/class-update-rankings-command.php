@@ -21,22 +21,25 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
      * : Niche taxonomy slug (required, e.g., dog-trainer)
      *
      * [--batch-size=<number>]
-     * : Number of cities to process per batch (default: 10)
+     * : Number of cities to process per batch (default: 20)
      *
      * [--delay=<number>]
-     * : Seconds to wait between profile saves (default: 5)
-     *
-     * [--resume]
-     * : Resume from where a previous interrupted run left off
+     * : Seconds to wait between profile saves (default: 0.5)
      *
      * [--batch-pause=<number>]
      * : Seconds to wait between batches (default: 2)
      *
+     * [--resume]
+     * : Force resume mode (enabled by default - resumes if progress file exists, starts fresh if not)
+     *
+     * [--fresh]
+     * : Force fresh start even if progress file exists
+     *
      * ## EXAMPLES
      *
      *     wp directory-helpers update-rankings dog-trainer --dry-run
-     *     wp directory-helpers update-rankings dog-trainer --batch-size=5 --delay=3
-     *     wp directory-helpers update-rankings dog-trainer --resume
+     *     wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1
+     *     wp directory-helpers update-rankings dog-trainer --fresh
      *
      * @when after_wp_load
      */
@@ -64,11 +67,11 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
 
         $niche_id = $niche_term->term_id;
         $dry_run = isset( $assoc_args['dry-run'] );
-        $batch_size = isset( $assoc_args['batch-size'] ) ? intval( $assoc_args['batch-size'] ) : 10;
-        $delay = isset( $assoc_args['delay'] ) ? floatval( $assoc_args['delay'] ) : 5;
+        $batch_size = isset( $assoc_args['batch-size'] ) ? intval( $assoc_args['batch-size'] ) : 20;
+        $delay = isset( $assoc_args['delay'] ) ? floatval( $assoc_args['delay'] ) : 0.5;
         $batch_pause = isset( $assoc_args['batch-pause'] ) ? intval( $assoc_args['batch-pause'] ) : 2;
         $resume = isset( $assoc_args['resume'] );
-        $force = isset( $assoc_args['force'] );
+        $fresh = isset( $assoc_args['fresh'] );
 
         // Progress tracking file
         $progress_file = WP_CONTENT_DIR . '/uploads/rankings-update-progress-' . $niche_slug . '.json';
@@ -86,16 +89,18 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
 
         // Check for existing progress
         $progress = [];
-        if ( file_exists( $progress_file ) && ( $resume || $force ) ) {
+        if ( file_exists( $progress_file ) ) {
             $progress_data = json_decode( file_get_contents( $progress_file ), true );
             if ( $progress_data ) {
                 $progress = $progress_data;
                 WP_CLI::line( "Resuming from previous run..." );
                 WP_CLI::line( "Previously completed: " . count( $progress['completed_cities'] ?? [] ) . " cities" );
+            } elseif ( $fresh ) {
+                // Force fresh start even with progress file
+                WP_CLI::line( "Starting fresh (ignoring existing progress file)..." );
             }
-        } elseif ( file_exists( $progress_file ) && ! $force ) {
-            WP_CLI::warning( "Progress file exists. Use --resume to continue or --force to start fresh." );
-            return;
+        } else {
+            WP_CLI::line( "Starting fresh run..." );
         }
 
         // Step 1: Find cities with profiles
