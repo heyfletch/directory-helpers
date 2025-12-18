@@ -194,6 +194,14 @@ if (!defined('ABSPATH')) exit;
                     <input type="number" name="min_count" value="<?php echo esc_attr($min_count); ?>" min="1" max="10" style="width: 60px;" />
                 </label>
                 
+                <label><strong><?php esc_html_e('City Status:', 'directory-helpers'); ?></strong>
+                    <select name="city_status">
+                        <option value="all" <?php selected($city_status, 'all'); ?>><?php esc_html_e('All', 'directory-helpers'); ?></option>
+                        <option value="new" <?php selected($city_status, 'new'); ?>><?php esc_html_e('New', 'directory-helpers'); ?></option>
+                        <option value="existing" <?php selected($city_status, 'existing'); ?>><?php esc_html_e('Existing', 'directory-helpers'); ?></option>
+                    </select>
+                </label>
+                
                 <button type="submit" class="button button-secondary"><?php esc_html_e('Filter', 'directory-helpers'); ?></button>
             </div>
         </form>

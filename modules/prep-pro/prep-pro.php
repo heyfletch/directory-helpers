@@ -731,14 +731,34 @@ class DH_Prep_Pro {
         $city_slug = isset($_REQUEST['city']) ? sanitize_title(wp_unslash($_REQUEST['city'])) : '';
         $niche_slug = isset($_REQUEST['niche']) ? sanitize_title(wp_unslash($_REQUEST['niche'])) : 'dog-trainer';
         $city_search = isset($_REQUEST['city_search']) ? sanitize_text_field(wp_unslash($_REQUEST['city_search'])) : '';
+        $city_status = isset($_REQUEST['city_status']) ? sanitize_key($_REQUEST['city_status']) : 'all';
         
         if (!in_array($post_status, array('refining', 'publish', 'private', 'all'), true)) {
             $post_status = 'refining';
+        }
+        if (!in_array($city_status, array('all', 'new', 'existing'), true)) {
+            $city_status = 'all';
         }
         
         $states = $this->get_state_terms();
         $niches = $this->get_niche_terms();
         $profiles = !empty($state_slug) ? $this->query_profiles($state_slug, $post_status, $min_count, $city_slug, $niche_slug, $city_search) : array();
+        
+        // Filter profiles by city status (new/existing city-listing)
+        if ($city_status !== 'all' && !empty($profiles)) {
+            $niche_term = get_term_by('slug', $niche_slug, 'niche');
+            $niche_term_id = ($niche_term && !is_wp_error($niche_term)) ? (int)$niche_term->term_id : 0;
+            
+            $profiles = array_filter($profiles, function($p) use ($city_status, $niche_term_id) {
+                $city_exists = $this->city_listing_exists((int)$p->area_id, $niche_term_id);
+                if ($city_status === 'new') {
+                    return !$city_exists;
+                } else { // existing
+                    return $city_exists;
+                }
+            });
+            $profiles = array_values($profiles); // Re-index array
+        }
         $tracking = $this->get_tracking();
         
         // Build city list for dropdown
