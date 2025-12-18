@@ -201,6 +201,17 @@ if (!defined('ABSPATH')) exit;
     
     <!-- Fast Publishing -->
     <?php if (!empty($profiles)): ?>
+        <style>
+            .button-success {
+                background: #46b450 !important;
+                border-color: #46b450 !important;
+                color: #fff !important;
+            }
+            .button-success:hover {
+                background: #54c55f !important;
+                border-color: #54c55f !important;
+            }
+        </style>
         <div style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
             <h2 style="margin-top: 0;">🚀 Publish Profiles & Create Cities</h2>
             <p>This creates new city pages, publishes selected profiles, and sends cities for AI content (1 second delay between each city request).</p>
@@ -215,8 +226,8 @@ if (!defined('ABSPATH')) exit;
                 <input type="hidden" name="niche" value="<?php echo esc_attr($niche_slug); ?>" />
                 <input type="hidden" name="city_search" value="<?php echo esc_attr($city_search); ?>" />
                 
-                <button type="submit" class="button button-primary button-hero">
-                    <?php echo sprintf(esc_html__('Publish Profiles & Create Cities (%d profiles)', 'directory-helpers'), count($profiles)); ?>
+                <button type="submit" class="button button-success button-hero">
+                    <?php echo sprintf(esc_html__('Publish Profiles & Create Cities if New (%d profiles)', 'directory-helpers'), count($profiles)); ?>
                 </button>
             </form>
         </div>
