@@ -751,13 +751,13 @@ class DH_Prep_Pro {
         $city_slug = isset($_REQUEST['city']) ? sanitize_title(wp_unslash($_REQUEST['city'])) : '';
         $niche_slug = isset($_REQUEST['niche']) ? sanitize_title(wp_unslash($_REQUEST['niche'])) : 'dog-trainer';
         $city_search = isset($_REQUEST['city_search']) ? sanitize_text_field(wp_unslash($_REQUEST['city_search'])) : '';
-        $city_status = isset($_REQUEST['city_status']) ? sanitize_key($_REQUEST['city_status']) : 'existing';
+        $city_status = isset($_REQUEST['city_status']) ? sanitize_key($_REQUEST['city_status']) : 'all';
         
         if (!in_array($post_status, array('refining', 'publish', 'private', 'all'), true)) {
             $post_status = 'refining';
         }
         if (!in_array($city_status, array('all', 'new', 'existing'), true)) {
-            $city_status = 'existing';
+            $city_status = 'all';
         }
         
         $states = $this->get_state_terms();
