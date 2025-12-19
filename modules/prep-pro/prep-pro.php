@@ -159,7 +159,7 @@ class DH_Prep_Pro {
                 $state_code = strtoupper($state_term->description);
             }
         }
-        if (!$state_code && preg_match('/\s-\s([A-Za-z]{2})$/', $area_term->name, $m)) {
+        if (!$state_code && preg_match('/-([A-Za-z]{2})$/', $area_term->slug, $m)) {
             $state_code = strtoupper($m[1]);
         }
         if (!$state_code && strlen($state_slug) >= 2) {
