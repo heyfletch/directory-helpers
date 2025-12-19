@@ -164,6 +164,70 @@ class DH_Prep_City_Listings {
         return (int)$post_id;
     }
     
+    private function cleanup_area_terms($area_term_ids) {
+        if (empty($area_term_ids)) return;
+        
+        $unique_terms = array();
+        foreach ($area_term_ids as $term_id) {
+            $term = get_term((int)$term_id, 'area');
+            if (!is_wp_error($term) && $term) {
+                $unique_terms[$term->term_id] = $term;
+            }
+        }
+        
+        foreach ($unique_terms as $term) {
+            if (preg_match('/\s-\s[A-Za-z]{2}$/', $term->name)) {
+                $new_name = trim(preg_replace('/\s-\s[A-Za-z]{2}$/', '', $term->name));
+                if ($new_name && $new_name !== $term->name) {
+                    wp_update_term((int)$term->term_id, 'area', array('name' => $new_name));
+                }
+            }
+        }
+    }
+    
+    private function rerank_cities($area_term_ids, $niche_slug) {
+        if (empty($area_term_ids)) return;
+        
+        $niche_term = get_term_by('slug', $niche_slug, 'niche');
+        if (!$niche_term || is_wp_error($niche_term)) {
+            return;
+        }
+        
+        foreach ($area_term_ids as $area_term_id) {
+            // Find a published profile with this area term and niche
+            $profile_id = $this->find_profile_in_area($area_term_id, $niche_term->term_id);
+            if ($profile_id) {
+                // Trigger ACF save hook to recalculate rankings
+                do_action('acf/save_post', $profile_id);
+            }
+        }
+    }
+    
+    private function find_profile_in_area($area_term_id, $niche_term_id) {
+        $args = array(
+            'post_type' => 'profile',
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'tax_query' => array(
+                'relation' => 'AND',
+                array(
+                    'taxonomy' => 'area',
+                    'field' => 'term_id',
+                    'terms' => array((int)$area_term_id),
+                ),
+                array(
+                    'taxonomy' => 'niche',
+                    'field' => 'term_id',
+                    'terms' => array((int)$niche_term_id),
+                ),
+            ),
+            'fields' => 'ids',
+        );
+        
+        $query = new WP_Query($args);
+        return !empty($query->posts) ? (int)$query->posts[0] : 0;
+    }
+    
     private function trigger_ai_for_cities($city_ids) {
         $options = get_option('directory_helpers_options');
         $url = isset($options['n8n_webhook_url']) ? $options['n8n_webhook_url'] : '';
@@ -280,6 +344,28 @@ class DH_Prep_City_Listings {
         }
         
         if (!empty($created_city_ids)) {
+            // Collect area terms from created cities for reranking
+            $area_term_ids = array();
+            foreach ($created_city_ids as $city_id) {
+                $area_terms = get_the_terms($city_id, 'area');
+                if (!empty($area_terms) && !is_wp_error($area_terms)) {
+                    foreach ($area_terms as $term) {
+                        $area_term_ids[] = (int)$term->term_id;
+                    }
+                }
+            }
+            
+            // Clean area term names (remove state extension)
+            if (!empty($area_term_ids)) {
+                $this->cleanup_area_terms($area_term_ids);
+            }
+            
+            // Rerank cities
+            if (!empty($area_term_ids)) {
+                $this->rerank_cities($area_term_ids, $niche_slug);
+            }
+            
+            // Trigger AI for content generation
             $this->trigger_ai_for_cities($created_city_ids);
             set_transient('dh_prep_city_listings_created_' . get_current_user_id(), $created_city_ids, 60);
         }
