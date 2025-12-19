@@ -263,9 +263,13 @@ class DH_AI_Content_Generator {
             'headers' => array('Content-Type' => 'application/json'),
             'body'    => $body,
             'timeout' => 20,
+            'sslverify' => true,
         ));
 
         if (is_wp_error($response)) {
+            // Log detailed error for debugging
+            error_log('DH AI Content Generator - Webhook Error: ' . $response->get_error_message());
+            error_log('DH AI Content Generator - Target URL: ' . $url);
             return new WP_Error('request_failed', $response->get_error_message(), array('status' => 500));
         }
 
