@@ -303,31 +303,51 @@ class DH_Prep_Pro {
         $city_slug = isset($_POST['city']) ? sanitize_title(wp_unslash($_POST['city'])) : '';
         $niche_slug = isset($_POST['niche']) ? sanitize_title(wp_unslash($_POST['niche'])) : 'dog-trainer';
         $city_search = isset($_POST['city_search']) ? sanitize_text_field(wp_unslash($_POST['city_search'])) : '';
+        $city_status = isset($_POST['city_status']) ? sanitize_key($_POST['city_status']) : 'all';
         
         // 1. Query profiles
         $profiles = $this->query_profiles($state_slug, $post_status, $min_count, $city_slug, $niche_slug, $city_search);
-        $profile_ids = wp_list_pluck($profiles, 'ID');
         
-        // 2. Create missing city-listings
-        $created_city_ids = array();
+        // Filter profiles by city_status if set
         $niche_term = get_term_by('slug', $niche_slug, 'niche');
+        $niche_term_id = ($niche_term && !is_wp_error($niche_term)) ? (int)$niche_term->term_id : 0;
         
-        $unique_cities = array();
-        foreach ($profiles as $p) {
-            if (!empty($p->area_slug)) {
-                $unique_cities[$p->area_slug] = $p->area_id;
-            }
+        if ($city_status !== 'all' && !empty($profiles)) {
+            $profiles = array_filter($profiles, function($p) use ($city_status, $niche_term_id) {
+                $city_exists = $this->city_listing_exists((int)$p->area_id, $niche_term_id);
+                if ($city_status === 'new') {
+                    return !$city_exists;
+                } else { // existing
+                    return $city_exists;
+                }
+            });
+            $profiles = array_values($profiles);
         }
         
-        foreach ($unique_cities as $area_slug => $area_term_id) {
-            $area_term = get_term_by('term_id', $area_term_id, 'area');
-            if (!$area_term) continue;
+        $profile_ids = wp_list_pluck($profiles, 'ID');
+        
+        // 2. Create missing city-listings (only if city_status allows new cities)
+        $created_city_ids = array();
+        
+        // Skip city creation entirely if filtering for existing cities only
+        if ($city_status !== 'existing') {
+            $unique_cities = array();
+            foreach ($profiles as $p) {
+                if (!empty($p->area_slug)) {
+                    $unique_cities[$p->area_slug] = $p->area_id;
+                }
+            }
             
-            $exists = $this->city_listing_exists((int)$area_term->term_id, ($niche_term && !is_wp_error($niche_term)) ? (int)$niche_term->term_id : 0);
-            if (!$exists) {
-                $new_id = $this->create_city_listing($area_term, $state_slug, $niche_term);
-                if ($new_id) {
-                    $created_city_ids[] = $new_id;
+            foreach ($unique_cities as $area_slug => $area_term_id) {
+                $area_term = get_term_by('term_id', $area_term_id, 'area');
+                if (!$area_term) continue;
+                
+                $exists = $this->city_listing_exists((int)$area_term->term_id, $niche_term_id);
+                if (!$exists) {
+                    $new_id = $this->create_city_listing($area_term, $state_slug, $niche_term);
+                    if ($new_id) {
+                        $created_city_ids[] = $new_id;
+                    }
                 }
             }
         }

@@ -233,6 +233,7 @@ if (!defined('ABSPATH')) exit;
                 <input type="hidden" name="city" value="<?php echo esc_attr($city_slug); ?>" />
                 <input type="hidden" name="niche" value="<?php echo esc_attr($niche_slug); ?>" />
                 <input type="hidden" name="city_search" value="<?php echo esc_attr($city_search); ?>" />
+                <input type="hidden" name="city_status" value="<?php echo esc_attr($city_status); ?>" />
                 
                 <button type="submit" class="button button-success button-hero">
                     <?php echo sprintf(esc_html__('Publish Profiles & Create Cities if New (%d profiles)', 'directory-helpers'), count($profiles)); ?>
