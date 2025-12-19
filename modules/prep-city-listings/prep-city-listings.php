@@ -228,6 +228,43 @@ class DH_Prep_City_Listings {
         return !empty($query->posts) ? (int)$query->posts[0] : 0;
     }
     
+    private function update_profile_counts($city_ids) {
+        if (empty($city_ids)) return;
+        
+        foreach ($city_ids as $city_id) {
+            $area_terms = get_the_terms($city_id, 'area');
+            if (!empty($area_terms) && !is_wp_error($area_terms)) {
+                $area_term_id = $area_terms[0]->term_id;
+                
+                // Count published profiles in this city
+                $profile_count = count(get_posts(array(
+                    'post_type' => 'profile',
+                    'post_status' => 'publish',
+                    'posts_per_page' => -1,
+                    'tax_query' => array(
+                        array('taxonomy' => 'area', 'field' => 'term_id', 'terms' => $area_term_id),
+                    ),
+                    'fields' => 'ids',
+                )));
+                
+                update_post_meta($city_id, '_profile_count', (int)$profile_count);
+            }
+        }
+    }
+    
+    private function create_shortlinks($city_ids) {
+        if (empty($city_ids)) return;
+        
+        if (!class_exists('DH_Shortlinks')) {
+            return;
+        }
+        
+        $shortlinks = new DH_Shortlinks();
+        foreach ($city_ids as $city_id) {
+            $shortlinks->create_shortlink_for_post($city_id);
+        }
+    }
+    
     private function trigger_ai_for_cities($city_ids) {
         $options = get_option('directory_helpers_options');
         $url = isset($options['n8n_webhook_url']) ? $options['n8n_webhook_url'] : '';
@@ -364,6 +401,12 @@ class DH_Prep_City_Listings {
             if (!empty($area_term_ids)) {
                 $this->rerank_cities($area_term_ids, $niche_slug);
             }
+            
+            // Update profile counts for newly created city-listings
+            $this->update_profile_counts($created_city_ids);
+            
+            // Create shortlinks for newly created city-listings
+            $this->create_shortlinks($created_city_ids);
             
             // Trigger AI for content generation
             $this->trigger_ai_for_cities($created_city_ids);
