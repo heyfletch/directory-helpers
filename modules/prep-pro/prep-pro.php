@@ -747,17 +747,17 @@ class DH_Prep_Pro {
         
         $state_slug = isset($_REQUEST['state']) ? sanitize_text_field(wp_unslash($_REQUEST['state'])) : '';
         $post_status = isset($_REQUEST['post_status']) ? sanitize_key($_REQUEST['post_status']) : 'refining';
-        $min_count = isset($_REQUEST['min_count']) ? max(1, min(5, (int)$_REQUEST['min_count'])) : 3;
+        $min_count = isset($_REQUEST['min_count']) ? max(1, min(5, (int)$_REQUEST['min_count'])) : 2;
         $city_slug = isset($_REQUEST['city']) ? sanitize_title(wp_unslash($_REQUEST['city'])) : '';
         $niche_slug = isset($_REQUEST['niche']) ? sanitize_title(wp_unslash($_REQUEST['niche'])) : 'dog-trainer';
         $city_search = isset($_REQUEST['city_search']) ? sanitize_text_field(wp_unslash($_REQUEST['city_search'])) : '';
-        $city_status = isset($_REQUEST['city_status']) ? sanitize_key($_REQUEST['city_status']) : 'all';
+        $city_status = isset($_REQUEST['city_status']) ? sanitize_key($_REQUEST['city_status']) : 'existing';
         
         if (!in_array($post_status, array('refining', 'publish', 'private', 'all'), true)) {
             $post_status = 'refining';
         }
         if (!in_array($city_status, array('all', 'new', 'existing'), true)) {
-            $city_status = 'all';
+            $city_status = 'existing';
         }
         
         $states = $this->get_state_terms();
