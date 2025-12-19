@@ -775,6 +775,12 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/prep-pro/prep-pro.php',
                 'class' => 'DH_Prep_Pro'
             ),
+            'prep-city-listings' => array(
+                'name' => __('Prep City Listings', 'directory-helpers'),
+                'description' => __('Create city-listing pages for cities that have published profiles but no city-listing page. Find and create listings in batches by niche.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/prep-city-listings/prep-city-listings.php',
+                'class' => 'DH_Prep_City_Listings'
+            ),
             'instant-search' => array(
                 'name' => __('Instant Search', 'directory-helpers'),
                 'description' => __('Client-side instant search for titles of selected post types with typeahead dropdown and ARIA support. Shortcode: [dh_instant_search].', 'directory-helpers'),
