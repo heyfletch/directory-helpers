@@ -148,7 +148,22 @@ class DH_Prep_Profiles_By_State {
         foreach ($post_ids as $pid) {
             $terms = get_the_terms($pid, 'area');
             if (!empty($terms) && !is_wp_error($terms)) {
-                $unique[$terms[0]->term_id] = $terms[0];
+                // If multiple area terms, select the one matching the profile's state
+                $selected_term = $terms[0]; // fallback
+                if (count($terms) > 1) {
+                    $state_terms = get_the_terms($pid, 'state');
+                    if (!empty($state_terms) && !is_wp_error($state_terms)) {
+                        $state_slug = strtolower($state_terms[0]->slug);
+                        foreach ($terms as $term) {
+                            // Match area term slug ending with state code (e.g., milford-nh)
+                            if (preg_match('/-' . preg_quote($state_slug, '/') . '$/', $term->slug)) {
+                                $selected_term = $term;
+                                break;
+                            }
+                        }
+                    }
+                }
+                $unique[$selected_term->term_id] = $selected_term;
             }
         }
         return $unique; // term_id => WP_Term
