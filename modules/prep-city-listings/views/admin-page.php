@@ -95,6 +95,7 @@ if (!defined('ABSPATH')) exit;
                             <th style="width: 40px;"><input type="checkbox" id="select-all-cities" onclick="toggleAllCities(this);" /></th>
                             <th>City</th>
                             <th>State</th>
+                            <th style="width: 100px; text-align: center;">Profiles</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -105,6 +106,7 @@ if (!defined('ABSPATH')) exit;
                                 </td>
                                 <td><?php echo esc_html($city->name); ?></td>
                                 <td><?php echo esc_html($city->state_name); ?></td>
+                                <td style="text-align: center;"><strong><?php echo (int)$city->profile_count; ?></strong></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>

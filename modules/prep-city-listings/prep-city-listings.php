@@ -39,7 +39,7 @@ class DH_Prep_City_Listings {
      * Find cities (area terms) that have published profiles but no city-listing page.
      *
      * @param string $niche_slug Niche slug to filter by.
-     * @return array Array of area terms needing city-listings.
+     * @return array Array of area terms needing city-listings with profile counts.
      */
     private function get_cities_needing_listings($niche_slug = 'dog-trainer') {
         global $wpdb;
@@ -54,7 +54,8 @@ class DH_Prep_City_Listings {
         // Find all area terms that have at least one published profile with the niche
         $sql = "
             SELECT DISTINCT t.term_id, t.name, t.slug,
-                   ts.name AS state_name, ts.slug AS state_slug
+                   ts.name AS state_name, ts.slug AS state_slug,
+                   COUNT(p.ID) AS profile_count
             FROM {$prefix}posts p
             JOIN {$prefix}term_relationships tr_area ON p.ID = tr_area.object_id
             JOIN {$prefix}term_taxonomy tt_area ON tr_area.term_taxonomy_id = tt_area.term_taxonomy_id
@@ -70,7 +71,8 @@ class DH_Prep_City_Listings {
               AND tt_niche.taxonomy = 'niche'
               AND tt_niche.term_id = %d
               AND tt_state.taxonomy = 'state'
-            ORDER BY ts.name ASC, t.name ASC
+            GROUP BY t.term_id, t.name, t.slug, ts.name, ts.slug
+            ORDER BY profile_count DESC, ts.name ASC, t.name ASC
         ";
         
         $areas = $wpdb->get_results($wpdb->prepare($sql, $niche_term_id));
