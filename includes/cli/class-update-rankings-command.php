@@ -108,8 +108,47 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
 
         global $wpdb;
 
-        // Get all unique cities that have profiles with this niche
+        // Step 1a: Get all published city-listing pages with this niche
+        WP_CLI::line( "Fetching city-listing pages..." );
+        $city_listings = get_posts([
+            'post_type' => 'city-listing',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'tax_query' => [
+                [
+                    'taxonomy' => 'niche',
+                    'field' => 'term_id',
+                    'terms' => $niche_id,
+                ]
+            ]
+        ]);
+
+        if ( empty( $city_listings ) ) {
+            WP_CLI::error( "No published city-listing pages found with niche '{$niche_slug}'." );
+            return;
+        }
+
+        // Extract area term IDs from city-listing pages
+        $area_term_ids = [];
+        foreach ( $city_listings as $post ) {
+            $area_terms = get_the_terms( $post->ID, 'area' );
+            if ( ! empty( $area_terms ) && ! is_wp_error( $area_terms ) ) {
+                foreach ( $area_terms as $term ) {
+                    $area_term_ids[] = $term->term_id;
+                }
+            }
+        }
+
+        $area_term_ids = array_unique( $area_term_ids );
+
+        if ( empty( $area_term_ids ) ) {
+            WP_CLI::error( "No area terms found on city-listing pages with niche '{$niche_slug}'." );
+            return;
+        }
+
+        // Get all unique cities that have profiles with this niche AND have a city-listing page
         // Find cities by area taxonomy terms, not ACF city field
+        $area_ids_sql = implode( ',', array_map( 'intval', $area_term_ids ) );
         $cities_query = $wpdb->prepare( "
             SELECT DISTINCT
                 t.term_id,
@@ -120,7 +159,7 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             FROM {$wpdb->posts} p
             INNER JOIN {$wpdb->term_relationships} tr_area ON p.ID = tr_area.object_id
             INNER JOIN {$wpdb->term_taxonomy} tt_area ON tr_area.term_taxonomy_id = tt_area.term_taxonomy_id
-                AND tt_area.taxonomy = 'area'
+                AND tt_area.taxonomy = 'area' AND tt_area.term_id IN ($area_ids_sql)
             INNER JOIN {$wpdb->terms} t ON tt_area.term_id = t.term_id
             INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
             INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
