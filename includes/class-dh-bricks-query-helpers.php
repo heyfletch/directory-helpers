@@ -59,7 +59,16 @@ class DH_Bricks_Query_Helpers {
         } elseif ( $object instanceof WP_Post ) {
             $terms = get_the_terms( $object->ID, $area_tax );
             if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
-                $target_term = $terms[0];
+                // Match area term slug against post slug to avoid confusing cities with same name
+                // e.g., milford-nh-dog-trainers should use milford-nh, not milford-ct
+                $post_slug = $object->post_name;
+                $target_term = $terms[0]; // fallback
+                foreach ( $terms as $term ) {
+                    if ( strpos( $post_slug, $term->slug ) !== false ) {
+                        $target_term = $term;
+                        break;
+                    }
+                }
             }
         }
 
