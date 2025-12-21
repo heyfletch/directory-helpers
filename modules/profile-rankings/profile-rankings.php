@@ -378,7 +378,7 @@ class DH_Profile_Rankings {
 
             if (empty($rating) || empty($review_count)) {
                 // Profiles without reviews are not ranked
-                $scores[$profile_id] = ['score' => -1, 'review_count' => 0]; 
+                $scores[$profile_id] = ['score' => -1, 'review_count' => 0];
                 continue;
             }
 
@@ -399,11 +399,13 @@ class DH_Profile_Rankings {
         // Update rank field for each profile
         $rank = 1;
         foreach ($scores as $profile_id => $data) {
-            if ($data['score'] < 0) {
-                // Not ranked, update field to a high number so it sorts last
-                update_field($rank_field, 99999, $profile_id);
-            } else {
-                update_field($rank_field, $rank, $profile_id);
+            $rank_value = ($data['score'] < 0) ? 99999 : $rank;
+            
+            // Delete old value first, then add new one to ensure it updates
+            delete_post_meta($profile_id, $rank_field);
+            add_post_meta($profile_id, $rank_field, $rank_value);
+            
+            if ($data['score'] >= 0) {
                 $rank++;
             }
         }

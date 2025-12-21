@@ -35,11 +35,15 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
      * [--fresh]
      * : Force fresh start even if progress file exists
      *
+     * [--city=<slug>]
+     * : Process only a specific city by area term slug (e.g., bethesda-md)
+     *
      * ## EXAMPLES
      *
      *     wp directory-helpers update-rankings dog-trainer --dry-run
      *     wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1
      *     wp directory-helpers update-rankings dog-trainer --fresh
+     *     wp directory-helpers update-rankings dog-trainer --city=bethesda-md
      *
      * @when after_wp_load
      */
@@ -72,6 +76,7 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
         $batch_pause = isset( $assoc_args['batch-pause'] ) ? intval( $assoc_args['batch-pause'] ) : 2;
         $resume = isset( $assoc_args['resume'] );
         $fresh = isset( $assoc_args['fresh'] );
+        $single_city = isset( $assoc_args['city'] ) ? sanitize_title( $assoc_args['city'] ) : null;
 
         // Progress tracking file
         $progress_file = WP_CONTENT_DIR . '/uploads/rankings-update-progress-' . $niche_slug . '.json';
@@ -128,6 +133,8 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             return;
         }
 
+        WP_CLI::line( "Found " . count( $city_listings ) . " city-listing pages with niche '{$niche_slug}'." );
+
         // Extract area term IDs from city-listing pages
         $area_term_ids = [];
         foreach ( $city_listings as $post ) {
@@ -145,6 +152,8 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             WP_CLI::error( "No area terms found on city-listing pages with niche '{$niche_slug}'." );
             return;
         }
+
+        WP_CLI::line( "Found " . count( $area_term_ids ) . " unique area terms from city-listing pages." );
 
         // Get all unique cities that have profiles with this niche AND have a city-listing page
         // Find cities by area taxonomy terms, not ACF city field
@@ -177,9 +186,23 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             return;
         }
 
+        // Filter to single city if --city is specified
+        if ( $single_city ) {
+            $cities = array_filter( $cities, function( $city ) use ( $single_city ) {
+                return $city->city_slug === $single_city;
+            } );
+            $cities = array_values( $cities ); // Re-index array
+            
+            if ( empty( $cities ) ) {
+                WP_CLI::error( "City '{$single_city}' not found or has no profiles with niche '{$niche_slug}'." );
+                return;
+            }
+            WP_CLI::line( "Filtering to single city: {$single_city}" );
+        }
+
         // Filter out completed cities if resuming
         $completed_cities = $progress['completed_cities'] ?? [];
-        if ( ! empty( $completed_cities ) && $resume ) {
+        if ( ! empty( $completed_cities ) && $resume && ! $single_city ) {
             $cities = array_filter( $cities, function( $city ) use ( $completed_cities ) {
                 return ! in_array( $city->term_id, $completed_cities );
             } );
