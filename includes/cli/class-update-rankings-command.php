@@ -274,9 +274,29 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
 
                     // Explicitly trigger ACF save_post hook to recalculate rankings
                     $ranking_start = microtime( true );
-                    do_action( 'acf/save_post', $sample_profile_id );
-                    $ranking_time = microtime( true ) - $ranking_start;
-                    $ranking_times[] = $ranking_time;
+                    
+                    // Add timeout protection for ranking calculation
+                    $timeout = 60; // 60 seconds timeout per city
+                    $old_timeout = ini_get('default_socket_timeout');
+                    ini_set('default_socket_timeout', $timeout);
+                    
+                    try {
+                        do_action( 'acf/save_post', $sample_profile_id );
+                        $ranking_time = microtime( true ) - $ranking_start;
+                        $ranking_times[] = $ranking_time;
+                        
+                        // Restore timeout
+                        ini_set('default_socket_timeout', $old_timeout);
+                        
+                        // Check if we exceeded timeout
+                        if ($ranking_time > $timeout) {
+                            WP_CLI::warning("  → Ranking calculation took {$ranking_time}s (exceeded {$timeout}s timeout)");
+                        }
+                    } catch (Exception $e) {
+                        // Restore timeout
+                        ini_set('default_socket_timeout', $old_timeout);
+                        throw $e;
+                    }
 
                     $city_time = round( microtime( true ) - $city_start_time, 2 );
                     WP_CLI::line( "  → Completed in {$city_time}s (ranking: " . round( $ranking_time, 2 ) . "s)" );

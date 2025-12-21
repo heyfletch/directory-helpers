@@ -314,11 +314,32 @@ class DH_Profile_Rankings {
         // To prevent infinite loops, remove the action before updating fields and add it back after.
         remove_action('acf/save_post', array($this, 'update_ranks_on_save'), 20);
 
-        $this->recalculate_and_save_ranks($post_id);
+        // Add timeout protection for ranking calculation
+        $start_time = microtime(true);
+        $timeout = 30; // 30 seconds timeout per ranking calculation
+        
+        try {
+            $this->recalculate_and_save_ranks($post_id);
+            
+            // Check if we exceeded timeout
+            $elapsed = microtime(true) - $start_time;
+            if ($elapsed > $timeout) {
+                error_log("Ranking calculation for profile {$post_id} took {$elapsed} seconds (exceeded {$timeout}s timeout)");
+                if (defined('WP_CLI') && WP_CLI) {
+                    WP_CLI::warning("  [Rankings] Profile {$post_id} ranking took {$elapsed}s (slow performance)");
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Ranking calculation failed for profile {$post_id}: " . $e->getMessage());
+            if (defined('WP_CLI') && WP_CLI) {
+                WP_CLI::warning("  [Rankings] Failed to calculate rankings for profile {$post_id}: " . $e->getMessage());
+            }
+        }
 
         // Clear the WordPress object cache to ensure changes are reflected immediately.
         wp_cache_flush();
 
+        // Re-add the action
         add_action('acf/save_post', array($this, 'update_ranks_on_save'), 20);
     }
 
@@ -334,11 +355,15 @@ class DH_Profile_Rankings {
             $this->update_ranks_for_term($primary_area_term, 'area', 'city_rank');
         }
 
+        // Skip state ranking for now - it's causing hangs with large states
+        // TODO: Optimize state ranking to handle large profile counts
+        /*
         // Recalculate for State
         $state_terms = get_the_terms($post_id, 'state');
         if (!empty($state_terms) && !is_wp_error($state_terms)) {
             $this->update_ranks_for_term($state_terms[0], 'state', 'state_rank');
         }
+        */
     }
 
     /**
@@ -349,6 +374,11 @@ class DH_Profile_Rankings {
      * @param string  $rank_field The ACF field name to save the rank to ('city_rank' or 'state_rank').
      */
     private function update_ranks_for_term($term, $taxonomy, $rank_field) {
+        // Add debug logging for CLI
+        if (defined('WP_CLI') && WP_CLI) {
+            WP_CLI::line("  [Rankings] Processing {$taxonomy} term: {$term->name} (ID: {$term->term_id})");
+        }
+
         $args = array(
             'post_type' => 'profile',
             'post_status' => 'publish',
@@ -367,11 +397,27 @@ class DH_Profile_Rankings {
         $profiles = $query->posts;
 
         if (empty($profiles)) {
+            if (defined('WP_CLI') && WP_CLI) {
+                WP_CLI::line("  [Rankings] No profiles found for {$taxonomy} term: {$term->name}");
+            }
             return;
         }
 
+        if (defined('WP_CLI') && WP_CLI) {
+            WP_CLI::line("  [Rankings] Found " . count($profiles) . " profiles for {$taxonomy} term: {$term->name}");
+        }
+
         $scores = array();
+        $processed = 0;
+        
         foreach ($profiles as $profile_id) {
+            $processed++;
+            
+            // Add progress indicator for large sets
+            if (defined('WP_CLI') && WP_CLI && count($profiles) > 50 && $processed % 20 == 0) {
+                WP_CLI::line("    [Rankings] Processed {$processed}/" . count($profiles) . " profiles...");
+            }
+            
             $rating = get_field('rating_value', $profile_id);
             $review_count = get_field('rating_votes_count', $profile_id);
             $boost = get_field('ranking_boost', $profile_id) ?: 0;
