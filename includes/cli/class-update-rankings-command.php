@@ -200,9 +200,9 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             WP_CLI::line( "Filtering to single city: {$single_city}" );
         }
 
-        // Filter out completed cities if resuming
+        // Filter out completed cities if resuming (default behavior when progress file exists)
         $completed_cities = $progress['completed_cities'] ?? [];
-        if ( ! empty( $completed_cities ) && $resume && ! $single_city ) {
+        if ( ! empty( $completed_cities ) && ! $fresh && ! $single_city ) {
             $cities = array_filter( $cities, function( $city ) use ( $completed_cities ) {
                 return ! in_array( $city->term_id, $completed_cities );
             } );
@@ -250,29 +250,31 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             WP_CLI::line( "=== Processing Batch " . ($batch_index + 1) . " of " . count( $batches ) . " ===" );
 
             foreach ( $batch as $city_index => $city ) {
-                $city_start_time = microtime( true );
+
+        $city_start_time = microtime( true );
                 $profile_ids = explode( ',', $city->profile_ids );
-                $profile_id_to_save = $profile_ids[0]; // Use first profile ID
+                $sample_profile_id = $profile_ids[0];
 
                 WP_CLI::line( sprintf(
-                    "[%d/%d] Processing %s (%d profiles) - Saving profile ID: %d",
+                    "[%d/%d] Processing %s (%s) (%d profiles) - Saving profile ID: %d",
                     $processed + $city_index + 1,
                     $total_cities,
                     $city->city_name,
+                    $city->city_slug,
                     $city->profile_count,
-                    $profile_id_to_save
+                    $sample_profile_id
                 ) );
 
                 try {
-                    // Verify profile exists and can be saved
-                    $profile = get_post( $profile_id_to_save );
-                    if ( ! $profile || $profile->post_type !== 'profile' ) {
-                        throw new Exception( "Profile ID {$profile_id_to_save} not found or invalid" );
+                    // Verify the profile exists
+                    $profile_to_save = get_post( $sample_profile_id );
+                    if ( ! $profile_to_save || $profile_to_save->post_type !== 'profile' ) {
+                        throw new Exception( "Profile ID {$sample_profile_id} not found or invalid" );
                     }
 
                     // Explicitly trigger ACF save_post hook to recalculate rankings
                     $ranking_start = microtime( true );
-                    do_action( 'acf/save_post', $profile_id_to_save );
+                    do_action( 'acf/save_post', $sample_profile_id );
                     $ranking_time = microtime( true ) - $ranking_start;
                     $ranking_times[] = $ranking_time;
 
@@ -282,10 +284,16 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
                     // Update progress
                     $progress['completed_cities'][] = $city->term_id;
                     $progress['last_updated'] = current_time( 'mysql' );
+                    $progress['sample_profile_id'] = $sample_profile_id;
+                    
+                    // Save progress after each city to prevent loss on interruption
+                    if ( false === file_put_contents( $progress_file, json_encode( $progress, JSON_PRETTY_PRINT ) ) ) {
+                        WP_CLI::warning( "Could not save progress file to: {$progress_file}" );
+                    }
 
                 } catch ( Exception $e ) {
                     $errors++;
-                    WP_CLI::warning( "  → Failed to save profile {$profile_id_to_save}: " . $e->getMessage() );
+                    WP_CLI::warning( "  → Failed to save profile {$sample_profile_id}: " . $e->getMessage() );
                 }
 
                 // Delay between saves (except for last item in batch)
