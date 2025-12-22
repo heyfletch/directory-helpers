@@ -861,6 +861,12 @@ class Directory_Helpers {
                 'description' => __('Simple shortcodes to display taxonomy terms: [dh_city_name], [dh_state_name format="full|abbr"], [dh_niche_name plural="true|false"]. Handles multiple area terms using ACF city field.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/taxonomy-display/taxonomy-display.php',
                 'class' => 'DH_Taxonomy_Display'
+            ),
+            'admin-cli-runner' => array(
+                'name' => __('Admin CLI Runner', 'directory-helpers'),
+                'description' => __('Run WP-CLI commands (rankings, radius analysis) from admin UI. Adds buttons to Directory Helpers page and term edit screens.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/admin-cli-runner/admin-cli-runner.php',
+                'class' => 'DH_Admin_CLI_Runner'
             )
             // Add more modules here as needed
         );

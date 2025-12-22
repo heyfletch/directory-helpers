@@ -115,6 +115,7 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 WP_CLI::line("[" . ($index + 1) . "/{$total_states}] {$state->state_name} ({$state->state_slug}) - {$state->profile_count} profiles");
 
                 // Get all profile IDs for this state and niche
+                $query_start = microtime(true);
                 $profile_ids = $wpdb->get_col($wpdb->prepare("
                     SELECT DISTINCT p.ID
                     FROM {$wpdb->posts} p
@@ -132,8 +133,12 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                     WP_CLI::line("  No profiles found, skipping...");
                     continue;
                 }
+                $query_time = round(microtime(true) - $query_start, 3);
+                $profile_count = count($profile_ids);
+                WP_CLI::line("  [Query] Fetched {$profile_count} profile IDs in {$query_time}s");
 
                 // Bulk fetch all meta data in one query
+                $meta_start = microtime(true);
                 $profile_id_string = implode(',', array_map('intval', $profile_ids));
                 
                 $meta_query = "
@@ -143,8 +148,11 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                     AND meta_key IN ('rating_value', 'rating_votes_count', 'ranking_boost')
                 ";
                 $meta_results = $wpdb->get_results($meta_query);
+                $meta_fetch_time = round(microtime(true) - $meta_start, 3);
+                WP_CLI::line("  [Meta] Fetched meta for {$profile_count} profiles in {$meta_fetch_time}s");
 
                 // Organize meta by profile ID
+                $organize_start = microtime(true);
                 $profile_meta = [];
                 foreach ($profile_ids as $pid) {
                     $profile_meta[$pid] = ['rating' => null, 'review_count' => null, 'boost' => 0];
@@ -158,8 +166,11 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                         $profile_meta[$row->post_id]['boost'] = $row->meta_value ?: 0;
                     }
                 }
+                $organize_time = round(microtime(true) - $organize_start, 3);
+                WP_CLI::line("  [Organize] Organized meta in {$organize_time}s");
 
                 // Calculate scores
+                $calc_start = microtime(true);
                 $scores = [];
                 foreach ($profile_ids as $pid) {
                     $data = $profile_meta[$pid];
@@ -177,21 +188,30 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                         $scores[$pid] = ['score' => $score, 'review_count' => $review_count];
                     }
                 }
+                $calc_time = round(microtime(true) - $calc_start, 3);
+                WP_CLI::line("  [Calculate] Calculated scores in {$calc_time}s");
 
                 // Sort by score desc, then review count desc
+                $sort_start = microtime(true);
                 $pids = array_keys($scores);
                 $score_vals = array_column($scores, 'score');
                 $review_vals = array_column($scores, 'review_count');
                 array_multisort($score_vals, SORT_DESC, $review_vals, SORT_DESC, $pids);
+                $sort_time = round(microtime(true) - $sort_start, 3);
+                WP_CLI::line("  [Sort] Sorted profiles in {$sort_time}s");
 
                 // Bulk delete existing state_rank values
+                $delete_start = microtime(true);
                 $wpdb->query("
                     DELETE FROM {$wpdb->postmeta}
                     WHERE post_id IN ({$profile_id_string})
                     AND meta_key = 'state_rank'
                 ");
+                $delete_time = round(microtime(true) - $delete_start, 3);
+                WP_CLI::line("  [Delete] Deleted old ranks in {$delete_time}s");
 
                 // Bulk insert new state_rank values
+                $insert_start = microtime(true);
                 $insert_values = [];
                 $rank = 1;
                 foreach ($pids as $pid) {
@@ -208,9 +228,11 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                         VALUES " . implode(',', $insert_values)
                     );
                 }
+                $insert_time = round(microtime(true) - $insert_start, 3);
+                WP_CLI::line("  [Insert] Inserted new ranks in {$insert_time}s");
 
                 $state_time = round(microtime(true) - $state_start, 2);
-                WP_CLI::line("  → Completed in {$state_time}s");
+                WP_CLI::line("  → Total: {$state_time}s");
             }
 
             $total_time = round(microtime(true) - $start_time, 2);

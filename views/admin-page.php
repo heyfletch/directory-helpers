@@ -326,6 +326,13 @@ wp directory-helpers update-state-rankings dog-trainer</code></pre>
                 </div>
             </div>
 
+            <?php 
+            // Include CLI Runner section if module is loaded
+            if (class_exists('DH_Admin_CLI_Runner')) {
+                echo DH_Admin_CLI_Runner::get_admin_section_html();
+            }
+            ?>
+
             <div class="directory-helpers-settings" style="margin-top: 20px;">
                 <h2><?php esc_html_e('AI Prompts', 'directory-helpers'); ?></h2>
                 <p class="description"><?php esc_html_e('Save named prompts. They will be available on post edit screens via window.DH_PROMPTS and helper functions dh_get_prompt()/dh_get_prompts().', 'directory-helpers'); ?></p>
