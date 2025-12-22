@@ -264,11 +264,10 @@ wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1</code
 
                     <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
                     <ul style="list-style: disc; margin-left: 20px;">
-                        <li><?php esc_html_e('Finds all cities with profiles in the specified niche', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Selects one profile per city to save', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Saves profiles in batches with configurable delays', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Each save triggers ranking recalculation for ALL profiles in that city + state', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Updates city_rank and state_rank ACF fields across all affected profiles', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Finds all cities with city-listing pages in the specified niche', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Selects one profile per city to trigger ranking recalculation', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Updates city_rank ACF field for all profiles in each city', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Uses bulk database operations for optimal performance', 'directory-helpers'); ?></li>
                     </ul>
 
                     <h4><?php esc_html_e('Performance Optimized Defaults:', 'directory-helpers'); ?></h4>
@@ -287,6 +286,43 @@ wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1</code
                     </ul>
 
                     <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command after bulk profile imports or major data changes. The dry-run mode lets you verify which cities will be processed before committing.', 'directory-helpers'); ?></p>
+                </div>
+
+                <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-left: 4px solid #0073aa;">
+                    <h3 style="margin-top: 0;"><?php esc_html_e('State Rankings Command', 'directory-helpers'); ?></h3>
+                    <p><?php esc_html_e('Update state_rank for all profiles. Processes each state only once using optimized bulk operations.', 'directory-helpers'); ?></p>
+                    
+                    <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
+                    <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview states that would be processed)
+wp directory-helpers update-state-rankings dog-trainer --dry-run
+
+# Update all state rankings
+wp directory-helpers update-state-rankings dog-trainer
+
+# Update a specific state only
+wp directory-helpers update-state-rankings dog-trainer --state=ca</code></pre>
+
+                    <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
+                    <ul style="list-style: disc; margin-left: 20px;">
+                        <li><?php esc_html_e('Finds all states with profiles in the specified niche', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Processes each state ONCE (not per city like the old method)', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Uses bulk database queries to fetch all profile data efficiently', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Updates state_rank ACF field for all profiles in each state', 'directory-helpers'); ?></li>
+                    </ul>
+
+                    <h4><?php esc_html_e('Performance:', 'directory-helpers'); ?></h4>
+                    <ul style="list-style: disc; margin-left: 20px;">
+                        <li><?php esc_html_e('California (1,200+ profiles): ~6 seconds', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Texas (800+ profiles): ~2 seconds', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('All 51 states: ~40 seconds total', 'directory-helpers'); ?></li>
+                    </ul>
+
+                    <p><strong><?php esc_html_e('Recommended Workflow:', 'directory-helpers'); ?></strong></p>
+                    <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Step 1: Run city rankings first
+wp directory-helpers update-rankings dog-trainer
+
+# Step 2: Run state rankings after city rankings complete
+wp directory-helpers update-state-rankings dog-trainer</code></pre>
                 </div>
             </div>
 

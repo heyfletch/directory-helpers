@@ -355,15 +355,9 @@ class DH_Profile_Rankings {
             $this->update_ranks_for_term($primary_area_term, 'area', 'city_rank');
         }
 
-        // Skip state ranking for now - it's causing hangs with large states
-        // TODO: Optimize state ranking to handle large profile counts
-        /*
-        // Recalculate for State
-        $state_terms = get_the_terms($post_id, 'state');
-        if (!empty($state_terms) && !is_wp_error($state_terms)) {
-            $this->update_ranks_for_term($state_terms[0], 'state', 'state_rank');
-        }
-        */
+        // State ranking is now handled separately via CLI command
+        // to avoid recalculating entire state on every city save
+        // Use: wp directory-helpers update-state-rankings <niche>
     }
 
     /**
@@ -374,11 +368,6 @@ class DH_Profile_Rankings {
      * @param string  $rank_field The ACF field name to save the rank to ('city_rank' or 'state_rank').
      */
     private function update_ranks_for_term($term, $taxonomy, $rank_field) {
-        // Add debug logging for CLI
-        if (defined('WP_CLI') && WP_CLI) {
-            WP_CLI::line("  [Rankings] Processing {$taxonomy} term: {$term->name} (ID: {$term->term_id})");
-        }
-
         $args = array(
             'post_type' => 'profile',
             'post_status' => 'publish',
@@ -397,63 +386,155 @@ class DH_Profile_Rankings {
         $profiles = $query->posts;
 
         if (empty($profiles)) {
-            if (defined('WP_CLI') && WP_CLI) {
-                WP_CLI::line("  [Rankings] No profiles found for {$taxonomy} term: {$term->name}");
-            }
             return;
         }
 
-        if (defined('WP_CLI') && WP_CLI) {
-            WP_CLI::line("  [Rankings] Found " . count($profiles) . " profiles for {$taxonomy} term: {$term->name}");
-        }
-
+        // OPTIMIZATION: Bulk fetch all ACF values in single queries
+        $profile_data = $this->bulk_fetch_profile_data($profiles);
+        
+        // Calculate scores
         $scores = array();
-        $processed = 0;
         
         foreach ($profiles as $profile_id) {
-            $processed++;
+            $data = $profile_data[$profile_id];
             
-            // Add progress indicator for large sets
-            if (defined('WP_CLI') && WP_CLI && count($profiles) > 50 && $processed % 20 == 0) {
-                WP_CLI::line("    [Rankings] Processed {$processed}/" . count($profiles) . " profiles...");
-            }
-            
-            $rating = get_field('rating_value', $profile_id);
-            $review_count = get_field('rating_votes_count', $profile_id);
-            $boost = get_field('ranking_boost', $profile_id) ?: 0;
-
-            if (empty($rating) || empty($review_count)) {
-                // Profiles without reviews are not ranked
+            if (empty($data['rating']) || empty($data['review_count'])) {
                 $scores[$profile_id] = ['score' => -1, 'review_count' => 0];
                 continue;
             }
 
             $scores[$profile_id] = [
-                'score' => $this->calculate_ranking_score($rating, $review_count, $boost),
-                'review_count' => (int)$review_count,
+                'score' => $this->calculate_ranking_score($data['rating'], $data['review_count'], $data['boost']),
+                'review_count' => (int)$data['review_count'],
             ];
         }
 
-        // Sort by score descending
-        uasort($scores, function($a, $b) {
-            if (bccomp((string)$a['score'], (string)$b['score'], 8) === 0) {
-                return $b['review_count'] - $a['review_count'];
-            }
-            return bccomp((string)$b['score'], (string)$a['score'], 8);
-        });
+        // Sort by score descending (using native PHP sorting for performance)
+        
+        // Extract scores and review counts for sorting
+        $profile_ids = array_keys($scores);
+        $score_values = [];
+        $review_counts = [];
+        
+        foreach ($scores as $profile_id => $data) {
+            $score_values[] = $data['score'];
+            $review_counts[] = $data['review_count'];
+        }
+        
+        // Use array_multisort for efficient multi-column sorting
+        array_multisort(
+            $score_values, SORT_DESC, SORT_NUMERIC,
+            $review_counts, SORT_DESC, SORT_NUMERIC,
+            $profile_ids
+        );
+        
+        // Rebuild scores array in sorted order
+        $sorted_scores = [];
+        foreach ($profile_ids as $profile_id) {
+            $sorted_scores[$profile_id] = $scores[$profile_id];
+        }
+        $scores = $sorted_scores;
 
-        // Update rank field for each profile
+        // OPTIMIZATION: Bulk update all ranks in single query
+        $this->bulk_update_ranks($scores, $rank_field);
+    }
+
+    /**
+     * Bulk fetch all ACF values for multiple profiles in minimal queries
+     */
+    private function bulk_fetch_profile_data($profile_ids) {
+        global $wpdb;
+        
+        // Convert to string for IN clause
+        $profile_id_string = implode(',', array_map('intval', $profile_ids));
+        
+        // Fetch all meta values in 3 queries instead of 3 * N queries
+        $ratings = $wpdb->get_results($wpdb->prepare("
+            SELECT post_id, meta_value as rating_value
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$profile_id_string})
+            AND meta_key = 'rating_value'
+        "));
+        
+        $review_counts = $wpdb->get_results($wpdb->prepare("
+            SELECT post_id, meta_value as review_count
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$profile_id_string})
+            AND meta_key = 'rating_votes_count'
+        "));
+        
+        $boosts = $wpdb->get_results($wpdb->prepare("
+            SELECT post_id, meta_value as boost
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$profile_id_string})
+            AND meta_key = 'ranking_boost'
+        "));
+        
+        // Organize data by profile_id
+        $profile_data = [];
+        
+        // Initialize with defaults
+        foreach ($profile_ids as $profile_id) {
+            $profile_data[$profile_id] = [
+                'rating' => null,
+                'review_count' => null,
+                'boost' => 0
+            ];
+        }
+        
+        // Fill in actual values
+        foreach ($ratings as $row) {
+            $profile_data[$row->post_id]['rating'] = $row->rating_value;
+        }
+        
+        foreach ($review_counts as $row) {
+            $profile_data[$row->post_id]['review_count'] = $row->review_count;
+        }
+        
+        foreach ($boosts as $row) {
+            $profile_data[$row->post_id]['boost'] = $row->boost ?: 0;
+        }
+        
+        return $profile_data;
+    }
+
+    /**
+     * Bulk update all rank values in minimal queries
+     */
+    private function bulk_update_ranks($scores, $rank_field) {
+        global $wpdb;
+        
+        // Prepare bulk delete and insert queries
+        $profile_ids = array_keys($scores);
+        $profile_id_string = implode(',', array_map('intval', $profile_ids));
+        
+        // Delete all existing rank values in one query
+        $wpdb->query($wpdb->prepare("
+            DELETE FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$profile_id_string})
+            AND meta_key = %s
+        ", $rank_field));
+        
+        // Prepare bulk insert data
+        $insert_data = [];
         $rank = 1;
+        
         foreach ($scores as $profile_id => $data) {
             $rank_value = ($data['score'] < 0) ? 99999 : $rank;
-            
-            // Delete old value first, then add new one to ensure it updates
-            delete_post_meta($profile_id, $rank_field);
-            add_post_meta($profile_id, $rank_field, $rank_value);
+            $insert_data[] = "({$profile_id}, '" . esc_sql($rank_field) . "', {$rank_value})";
             
             if ($data['score'] >= 0) {
                 $rank++;
             }
+        }
+        
+        // Insert all new rank values in one query
+        if (!empty($insert_data)) {
+            $insert_string = implode(',', $insert_data);
+            $wpdb->query("
+                INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value)
+                VALUES {$insert_string}
+            ");
         }
     }
 }
