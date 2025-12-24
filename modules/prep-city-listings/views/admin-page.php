@@ -87,6 +87,8 @@ if (!defined('ABSPATH')) exit;
                     <button type="button" class="button button-secondary" onclick="deselectAll();">Deselect All</button>
                     
                     <button type="submit" class="button button-primary">Create Selected City Listings</button>
+                    
+                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dh_prep_city_listings_csv&niche=' . urlencode($niche_slug)), 'dh_prep_city_listings_csv')); ?>" class="button button-secondary" style="margin-left: 10px;">📥 Download CSV</a>
                 </div>
                 
                 <table class="wp-list-table widefat fixed striped">

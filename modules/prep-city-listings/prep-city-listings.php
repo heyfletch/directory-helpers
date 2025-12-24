@@ -17,6 +17,38 @@ class DH_Prep_City_Listings {
     public function __construct() {
         add_action('admin_menu', array($this, 'add_admin_menu'), 21);
         add_action('admin_post_dh_prep_city_listings_create', array($this, 'handle_create_cities'));
+        add_action('admin_post_dh_prep_city_listings_csv', array($this, 'handle_csv_download'));
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
+    }
+    
+    public function register_rest_routes() {
+        register_rest_route('directory-helpers/v1', '/cities-needing-listings', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'rest_get_cities_needing_listings'),
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
+            'args' => array(
+                'niche' => array(
+                    'default' => 'dog-trainer',
+                    'sanitize_callback' => 'sanitize_title',
+                ),
+            ),
+        ));
+    }
+    
+    public function rest_get_cities_needing_listings($request) {
+        $niche_slug = $request->get_param('niche');
+        $cities = $this->get_cities_needing_listings($niche_slug);
+        
+        $slugs = array_map(function($city) {
+            return $city->slug;
+        }, $cities);
+        
+        return new WP_REST_Response(array(
+            'count' => count($slugs),
+            'slugs' => $slugs,
+        ), 200);
     }
     
     public function add_admin_menu() {
@@ -431,6 +463,32 @@ class DH_Prep_City_Listings {
         $cities_needing_listings = $this->get_cities_needing_listings($niche_slug);
         
         require_once __DIR__ . '/views/admin-page.php';
+    }
+    
+    public function handle_csv_download() {
+        if (!current_user_can('manage_options')) wp_die('Unauthorized');
+        check_admin_referer('dh_prep_city_listings_csv');
+        
+        $niche_slug = isset($_GET['niche']) ? sanitize_title(wp_unslash($_GET['niche'])) : 'dog-trainer';
+        $cities_needing_listings = $this->get_cities_needing_listings($niche_slug);
+        
+        $filename = 'cities-needing-listings-' . $niche_slug . '-' . date('Y-m-d') . '.csv';
+        
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        $output = fopen('php://output', 'w');
+        
+        fputcsv($output, array('area_slug'));
+        
+        foreach ($cities_needing_listings as $city) {
+            fputcsv($output, array($city->slug));
+        }
+        
+        fclose($output);
+        exit;
     }
 }
 
