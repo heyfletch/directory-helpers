@@ -85,9 +85,9 @@ class DH_Prep_City_Listings {
         
         // Find all area terms that have at least one published profile with the niche
         $sql = "
-            SELECT DISTINCT t.term_id, t.name, t.slug,
+            SELECT t.term_id, t.name, t.slug,
                    ts.name AS state_name, ts.slug AS state_slug,
-                   COUNT(p.ID) AS profile_count
+                   COUNT(DISTINCT p.ID) AS profile_count
             FROM {$prefix}posts p
             JOIN {$prefix}term_relationships tr_area ON p.ID = tr_area.object_id
             JOIN {$prefix}term_taxonomy tt_area ON tr_area.term_taxonomy_id = tt_area.term_taxonomy_id
