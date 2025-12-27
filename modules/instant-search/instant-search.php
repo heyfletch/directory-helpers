@@ -29,11 +29,11 @@ if (!class_exists('DH_Instant_Search')) {
 
             add_action('rest_api_init', array($this, 'register_rest_routes'));
 
-            // Invalidate index when relevant posts change
-            add_action('transition_post_status', array($this, 'maybe_invalidate_on_transition'), 10, 3);
-            add_action('deleted_post', array($this, 'invalidate_and_rebuild_index'));
-            add_action('trashed_post', array($this, 'invalidate_and_rebuild_index'));
-            add_action('untrashed_post', array($this, 'invalidate_and_rebuild_index'));
+            // Automatic cache rebuilds disabled - only manual rebuilds allowed
+            // add_action('transition_post_status', array($this, 'maybe_invalidate_on_transition'), 10, 3);
+            // add_action('deleted_post', array($this, 'invalidate_and_rebuild_index'));
+            // add_action('trashed_post', array($this, 'invalidate_and_rebuild_index'));
+            // add_action('untrashed_post', array($this, 'invalidate_and_rebuild_index'));
             
             // Admin actions
             add_action('admin_post_dh_rebuild_search_cache', array($this, 'handle_manual_cache_rebuild'));
@@ -186,46 +186,51 @@ if (!class_exists('DH_Instant_Search')) {
         }
 
         public function rest_get_index(WP_REST_Request $request) {
-            $index = $this->get_index_data();
-
-            // Optional filter by type letters via ?pt=c,p
-            $pt_letters = array();
-            $arg_pt = $request->get_param('pt');
-            if (is_string($arg_pt) && $arg_pt !== '') {
-                $pt_letters = array_filter(array_map('trim', explode(',', strtolower($arg_pt))));
-                if (!empty($pt_letters)) {
-                    $index['items'] = array_values(array_filter($index['items'], function($item) use ($pt_letters) {
-                        return in_array($item['y'], $pt_letters, true);
-                    }));
+            try {
+                $index = $this->get_index_data();
+                
+                // Validate index structure
+                if (!is_array($index) || !isset($index['items'])) {
+                    return new WP_Error(
+                        'index_build_failed',
+                        'Failed to build search index',
+                        array('status' => 500)
+                    );
                 }
-            }
 
-            return rest_ensure_response($index);
+                // Optional filter by type letters via ?pt=c,p
+                $pt_letters = array();
+                $arg_pt = $request->get_param('pt');
+                if (is_string($arg_pt) && $arg_pt !== '') {
+                    $pt_letters = array_filter(array_map('trim', explode(',', strtolower($arg_pt))));
+                    if (!empty($pt_letters)) {
+                        $index['items'] = array_values(array_filter($index['items'], function($item) use ($pt_letters) {
+                            return in_array($item['y'], $pt_letters, true);
+                        }));
+                    }
+                }
+
+                return rest_ensure_response($index);
+            } catch (Exception $e) {
+                return new WP_Error(
+                    'index_error',
+                    'Error generating search index: ' . $e->getMessage(),
+                    array('status' => 500)
+                );
+            }
         }
 
         /**
          * Hooked to 'transition_post_status' to invalidate the index ONLY when
          * a post transitions TO or FROM publish status. This prevents cache clearing
          * on every save and only triggers when content actually becomes visible/invisible.
+         * 
+         * NOTE: This method is disabled - automatic cache rebuilds are disabled.
+         * Only manual rebuilds via CLI or admin button are allowed.
          */
         public function maybe_invalidate_on_transition($new_status, $old_status, $post) {
-            if (!($post instanceof WP_Post)) {
-                return;
-            }
-            
-            // Only invalidate if transitioning TO or FROM publish
-            $is_becoming_published = ($new_status === 'publish' && $old_status !== 'publish');
-            $is_becoming_unpublished = ($old_status === 'publish' && $new_status !== 'publish');
-            
-            if (!$is_becoming_published && !$is_becoming_unpublished) {
-                return;
-            }
-            
-            // Allow site-wide control of which post types are indexed.
-            $target_pts = apply_filters('dh_instant_search_post_types', $this->default_post_types);
-            if (in_array($post->post_type, $target_pts, true)) {
-                $this->invalidate_and_rebuild_index();
-            }
+            // Automatic cache rebuilds disabled - do nothing
+            return;
         }
 
         /**
@@ -267,77 +272,128 @@ if (!class_exists('DH_Instant_Search')) {
                 'items'   => $items,
             );
 
-            // Cache for 7 days; only invalidated when posts are published/unpublished
+            // Cache for 1 year; only invalidated when posts are published/unpublished
             // Longer cache duration prevents unnecessary rebuilds and ensures fast search
-            set_transient(self::TRANSIENT_INDEX, $data, WEEK_IN_SECONDS);
+            set_transient(self::TRANSIENT_INDEX, $data, YEAR_IN_SECONDS);
             return $data;
         }
 
         // Builds the index: queries all published posts for configured post types
         // and returns compact records used by the client.
+        // Optimized for large datasets (12K+ posts) with batched processing.
         private function build_index_items() {
             $post_types = apply_filters('dh_instant_search_post_types', $this->default_post_types);
-
-            $ids = array();
-            foreach ($post_types as $pt) {
-                $q = new WP_Query(array(
-                    'post_type'      => $pt,
-                    'post_status'    => 'publish',
-                    'posts_per_page' => -1,
-                    'fields'         => 'ids',
-                    'no_found_rows'  => true,
-                    'orderby'        => 'ID',
-                    'order'          => 'DESC',
-                ));
-                if (!empty($q->posts)) {
-                    foreach ($q->posts as $id) {
-                        $ids[] = array($id, $pt);
-                    }
-                }
-                wp_reset_postdata();
-            }
-
+            
+            // Increase limits temporarily for large index builds
+            $original_time_limit = ini_get('max_execution_time');
+            $original_memory_limit = ini_get('memory_limit');
+            @set_time_limit(300); // 5 minutes
+            @ini_set('memory_limit', '512M');
+            
+            // Batch size for processing posts - balance between memory and DB queries
+            $batch_size = apply_filters('dh_instant_search_batch_size', 500);
+            
             $items = array();
-            foreach ($ids as $pair) {
-                list($id, $pt) = $pair;
-                $title = get_the_title($id);
-                // Decode HTML entities so the client displays proper characters and normalization uses clean text.
-                if ($title !== '' && $title !== null) {
-                    $title = html_entity_decode($title, ENT_QUOTES | ENT_HTML5, get_bloginfo('charset'));
-                }
-                if ($title === '' || $title === null) {
-                    continue;
-                }
-                $url = get_permalink($id);
-                if (!$url) {
-                    continue;
-                }
-                $n = $this->normalize($title);
-                // Base item
-                $item = array(
-                    'i' => (int) $id,            // id
-                    't' => $title,                // title
-                    'u' => $url,                  // url
-                    'y' => isset($this->type_map[$pt]) ? $this->type_map[$pt] : substr($pt, 0, 1), // type letter
-                    'n' => $n,                    // normalized title
-                );
-
-                // Attach ZIP (as 'z') for profiles (type letter 'p') when available. The meta key is filterable.
-                if (isset($item['y']) && $item['y'] === 'p') {
-                    $zip_meta_key = apply_filters('dh_instant_search_profile_zip_meta_key', 'zip', $id);
-                    $zip_raw = (string) get_post_meta($id, $zip_meta_key, true);
-                    if ($zip_raw !== '') {
-                        // Keep only digits; store the first 5 digits if available (handles ZIP+4).
-                        $zip_digits = preg_replace('/\D+/', '', $zip_raw);
-                        if (is_string($zip_digits) && strlen($zip_digits) >= 5) {
-                            $item['z'] = substr($zip_digits, 0, 5);
+            $charset = get_bloginfo('charset');
+            
+            foreach ($post_types as $pt) {
+                $type_letter = isset($this->type_map[$pt]) ? $this->type_map[$pt] : substr($pt, 0, 1);
+                $is_profile = ($type_letter === 'p');
+                $zip_meta_key = $is_profile ? apply_filters('dh_instant_search_profile_zip_meta_key', 'zip', 0) : '';
+                
+                $offset = 0;
+                $has_more = true;
+                
+                while ($has_more) {
+                    $q = new WP_Query(array(
+                        'post_type'      => $pt,
+                        'post_status'    => 'publish',
+                        'posts_per_page' => $batch_size,
+                        'offset'         => $offset,
+                        'fields'         => 'ids',
+                        'no_found_rows'  => true,
+                        'orderby'        => 'ID',
+                        'order'          => 'DESC',
+                        'suppress_filters' => true,
+                        'cache_results'  => false,
+                        'update_post_meta_cache' => false,
+                        'update_post_term_cache' => false,
+                    ));
+                    
+                    $batch_ids = $q->posts;
+                    $has_more = (count($batch_ids) === $batch_size);
+                    $offset += $batch_size;
+                    
+                    if (empty($batch_ids)) {
+                        break;
+                    }
+                    
+                    // Prime caches for this batch to reduce individual queries
+                    _prime_post_caches($batch_ids, false, false);
+                    
+                    // Batch load ZIP meta for profiles
+                    $zip_data = array();
+                    if ($is_profile && $zip_meta_key) {
+                        global $wpdb;
+                        $ids_placeholder = implode(',', array_map('intval', $batch_ids));
+                        $zip_results = $wpdb->get_results($wpdb->prepare(
+                            "SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE post_id IN ({$ids_placeholder}) AND meta_key = %s",
+                            $zip_meta_key
+                        ));
+                        foreach ($zip_results as $row) {
+                            $zip_data[(int)$row->post_id] = $row->meta_value;
                         }
                     }
+                    
+                    foreach ($batch_ids as $id) {
+                        $title = get_the_title($id);
+                        if ($title !== '' && $title !== null) {
+                            $title = html_entity_decode($title, ENT_QUOTES | ENT_HTML5, $charset);
+                        }
+                        if ($title === '' || $title === null) {
+                            continue;
+                        }
+                        $url = get_permalink($id);
+                        if (!$url) {
+                            continue;
+                        }
+                        
+                        $item = array(
+                            'i' => (int) $id,
+                            't' => $title,
+                            'u' => $url,
+                            'y' => $type_letter,
+                            'n' => $this->normalize($title),
+                        );
+                        
+                        // Attach ZIP for profiles using batch-loaded data
+                        if ($is_profile && isset($zip_data[$id])) {
+                            $zip_raw = (string) $zip_data[$id];
+                            if ($zip_raw !== '') {
+                                $zip_digits = preg_replace('/\D+/', '', $zip_raw);
+                                if (is_string($zip_digits) && strlen($zip_digits) >= 5) {
+                                    $item['z'] = substr($zip_digits, 0, 5);
+                                }
+                            }
+                        }
+                        
+                        $items[] = $item;
+                    }
+                    
+                    // Free memory after each batch
+                    wp_reset_postdata();
+                    if (function_exists('wp_cache_flush_runtime')) {
+                        wp_cache_flush_runtime();
+                    }
                 }
-
-                $items[] = $item;
             }
-
+            
+            // Restore original limits
+            @set_time_limit((int)$original_time_limit);
+            if ($original_memory_limit) {
+                @ini_set('memory_limit', $original_memory_limit);
+            }
+            
             return $items;
         }
 
@@ -403,15 +459,31 @@ if (!class_exists('DH_Instant_Search')) {
          */
         public function cli_rebuild_cache($args, $assoc_args) {
             WP_CLI::log('Rebuilding instant search cache...');
+            WP_CLI::log('Memory limit: ' . ini_get('memory_limit'));
             
             $start = microtime(true);
+            $start_memory = memory_get_usage(true);
+            
             $this->invalidate_and_rebuild_index();
+            
             $elapsed = round(microtime(true) - $start, 2);
+            $peak_memory = memory_get_peak_usage(true);
             
             $cached = get_transient(self::TRANSIENT_INDEX);
             $count = isset($cached['items']) ? count($cached['items']) : 0;
             
+            // Estimate JSON size
+            $json_size = strlen(json_encode($cached));
+            $json_size_kb = round($json_size / 1024, 1);
+            $json_size_mb = round($json_size / 1024 / 1024, 2);
+            
             WP_CLI::success("Search cache rebuilt in {$elapsed}s with {$count} items indexed.");
+            WP_CLI::log("Peak memory usage: " . round($peak_memory / 1024 / 1024, 1) . " MB");
+            WP_CLI::log("Index JSON size: {$json_size_kb} KB ({$json_size_mb} MB)");
+            
+            if ($json_size_mb > 2) {
+                WP_CLI::warning("Index size is large ({$json_size_mb} MB). Consider increasing min_chars in shortcode or reducing indexed post types.");
+            }
         }
     }
 }
