@@ -140,7 +140,8 @@
         opt.setAttribute('role','option');
         var oid = state.root.id+'-opt-'+(idx++);
         opt.id = oid;
-        opt.href = it.u;
+        // Convert relative URL to absolute if needed
+        opt.href = it.u.startsWith('http') ? it.u : (window.location.origin + it.u);
         opt.dataset.url = it.u;
         opt.dataset.type = it.y;
         opt.textContent = it.t;
@@ -255,7 +256,8 @@
       } else if(key === 'Enter'){
         var options = panel.querySelectorAll('[role="option"]');
         if(options.length && state.activeIndex >=0){
-          e.preventDefault(); window.location.href = options[state.activeIndex].dataset.url;
+          e.preventDefault(); var url = options[state.activeIndex].dataset.url;
+        window.location.href = url.startsWith('http') ? url : (window.location.origin + url);
         }
       } else if(key === 'Escape'){
         panel.innerHTML=''; el.setAttribute('aria-expanded','false'); input.setAttribute('aria-activedescendant','');

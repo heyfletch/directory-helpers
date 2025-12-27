@@ -11,6 +11,7 @@ if (!class_exists('DH_Instant_Search')) {
     class DH_Instant_Search {
         const OPTION_VERSION = 'dh_instant_search_index_version';
         const TRANSIENT_INDEX = 'dh_instant_search_index_json';
+        const STATIC_JSON_FILE = 'dh-search-index.txt';
 
         // Default indexed post types. Adjust defaults here, or use the
         // 'dh_instant_search_post_types' filter to set site-wide types.
@@ -88,8 +89,10 @@ if (!class_exists('DH_Instant_Search')) {
             $zip_min_digits = isset($opts['instant_search_zip_min_digits']) ? (int) $opts['instant_search_zip_min_digits'] : 3;
             if ($zip_min_digits < 1) { $zip_min_digits = 1; }
             if ($zip_min_digits > 5) { $zip_min_digits = 5; }
+            // Use static file URL in uploads directory to bypass WAF blocking
+            $static_json_url = $this->get_static_json_url() . '?v=' . get_option(self::OPTION_VERSION, '0');
             wp_localize_script('dh-instant-search', 'dhInstantSearch', array(
-                'restUrl' => esc_url_raw( rest_url('dh/v1/instant-index') ),
+                'restUrl' => esc_url_raw($static_json_url),
                 'version' => (string) get_option(self::OPTION_VERSION, '0'),
                 'labels'  => $labels,
                 'zipMinDigits' => $zip_min_digits,
@@ -275,6 +278,10 @@ if (!class_exists('DH_Instant_Search')) {
             // Cache for 1 year; only invalidated when posts are published/unpublished
             // Longer cache duration prevents unnecessary rebuilds and ensures fast search
             set_transient(self::TRANSIENT_INDEX, $data, YEAR_IN_SECONDS);
+            
+            // Also write to static JSON file to bypass REST API/WAF blocking
+            $this->write_static_json($data);
+            
             return $data;
         }
 
@@ -357,11 +364,13 @@ if (!class_exists('DH_Instant_Search')) {
                         if (!$url) {
                             continue;
                         }
+                        // Convert to relative path to reduce JSON size
+                        $relative_url = wp_make_link_relative($url);
                         
                         $item = array(
                             'i' => (int) $id,
                             't' => $title,
-                            'u' => $url,
+                            'u' => $relative_url,
                             'y' => $type_letter,
                             'n' => $this->normalize($title),
                         );
@@ -397,6 +406,27 @@ if (!class_exists('DH_Instant_Search')) {
             return $items;
         }
 
+        /**
+         * Write index data to a static file in uploads directory.
+         * This bypasses REST API and WAF blocking issues.
+         */
+        private function write_static_json($data) {
+            $upload_dir = wp_upload_dir();
+            $file_path = $upload_dir['basedir'] . '/' . self::STATIC_JSON_FILE;
+            $json = wp_json_encode($data);
+            if ($json !== false) {
+                @file_put_contents($file_path, $json);
+            }
+        }
+        
+        /**
+         * Get the URL to the static search index file.
+         */
+        private function get_static_json_url() {
+            $upload_dir = wp_upload_dir();
+            return $upload_dir['baseurl'] . '/' . self::STATIC_JSON_FILE;
+        }
+        
         // Server-side normalization to match the client-side tokenizer.
         private function normalize($str) {
             if (!function_exists('remove_accents')) {
