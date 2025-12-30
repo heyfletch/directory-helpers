@@ -45,10 +45,17 @@ class DH_Prep_City_Listings {
             return $city->slug;
         }, $cities);
         
-        return new WP_REST_Response(array(
+        $response = new WP_REST_Response(array(
             'count' => count($slugs),
+            'timestamp' => time(),
             'slugs' => $slugs,
         ), 200);
+        
+        $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->header('Pragma', 'no-cache');
+        $response->header('Expires', '0');
+        
+        return $response;
     }
     
     public function add_admin_menu() {
@@ -86,7 +93,7 @@ class DH_Prep_City_Listings {
         // Find all area terms that have at least one published profile with the niche
         $sql = "
             SELECT t.term_id, t.name, t.slug,
-                   ts.name AS state_name, ts.slug AS state_slug,
+                   MAX(ts.name) AS state_name, MAX(ts.slug) AS state_slug,
                    COUNT(DISTINCT p.ID) AS profile_count
             FROM {$prefix}posts p
             JOIN {$prefix}term_relationships tr_area ON p.ID = tr_area.object_id
@@ -103,8 +110,8 @@ class DH_Prep_City_Listings {
               AND tt_niche.taxonomy = 'niche'
               AND tt_niche.term_id = %d
               AND tt_state.taxonomy = 'state'
-            GROUP BY t.term_id, t.name, t.slug, ts.name, ts.slug
-            ORDER BY profile_count DESC, ts.name ASC, t.name ASC
+            GROUP BY t.term_id, t.name, t.slug
+            ORDER BY profile_count DESC, t.name ASC
         ";
         
         $areas = $wpdb->get_results($wpdb->prepare($sql, $niche_term_id));
@@ -476,15 +483,17 @@ class DH_Prep_City_Listings {
         
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Cache-Control: post-check=0, pre-check=0', false);
         header('Pragma: no-cache');
         header('Expires: 0');
         
         $output = fopen('php://output', 'w');
         
-        fputcsv($output, array('area_slug'));
+        fputcsv($output, array('area_slug', 'profile_count'));
         
         foreach ($cities_needing_listings as $city) {
-            fputcsv($output, array($city->slug));
+            fputcsv($output, array($city->slug, $city->profile_count));
         }
         
         fclose($output);
