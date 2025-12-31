@@ -867,6 +867,12 @@ class Directory_Helpers {
                 'description' => __('Run WP-CLI commands (rankings, radius analysis) from admin UI. Adds buttons to Directory Helpers page and term edit screens.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/admin-cli-runner/admin-cli-runner.php',
                 'class' => 'DH_Admin_CLI_Runner'
+            ),
+            'area-term-links' => array(
+                'name' => __('Area Term Links', 'directory-helpers'),
+                'description' => __('Adds direct "Edit Term" links to area taxonomy terms in city-listing meta boxes for quick access to term edit pages.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/area-term-links/area-term-links.php',
+                'class' => 'DH_Area_Term_Links'
             )
             // Add more modules here as needed
         );
