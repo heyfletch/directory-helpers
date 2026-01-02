@@ -49,8 +49,8 @@ class DH_External_Link_Management {
         add_action('wp_ajax_dh_elm_ai_suggest_link', array($this, 'ajax_ai_suggest_link'));
         add_action('wp_ajax_dh_elm_ai_apply_suggestion', array($this, 'ajax_ai_apply_suggestion'));
         
-        // WP All Import Pro hook to scan imported posts
-        add_action('pmxi_after_xml_import', array($this, 'after_xml_import_scan_links'), 10, 2);
+        // WP All Import Pro hook to scan imported posts (fires for each post)
+        add_action('pmxi_saved_post', array($this, 'on_post_imported'), 10, 3);
     }
 
     private function table_name() {
@@ -871,70 +871,49 @@ class DH_External_Link_Management {
     }
 
     /**
-     * Handle WP All Import Pro - scan imported city-listing and state-listing posts for external links
+     * Handle WP All Import Pro - scan each imported post for external links
+     * Fires when a post is saved/updated during import
+     * 
+     * @param int $post_id The post ID
+     * @param \SimpleXMLElement $xml_node The XML node (not used)
+     * @param bool $is_update Whether this is an update
      */
-    public function after_xml_import_scan_links($import_id, $import) {
-        // Get posts from this specific import session
-        $imported_posts = $this->get_imported_posts($import_id);
-        
-        if (empty($imported_posts)) {
-            return;
-        }
-        
-        // Process each imported post from this session
-        foreach ($imported_posts as $post_id) {
-            $post = get_post($post_id);
-            if (!$post) {
-                continue;
+    public function on_post_imported($post_id, $xml_node, $is_update) {
+        try {
+            // Only process city-listing and state-listing posts
+            $post_type = get_post_type($post_id);
+            if (!in_array($post_type, array('city-listing', 'state-listing'), true)) {
+                return;
             }
             
-            // Only process city-listing and state-listing posts
-            if (!in_array($post->post_type, array('city-listing', 'state-listing'), true)) {
-                continue;
+            $post = get_post($post_id);
+            if (!$post || empty($post->post_content)) {
+                return;
+            }
+            
+            // Skip if content has no links
+            if (stripos($post->post_content, '<a') === false && stripos($post->post_content, 'href=') === false) {
+                return;
             }
             
             // Process the post content for external links
-            $this->process_imported_post($post_id, $post->post_content);
-        }
-    }
-    
-    /**
-     * Get recently imported posts from WP All Import Pro
-     */
-    private function get_imported_posts($import_id) {
-        global $wpdb;
-        
-        // WP All Import Pro stores import records in wp_pmxi_imports and wp_pmxi_posts
-        $imported_posts = $wpdb->get_col($wpdb->prepare("
-            SELECT post_id 
-            FROM {$wpdb->prefix}pmxi_posts 
-            WHERE import_id = %d 
-            AND post_id IS NOT NULL 
-            AND post_id > 0
-            ORDER BY id DESC
-            LIMIT 1000
-        ", $import_id));
-        
-        return array_map('absint', $imported_posts);
-    }
-    
-    /**
-     * Process an imported post for external links (similar to on_ai_content_updated)
-     */
-    private function process_imported_post($post_id, $content) {
-        // Before rescanning, delete any existing link rows for this post
-        $this->delete_links_for_post($post_id);
-
-        // Convert external links to shortcodes and persist
-        $result = $this->scan_convert_and_save($post_id, $content);
-        if ($result !== false && is_array($result)) {
-            $updated_html = $result['html'];
-            // Save updated HTML back to post content
-            if ($updated_html !== false) {
-                wp_update_post(array('ID' => $post_id, 'post_content' => $updated_html));
+            $this->delete_links_for_post($post_id);
+            
+            $result = $this->scan_convert_and_save($post_id, $post->post_content);
+            if ($result !== false && is_array($result)) {
+                $updated_html = $result['html'];
+                if ($updated_html !== false && $updated_html !== '') {
+                    // Unhook this function to prevent infinite loop
+                    remove_action('pmxi_saved_post', array($this, 'on_post_imported'), 10);
+                    wp_update_post(array('ID' => $post_id, 'post_content' => $updated_html));
+                    // Re-hook after update
+                    add_action('pmxi_saved_post', array($this, 'on_post_imported'), 10, 3);
+                }
+                // Check link health
+                $this->check_links_for_post($post_id);
             }
-            // Check all links since this is new imported content (all links are new)
-            $this->check_links_for_post($post_id);
+        } catch (Exception $e) {
+            error_log('DH External Link Management: Error processing imported post ' . $post_id . ': ' . $e->getMessage());
         }
     }
 
