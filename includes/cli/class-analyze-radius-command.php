@@ -239,17 +239,22 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
 
             $area_count = $area_count_query->found_posts;
 
-            // If sufficient, no proximity needed - skip expensive proximity testing
+            // If sufficient, no proximity needed - set radius to 1 to indicate calculated
             if ( $area_count >= $min_profiles ) {
                 $summary['sufficient']++;
-                \WP_CLI::line( "  → Sufficient profiles found ({$area_count}) - no proximity needed" );
+                \WP_CLI::line( "  → Sufficient profiles found ({$area_count}) - radius set to 1" );
                 $results[] = [
                     'term_id' => $term->term_id,
                     'name' => $term->name,
                     'area_profiles' => $area_count,
                     'status' => 'sufficient',
-                    'recommended_radius' => 0,
+                    'recommended_radius' => 1,
                 ];
+                
+                // Update meta if requested
+                if ( $update_meta && ! $dry_run ) {
+                    update_term_meta( $term->term_id, 'recommended_radius', 1 );
+                }
                 continue;
             }
 

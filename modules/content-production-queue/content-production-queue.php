@@ -907,10 +907,10 @@ class DH_Content_Production_Queue {
             'fields' => 'ids',
         )));
         
-        // If sufficient profiles, no proximity needed - clear any existing radius
+        // If sufficient profiles, no proximity needed - set radius to 1 to indicate calculated
         if ($area_count >= $min_profiles) {
-            delete_term_meta($area_term->term_id, 'recommended_radius');
-            error_log('DH CPQ: analyze_city_radius COMPLETE for ' . $city_slug . ' - sufficient profiles, no radius needed');
+            update_term_meta($area_term->term_id, 'recommended_radius', 1);
+            error_log('DH CPQ: analyze_city_radius COMPLETE for ' . $city_slug . ' - sufficient profiles, radius set to 1');
             return;
         }
         
