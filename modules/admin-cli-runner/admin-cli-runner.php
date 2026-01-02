@@ -35,10 +35,12 @@ class DH_Admin_CLI_Runner {
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook) {
-        // Load on directory-helpers admin page and term edit pages
+        // Load on directory-helpers admin page, term edit pages, and post edit pages
         $load_on = array(
             'toplevel_page_directory-helpers',
             'term.php',
+            'post.php',
+            'post-new.php',
         );
 
         if (!in_array($hook, $load_on)) {
@@ -49,6 +51,14 @@ class DH_Admin_CLI_Runner {
         if ($hook === 'term.php') {
             $taxonomy = isset($_GET['taxonomy']) ? sanitize_key($_GET['taxonomy']) : '';
             if (!in_array($taxonomy, array('area', 'state'))) {
+                return;
+            }
+        }
+
+        // Check if we're on city-listing post edit
+        if (in_array($hook, array('post.php', 'post-new.php'))) {
+            $post_type = isset($_GET['post']) ? get_post_type($_GET['post']) : (isset($_POST['post_type']) ? sanitize_key($_POST['post_type']) : '');
+            if ($post_type !== 'city-listing') {
                 return;
             }
         }

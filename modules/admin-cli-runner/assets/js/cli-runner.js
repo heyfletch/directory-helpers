@@ -46,8 +46,9 @@
             command = command.replace('{niche}', selectedNiche);
         }
         
-        // Store command on button for later use in polling
+        // Store command and button reference for later use in polling
         $btn.data('running-command', command);
+        $('.dh-cli-run-btn').data('active-button', $btn); // Track which button is active
         
         $btn.prop('disabled', true);
         $status.html('<span class="spinner is-active" style="float: none; margin: 0 5px;"></span> ' + dhCliRunner.strings.running);
@@ -67,11 +68,15 @@
                 } else {
                     $btn.prop('disabled', false);
                     $status.html('<span style="color: #dc3232;">❌ ' + (response.data.message || dhCliRunner.strings.failed) + '</span>');
+                    // Clear tracking data on error
+                    $btn.removeData('active-button');
                 }
             },
-            error: function() {
+            error: function(response) {
                 $btn.prop('disabled', false);
-                $status.html('<span style="color: #dc3232;">❌ ' + dhCliRunner.strings.failed + '</span>');
+                $status.html('<span style="color: #dc3232;">❌ ' + (response.data.message || dhCliRunner.strings.failed) + '</span>');
+                // Clear tracking data on error
+                $btn.removeData('active-button');
             }
         });
     }
@@ -90,8 +95,20 @@
             success: function(response) {
                 stopPolling();
                 updateGlobalStatus('', 'stopped');
-                $('.dh-cli-run-btn').prop('disabled', false);
-                $('.dh-cli-status').html('<span style="color: #f0ad4e;">⚠️ ' + dhCliRunner.strings.stopped + '</span>');
+                
+                // Get the active button and update only its status
+                var $activeBtn = $('.dh-cli-run-btn').data('active-button');
+                if ($activeBtn && $activeBtn.length) {
+                    $activeBtn.prop('disabled', false);
+                    $activeBtn.siblings('.dh-cli-status').html('<span style="color: #f0ad4e;">⚠️ ' + dhCliRunner.strings.stopped + '</span>');
+                } else {
+                    // Fallback: update all buttons if no active button tracked
+                    $('.dh-cli-run-btn').prop('disabled', false);
+                    $('.dh-cli-status').html('<span style="color: #f0ad4e;">⚠️ ' + dhCliRunner.strings.stopped + '</span>');
+                }
+                
+                // Clear tracking data
+                $('.dh-cli-run-btn').removeData('active-button');
             }
         });
     }
@@ -151,17 +168,25 @@
                         } else if (response.data.status === 'completed') {
                             stopPolling();
                             updateGlobalStatus('', 'completed');
-                            $('.dh-cli-run-btn').prop('disabled', false);
-                            $('.dh-cli-status').html('<span style="color: #46b450;">✓ ' + dhCliRunner.strings.completed + '</span>');
                             
-                            // Refresh page if this was an Analyze Radius command on term edit page
-                            var runningCommand = $('.dh-cli-run-btn').data('running-command');
-                            $('.dh-cli-run-btn').removeData('running-command'); // Clear stored command
-                            if (runningCommand && runningCommand.indexOf('analyze-radius') !== -1 && window.location.href.indexOf('term.php') !== -1) {
-                                setTimeout(function() {
-                                    window.location.reload();
-                                }, 1000);
+                            // Get the active button and update only its status
+                            var $activeBtn = $('.dh-cli-run-btn').data('active-button');
+                            if ($activeBtn && $activeBtn.length) {
+                                $activeBtn.prop('disabled', false);
+                                $activeBtn.siblings('.dh-cli-status').html('<span style="color: #46b450;">✓ ' + dhCliRunner.strings.completed + '</span>');
+                                
+                                // Refresh page if this was an Analyze Radius command on term edit page
+                                var runningCommand = $activeBtn.data('running-command');
+                                if (runningCommand && runningCommand.indexOf('analyze-radius') !== -1 && window.location.href.indexOf('term.php') !== -1) {
+                                    setTimeout(function() {
+                                        window.location.reload();
+                                    }, 1000);
+                                }
                             }
+                            
+                            // Clear tracking data
+                            $('.dh-cli-run-btn').removeData('running-command');
+                            $('.dh-cli-run-btn').removeData('active-button');
                         }
                     }
                 }

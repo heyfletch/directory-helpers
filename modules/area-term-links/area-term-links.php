@@ -64,6 +64,7 @@ class DH_Area_Term_Links {
     public function render_term_links_meta_box($post) {
         $post_type = get_post_type($post);
         $has_terms = false;
+        $area_slug = null;
         
         // Define which taxonomies to show for each post type
         $taxonomies = array();
@@ -88,8 +89,41 @@ class DH_Area_Term_Links {
                     echo esc_html($term->name) . ' (edit term)';
                     echo '</a>';
                     echo '</p>';
+                    
+                    // Store area slug for city-listing action buttons
+                    if ($post_type === 'city-listing' && $taxonomy === 'area') {
+                        $area_slug = $term->slug;
+                    }
                 }
             }
+        }
+        
+        // Add action buttons for city-listing
+        if ($post_type === 'city-listing' && $area_slug) {
+            echo '<div style="border-top: 1px solid #ddd; padding-top: 10px; margin-top: 10px;">';
+            echo '<p style="margin: 0 0 8px 0; font-weight: bold;">' . esc_html__('City Actions:', 'directory-helpers') . '</p>';
+            
+            // Update Rankings button
+            echo '<div class="dh-cli-actions" style="margin-bottom: 8px;">';
+            echo '<button type="button" class="button dh-cli-run-btn" ';
+            echo 'data-command="update-rankings dog-trainer --city=' . esc_attr($area_slug) . '">';
+            echo '<span class="dashicons dashicons-sort" style="font-size: 16px; line-height: 1.4;"></span> ';
+            echo esc_html__('Update Rankings', 'directory-helpers');
+            echo '</button>';
+            echo '<span class="dh-cli-status"></span>';
+            echo '</div>';
+            
+            // Analyze Radius button
+            echo '<div class="dh-cli-actions">';
+            echo '<button type="button" class="button dh-cli-run-btn" ';
+            echo 'data-command="analyze-radius dog-trainer ' . esc_attr($area_slug) . ' --update-meta">';
+            echo '<span class="dashicons dashicons-location-alt" style="font-size: 16px; line-height: 1.4;"></span> ';
+            echo esc_html__('Analyze Radius', 'directory-helpers');
+            echo '</button>';
+            echo '<span class="dh-cli-status"></span>';
+            echo '</div>';
+            
+            echo '</div>';
         }
         
         // Show message if no terms assigned
