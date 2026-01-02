@@ -445,30 +445,30 @@ class DH_Profile_Rankings {
     private function bulk_fetch_profile_data($profile_ids) {
         global $wpdb;
         
-        // Convert to string for IN clause
-        $profile_id_string = implode(',', array_map('intval', $profile_ids));
+        // Create placeholders for IN clause
+        $profile_id_placeholders = implode(',', array_fill(0, count($profile_ids), '%d'));
         
         // Fetch all meta values in 3 queries instead of 3 * N queries
         $ratings = $wpdb->get_results($wpdb->prepare("
             SELECT post_id, meta_value as rating_value
             FROM {$wpdb->postmeta}
-            WHERE post_id IN ({$profile_id_string})
-            AND meta_key = 'rating_value'
-        "));
+            WHERE post_id IN ({$profile_id_placeholders})
+            AND meta_key = %s
+        ", array_merge($profile_ids, array('rating_value'))));
         
         $review_counts = $wpdb->get_results($wpdb->prepare("
             SELECT post_id, meta_value as review_count
             FROM {$wpdb->postmeta}
-            WHERE post_id IN ({$profile_id_string})
-            AND meta_key = 'rating_votes_count'
-        "));
+            WHERE post_id IN ({$profile_id_placeholders})
+            AND meta_key = %s
+        ", array_merge($profile_ids, array('rating_votes_count'))));
         
         $boosts = $wpdb->get_results($wpdb->prepare("
             SELECT post_id, meta_value as boost
             FROM {$wpdb->postmeta}
-            WHERE post_id IN ({$profile_id_string})
-            AND meta_key = 'ranking_boost'
-        "));
+            WHERE post_id IN ({$profile_id_placeholders})
+            AND meta_key = %s
+        ", array_merge($profile_ids, array('ranking_boost'))));
         
         // Organize data by profile_id
         $profile_data = [];
@@ -506,14 +506,14 @@ class DH_Profile_Rankings {
         
         // Prepare bulk delete and insert queries
         $profile_ids = array_keys($scores);
-        $profile_id_string = implode(',', array_map('intval', $profile_ids));
+        $profile_id_placeholders = implode(',', array_fill(0, count($profile_ids), '%d'));
         
         // Delete all existing rank values in one query
         $wpdb->query($wpdb->prepare("
             DELETE FROM {$wpdb->postmeta}
-            WHERE post_id IN ({$profile_id_string})
+            WHERE post_id IN ({$profile_id_placeholders})
             AND meta_key = %s
-        ", $rank_field));
+        ", array_merge($profile_ids, array($rank_field))));
         
         // Prepare bulk insert data
         $insert_data = [];

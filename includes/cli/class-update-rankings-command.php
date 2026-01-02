@@ -157,7 +157,7 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
 
         // Get all unique cities that have profiles with this niche AND have a city-listing page
         // Find cities by area taxonomy terms, not ACF city field
-        $area_ids_sql = implode( ',', array_map( 'intval', $area_term_ids ) );
+        $area_ids_placeholder = implode( ',', array_fill( 0, count( $area_term_ids ), '%d' ) );
         $cities_query = $wpdb->prepare( "
             SELECT DISTINCT
                 t.term_id,
@@ -168,7 +168,7 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             FROM {$wpdb->posts} p
             INNER JOIN {$wpdb->term_relationships} tr_area ON p.ID = tr_area.object_id
             INNER JOIN {$wpdb->term_taxonomy} tt_area ON tr_area.term_taxonomy_id = tt_area.term_taxonomy_id
-                AND tt_area.taxonomy = 'area' AND tt_area.term_id IN ($area_ids_sql)
+                AND tt_area.taxonomy = 'area' AND tt_area.term_id IN ($area_ids_placeholder)
             INNER JOIN {$wpdb->terms} t ON tt_area.term_id = t.term_id
             INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
             INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
@@ -177,7 +177,7 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             AND p.post_status = 'publish'
             GROUP BY t.term_id
             ORDER BY t.name
-        ", $niche_id );
+        ", array_merge( $area_term_ids, array( $niche_id ) ) );
 
         $cities = $wpdb->get_results( $cities_query );
 

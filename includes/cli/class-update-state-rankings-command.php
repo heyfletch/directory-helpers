@@ -139,15 +139,14 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
 
                 // Bulk fetch all meta data in one query
                 $meta_start = microtime(true);
-                $profile_id_string = implode(',', array_map('intval', $profile_ids));
+                $profile_id_placeholders = implode(',', array_fill(0, count($profile_ids), '%d'));
                 
-                $meta_query = "
+                $meta_results = $wpdb->get_results($wpdb->prepare("
                     SELECT post_id, meta_key, meta_value
                     FROM {$wpdb->postmeta}
-                    WHERE post_id IN ({$profile_id_string})
-                    AND meta_key IN ('rating_value', 'rating_votes_count', 'ranking_boost')
-                ";
-                $meta_results = $wpdb->get_results($meta_query);
+                    WHERE post_id IN ({$profile_id_placeholders})
+                    AND meta_key IN (%s, %s, %s)
+                ", array_merge($profile_ids, array('rating_value', 'rating_votes_count', 'ranking_boost'))));
                 $meta_fetch_time = round(microtime(true) - $meta_start, 3);
                 WP_CLI::line("  [Meta] Fetched meta for {$profile_count} profiles in {$meta_fetch_time}s");
 
