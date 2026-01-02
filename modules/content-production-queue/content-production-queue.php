@@ -307,7 +307,14 @@ class DH_Content_Production_Queue {
         if (!empty($posts)) {
             $post_ids = wp_list_pluck($posts, 'ID');
             update_meta_cache('post', $post_ids);
-            update_post_thumbnail_cache(get_posts(array('post__in' => $post_ids, 'post_type' => 'any')));
+            // Create WP_Query object for thumbnail cache priming
+            $thumbnail_query = new WP_Query(array(
+                'post__in' => $post_ids,
+                'post_type' => 'any',
+                'posts_per_page' => -1,
+                'fields' => 'ids',
+            ));
+            update_post_thumbnail_cache($thumbnail_query);
         }
         
         // Sort by link health: all_ok first, then warning, then not checked, then red_alert
