@@ -634,6 +634,7 @@ class DH_Content_Production_Queue {
         
         // Track published city slugs for ranking updates and cache purging
         $published_cities = get_option('dh_cpq_published_cities', array());
+        error_log('DH CPQ: Starting batch processing - existing published cities: ' . count($published_cities));
         
         $last_post_id = 0;
         for ($i = 0; $i < $batch_count; $i++) {
@@ -652,6 +653,9 @@ class DH_Content_Production_Queue {
                 if (!empty($area_terms) && !is_wp_error($area_terms)) {
                     $city_slug = $area_terms[0]->slug;
                     $published_cities[$city_slug] = $city_slug;
+                    error_log('DH CPQ: Tracked city for post ' . $post->ID . ': ' . $city_slug);
+                } else {
+                    error_log('DH CPQ: WARNING - No area terms found for city-listing ' . $post->ID);
                 }
             }
             
@@ -710,6 +714,7 @@ class DH_Content_Production_Queue {
         update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
         update_option('dh_cpq_affected_states', $affected_states, false);
         update_option('dh_cpq_published_cities', $published_cities, false);
+        error_log('DH CPQ: Batch complete - saved ' . count($published_cities) . ' published cities to option');
         
         // Re-hook cache priming
         if ($prime_hooked && $dh_lscache_integration) {
@@ -721,6 +726,7 @@ class DH_Content_Production_Queue {
         
         if (empty($remaining_posts)) {
             // All done, stop queue
+            error_log('DH CPQ: Queue completion triggered - no more posts to process');
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
             
@@ -728,19 +734,37 @@ class DH_Content_Production_Queue {
             $niche_slug = 'dog-trainer'; // Default
             $niche_term = get_term_by('slug', $niche_slug, 'niche');
             $niche_id = $niche_term ? $niche_term->term_id : 0;
+            error_log('DH CPQ: Niche slug: ' . $niche_slug . ', Niche ID: ' . $niche_id);
             
             // Process published cities: update rankings and purge caches
             $published_cities_final = get_option('dh_cpq_published_cities', array());
+            error_log('DH CPQ: Published cities retrieved: ' . print_r($published_cities_final, true));
+            error_log('DH CPQ: Published cities count: ' . count($published_cities_final));
+            
             if (!empty($published_cities_final) && $niche_id) {
+                error_log('DH CPQ: Starting post-publishing workflow for ' . count($published_cities_final) . ' cities');
                 foreach ($published_cities_final as $city_slug) {
+                    error_log('DH CPQ: Processing city: ' . $city_slug);
+                    
                     // 1. Update rankings for this city
+                    error_log('DH CPQ: Calling update_city_rankings for ' . $city_slug);
                     $this->update_city_rankings($city_slug, $niche_id);
                     
                     // 2. Analyze and update radius for this city
+                    error_log('DH CPQ: Calling analyze_city_radius for ' . $city_slug);
                     $this->analyze_city_radius($city_slug, $niche_id);
                     
                     // 3. Purge caches for this city (after rankings and radius are updated)
+                    error_log('DH CPQ: Calling purge_city_caches for ' . $city_slug);
                     $this->purge_city_caches($city_slug);
+                }
+                error_log('DH CPQ: Completed post-publishing workflow for all cities');
+            } else {
+                if (empty($published_cities_final)) {
+                    error_log('DH CPQ: ISSUE - No published cities found in option');
+                }
+                if (!$niche_id) {
+                    error_log('DH CPQ: ISSUE - No valid niche ID found for slug: ' . $niche_slug);
                 }
             }
             
@@ -779,12 +803,14 @@ class DH_Content_Production_Queue {
     }
     
     /**
-     * Update rankings for a city by saving one profile to trigger recalculation
+     * Update rankings for a specific city by saving one profile
      * 
      * @param string $city_slug Area term slug (e.g., 'winter-park-fl')
      * @param int $niche_id Niche term ID
      */
     private function update_city_rankings($city_slug, $niche_id) {
+        error_log('DH CPQ: update_city_rankings START for ' . $city_slug . ' (niche: ' . $niche_id . ')');
+        
         // Get one profile from this city with no ranking (or any profile if all have rankings)
         $profile = get_posts(array(
             'post_type' => 'profile',
@@ -803,6 +829,8 @@ class DH_Content_Production_Queue {
             'fields' => 'ids',
         ));
         
+        error_log('DH CPQ: Found ' . count($profile) . ' profiles without ranking');
+        
         // If no profiles without rankings, get any profile from this city
         if (empty($profile)) {
             $profile = get_posts(array(
@@ -815,9 +843,11 @@ class DH_Content_Production_Queue {
                 ),
                 'fields' => 'ids',
             ));
+            error_log('DH CPQ: Found ' . count($profile) . ' total profiles');
         }
         
         if (!empty($profile)) {
+            error_log('DH CPQ: Updating profile ' . $profile[0] . ' to trigger ranking recalculation');
             // Trigger save to recalculate all rankings in this city
             // Use a minimal update to avoid triggering unnecessary hooks
             wp_update_post(array(
@@ -825,6 +855,9 @@ class DH_Content_Production_Queue {
                 'post_modified' => current_time('mysql'),
                 'post_modified_gmt' => current_time('mysql', 1),
             ));
+            error_log('DH CPQ: update_city_rankings COMPLETE for ' . $city_slug);
+        } else {
+            error_log('DH CPQ: update_city_rankings SKIPPED - no profiles found for ' . $city_slug);
         }
     }
     
@@ -837,17 +870,22 @@ class DH_Content_Production_Queue {
     private function analyze_city_radius($city_slug, $niche_id) {
         global $wpdb;
         
+        error_log('DH CPQ: analyze_city_radius START for ' . $city_slug . ' (niche: ' . $niche_id . ')');
+        
         // Get the area term
         $area_term = get_term_by('slug', $city_slug, 'area');
         if (!$area_term || is_wp_error($area_term)) {
+            error_log('DH CPQ: analyze_city_radius FAILED - area term not found for ' . $city_slug);
             return;
         }
+        error_log('DH CPQ: Found area term ID: ' . $area_term->term_id);
         
         // Get coordinates
         $lat = get_term_meta($area_term->term_id, 'latitude', true);
         $lng = get_term_meta($area_term->term_id, 'longitude', true);
         
         if (!$lat || !$lng) {
+            error_log('DH CPQ: analyze_city_radius SKIPPED - no coordinates found for ' . $city_slug);
             return; // Can't do radius analysis without coordinates
         }
         
@@ -872,6 +910,7 @@ class DH_Content_Production_Queue {
         // If sufficient profiles, no proximity needed - clear any existing radius
         if ($area_count >= $min_profiles) {
             delete_term_meta($area_term->term_id, 'recommended_radius');
+            error_log('DH CPQ: analyze_city_radius COMPLETE for ' . $city_slug . ' - sufficient profiles, no radius needed');
             return;
         }
         
@@ -889,7 +928,7 @@ class DH_Content_Production_Queue {
             $lng_min = $lng - $lng_offset;
             $lng_max = $lng + $lng_offset;
             
-            // Fast bounding box count
+            // Fast bounding box count - EXCLUDE area-tagged profiles to avoid double-counting
             $sql = $wpdb->prepare("
                 SELECT COUNT(DISTINCT p.ID) as total
                 FROM {$wpdb->posts} p
@@ -898,11 +937,15 @@ class DH_Content_Production_Queue {
                 INNER JOIN {$wpdb->term_relationships} tr_niche ON p.ID = tr_niche.object_id
                 INNER JOIN {$wpdb->term_taxonomy} tt_niche ON tr_niche.term_taxonomy_id = tt_niche.term_taxonomy_id 
                     AND tt_niche.taxonomy = 'niche' AND tt_niche.term_id = %d
+                LEFT JOIN {$wpdb->term_relationships} tr_area ON p.ID = tr_area.object_id
+                LEFT JOIN {$wpdb->term_taxonomy} tt_area ON tr_area.term_taxonomy_id = tt_area.term_taxonomy_id 
+                    AND tt_area.taxonomy = 'area' AND tt_area.term_id = %d
                 WHERE p.post_type = 'profile'
                 AND p.post_status = 'publish'
                 AND CAST(lat.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
                 AND CAST(lng.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
-            ", $niche_id, $lat_min, $lat_max, $lng_min, $lng_max);
+                AND tr_area.term_taxonomy_id IS NULL  -- Exclude area-tagged profiles
+            ", $niche_id, $area_term->term_id, $lat_min, $lat_max, $lng_min, $lng_max);
             
             $proximity_count = intval($wpdb->get_var($sql));
             $estimated_total = $area_count + $proximity_count;
@@ -923,18 +966,22 @@ class DH_Content_Production_Queue {
         // Update radius meta (even if max_radius doesn't meet threshold, set it anyway)
         if ($recommended_radius) {
             update_term_meta($area_term->term_id, 'recommended_radius', $recommended_radius);
+            error_log('DH CPQ: analyze_city_radius COMPLETE for ' . $city_slug . ' - set radius to ' . $recommended_radius . ' miles');
         } else {
             // Set max radius as best we can do
             update_term_meta($area_term->term_id, 'recommended_radius', $max_radius);
+            error_log('DH CPQ: analyze_city_radius COMPLETE for ' . $city_slug . ' - set radius to ' . $max_radius . ' miles (max)');
         }
     }
     
     /**
-     * Purge caches for all posts in a city (profiles, city-listing)
+     * Purge caches for a specific city
      * 
      * @param string $city_slug Area term slug (e.g., 'winter-park-fl')
      */
     private function purge_city_caches($city_slug) {
+        error_log('DH CPQ: purge_city_caches START for ' . $city_slug);
+        
         // 1. Purge city-listing
         $city_listing = get_posts(array(
             'post_type' => 'city-listing',
@@ -947,7 +994,10 @@ class DH_Content_Production_Queue {
         ));
         
         if (!empty($city_listing)) {
+            error_log('DH CPQ: Purging city-listing ' . $city_listing[0]);
             do_action('litespeed_purge_post', $city_listing[0]);
+        } else {
+            error_log('DH CPQ: No city-listing found for ' . $city_slug);
         }
         
         // 2. Purge all profiles in this city
@@ -961,9 +1011,11 @@ class DH_Content_Production_Queue {
             'fields' => 'ids',
         ));
         
+        error_log('DH CPQ: Purging ' . count($profiles) . ' profiles');
         foreach ($profiles as $profile_id) {
             do_action('litespeed_purge_post', $profile_id);
         }
+        error_log('DH CPQ: purge_city_caches COMPLETE for ' . $city_slug);
     }
     
     /**
