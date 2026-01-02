@@ -269,7 +269,7 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                 $lng_min = $lng - $lng_offset;
                 $lng_max = $lng + $lng_offset;
 
-                // Fast bounding box count (no Haversine calculation)
+                // Fast bounding box count - EXCLUDE profiles tagged with this specific area to avoid double-counting
                 $sql = $wpdb->prepare( "
                     SELECT COUNT(DISTINCT p.ID) as total
                     FROM {$wpdb->posts} p
@@ -282,9 +282,21 @@ class DH_Analyze_Radius_Command extends WP_CLI_Command {
                     AND p.post_status = 'publish'
                     AND CAST(lat.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
                     AND CAST(lng.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
-                ", $niche_id, $lat_min, $lat_max, $lng_min, $lng_max );
+                    AND p.ID NOT IN (
+                        SELECT tr.object_id 
+                        FROM {$wpdb->term_relationships} tr
+                        INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+                        WHERE tt.taxonomy = 'area' AND tt.term_id = %d
+                    )
+                ", $niche_id, $lat_min, $lat_max, $lng_min, $lng_max, $term->term_id );
 
                 $proximity_count = intval( $wpdb->get_var( $sql ) );
+
+                // Debug: Show what we found
+                if ($term->slug === 'harrisonburg-va') {
+                    \WP_CLI::line( "    DEBUG: Area count: {$area_count}, Proximity count: {$proximity_count}, Total: " . ($area_count + $proximity_count) );
+                    \WP_CLI::line( "    DEBUG: Testing radius: {$radius}mi" );
+                }
 
                 // Combine area-tagged + proximity
                 $estimated_total = $area_count + $proximity_count;

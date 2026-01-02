@@ -928,7 +928,7 @@ class DH_Content_Production_Queue {
             $lng_min = $lng - $lng_offset;
             $lng_max = $lng + $lng_offset;
             
-            // Fast bounding box count - EXCLUDE area-tagged profiles to avoid double-counting
+            // Fast bounding box count - EXCLUDE profiles tagged with this specific area to avoid double-counting
             $sql = $wpdb->prepare("
                 SELECT COUNT(DISTINCT p.ID) as total
                 FROM {$wpdb->posts} p
@@ -937,15 +937,17 @@ class DH_Content_Production_Queue {
                 INNER JOIN {$wpdb->term_relationships} tr_niche ON p.ID = tr_niche.object_id
                 INNER JOIN {$wpdb->term_taxonomy} tt_niche ON tr_niche.term_taxonomy_id = tt_niche.term_taxonomy_id 
                     AND tt_niche.taxonomy = 'niche' AND tt_niche.term_id = %d
-                LEFT JOIN {$wpdb->term_relationships} tr_area ON p.ID = tr_area.object_id
-                LEFT JOIN {$wpdb->term_taxonomy} tt_area ON tr_area.term_taxonomy_id = tt_area.term_taxonomy_id 
-                    AND tt_area.taxonomy = 'area' AND tt_area.term_id = %d
                 WHERE p.post_type = 'profile'
                 AND p.post_status = 'publish'
                 AND CAST(lat.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
                 AND CAST(lng.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
-                AND tr_area.term_taxonomy_id IS NULL  -- Exclude area-tagged profiles
-            ", $niche_id, $area_term->term_id, $lat_min, $lat_max, $lng_min, $lng_max);
+                AND p.ID NOT IN (
+                    SELECT tr.object_id 
+                    FROM {$wpdb->term_relationships} tr
+                    INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+                    WHERE tt.taxonomy = 'area' AND tt.term_id = %d
+                )
+            ", $niche_id, $lat_min, $lat_max, $lng_min, $lng_max, $area_term->term_id);
             
             $proximity_count = intval($wpdb->get_var($sql));
             $estimated_total = $area_count + $proximity_count;
