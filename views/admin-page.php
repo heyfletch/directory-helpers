@@ -224,7 +224,10 @@ wp directory-helpers analyze-radius dog-trainer --dry-run
 wp directory-helpers analyze-radius dog-trainer --update-meta
 
 # Custom thresholds
-wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --max-radius=40 --update-meta</code></pre>
+wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --max-radius=40 --update-meta
+
+# Single city only
+wp directory-helpers analyze-radius dog-trainer harrisonburg-va --update-meta</code></pre>
                     
                     <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
                     <ul style="list-style: disc; margin-left: 20px;">
@@ -232,6 +235,13 @@ wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --max-radius=4
                         <li><?php esc_html_e('Finds smallest radius that reaches your minimum threshold', 'directory-helpers'); ?></li>
                         <li><?php esc_html_e('Updates <code>recommended_radius</code> term meta for each area', 'directory-helpers'); ?></li>
                         <li><?php esc_html_e('Areas with sufficient direct profiles are marked as not needing proximity', 'directory-helpers'); ?></li>
+                    </ul>
+                    
+                    <h4><?php esc_html_e('Single City Mode:', 'directory-helpers'); ?></h4>
+                    <ul style="list-style: disc; margin-left: 20px;">
+                        <li><?php esc_html_e('Add city slug as second argument to analyze only one specific city', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Perfect for testing radius calculations or fixing issues in a specific city', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Example: <code>wp directory-helpers analyze-radius dog-trainer harrisonburg-va --update-meta</code>', 'directory-helpers'); ?></li>
                     </ul>
                     
                     <h4><?php esc_html_e('Radius Priority:', 'directory-helpers'); ?></h4>
@@ -260,7 +270,10 @@ wp directory-helpers update-rankings dog-trainer
 wp directory-helpers update-rankings dog-trainer --fresh
 
 # Custom batch settings
-wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1</code></pre>
+wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1
+
+# Single city only (great for testing or fixes)
+wp directory-helpers update-rankings dog-trainer --city=harrisonburg-va</code></pre>
 
                     <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
                     <ul style="list-style: disc; margin-left: 20px;">
@@ -275,6 +288,14 @@ wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1</code
                         <li><strong><?php esc_html_e('Batch Size:', 'directory-helpers'); ?></strong> <?php esc_html_e('20 cities (balances speed vs. memory)', 'directory-helpers'); ?></li>
                         <li><strong><?php esc_html_e('Delay:', 'directory-helpers'); ?></strong> <?php esc_html_e('0.5 seconds (allows ranking hooks to complete)', 'directory-helpers'); ?></li>
                         <li><strong><?php esc_html_e('Batch Pause:', 'directory-helpers'); ?></strong> <?php esc_html_e('2 seconds (prevents system overload)', 'directory-helpers'); ?></li>
+                    </ul>
+
+                    <h4><?php esc_html_e('Single City Mode:', 'directory-helpers'); ?></h4>
+                    <ul style="list-style: disc; margin-left: 20px;">
+                        <li><?php esc_html_e('Use <code>--city=city-slug</code> to process only one specific city', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Perfect for testing ranking logic or fixing issues in a specific city', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Ignores progress tracking files when using single city mode', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Example: <code>wp directory-helpers update-rankings dog-trainer --city=bethesda-md</code>', 'directory-helpers'); ?></li>
                     </ul>
 
                     <h4><?php esc_html_e('Progress Tracking:', 'directory-helpers'); ?></h4>

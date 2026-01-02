@@ -288,6 +288,14 @@ class DH_Admin_CLI_Runner {
             <td>
                 <div class="dh-cli-actions">
                     <button type="button" class="button dh-cli-run-btn" 
+                            data-command="update-rankings dog-trainer --city=<?php echo esc_attr($term_slug); ?>">
+                        <span class="dashicons dashicons-sort"></span>
+                        <?php esc_html_e('Update Rankings', 'directory-helpers'); ?>
+                    </button>
+                    <span class="dh-cli-status"></span>
+                </div>
+                <div class="dh-cli-actions" style="margin-top: 10px;">
+                    <button type="button" class="button dh-cli-run-btn" 
                             data-command="analyze-radius dog-trainer <?php echo esc_attr($term_slug); ?> --update-meta">
                         <span class="dashicons dashicons-location-alt"></span>
                         <?php esc_html_e('Analyze Radius', 'directory-helpers'); ?>
@@ -295,7 +303,7 @@ class DH_Admin_CLI_Runner {
                     <span class="dh-cli-status"></span>
                 </div>
                 <p class="description">
-                    <?php esc_html_e('Analyzes and updates the recommended radius for this city based on nearby profiles.', 'directory-helpers'); ?>
+                    <?php esc_html_e('Update Rankings: Recalculates profile rankings for this city. Analyze Radius: Updates the recommended radius based on nearby profiles.', 'directory-helpers'); ?>
                 </p>
             </td>
         </tr>
