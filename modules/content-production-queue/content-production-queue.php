@@ -625,16 +625,26 @@ class DH_Content_Production_Queue {
         // Track affected state slugs across entire queue run
         $affected_states = get_option('dh_cpq_affected_states', array());
         
+        // Track published city slugs for ranking updates and cache purging
+        $published_cities = get_option('dh_cpq_published_cities', array());
+        
         $last_post_id = 0;
         for ($i = 0; $i < $batch_count; $i++) {
             $post = $posts[$i];
             $last_post_id = $post->ID;
             
-            // Track state for this city-listing
+            // Track state and city for this city-listing
             if ($post->post_type === 'city-listing') {
                 $state_terms = get_the_terms($post->ID, 'state');
                 if (!empty($state_terms) && !is_wp_error($state_terms)) {
                     $affected_states[$state_terms[0]->slug] = $state_terms[0]->slug;
+                }
+                
+                // Track city area slug for post-publishing actions
+                $area_terms = get_the_terms($post->ID, 'area');
+                if (!empty($area_terms) && !is_wp_error($area_terms)) {
+                    $city_slug = $area_terms[0]->slug;
+                    $published_cities[$city_slug] = $city_slug;
                 }
             }
             
@@ -692,6 +702,7 @@ class DH_Content_Production_Queue {
         update_option(self::OPTION_CURRENT_POST, $last_post_id);
         update_option(self::OPTION_PUBLISHED_COUNT, $published_count);
         update_option('dh_cpq_affected_states', $affected_states, false);
+        update_option('dh_cpq_published_cities', $published_cities, false);
         
         // Re-hook cache priming
         if ($prime_hooked && $dh_lscache_integration) {
@@ -706,6 +717,23 @@ class DH_Content_Production_Queue {
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
             
+            // Get niche from queue mode option or default to dog-trainer
+            $niche_slug = 'dog-trainer'; // Default
+            $niche_term = get_term_by('slug', $niche_slug, 'niche');
+            $niche_id = $niche_term ? $niche_term->term_id : 0;
+            
+            // Process published cities: update rankings and purge caches
+            $published_cities_final = get_option('dh_cpq_published_cities', array());
+            if (!empty($published_cities_final) && $niche_id) {
+                foreach ($published_cities_final as $city_slug) {
+                    // Update rankings for this city
+                    $this->update_city_rankings($city_slug, $niche_id);
+                    
+                    // Purge caches for this city
+                    $this->purge_city_caches($city_slug);
+                }
+            }
+            
             // Clear affected state-listing caches at completion - do this SYNCHRONOUSLY
             $affected_states_final = get_option('dh_cpq_affected_states', array());
             if (!empty($affected_states_final)) {
@@ -719,6 +747,7 @@ class DH_Content_Production_Queue {
             
             // Clean up tracking
             delete_option('dh_cpq_affected_states');
+            delete_option('dh_cpq_published_cities');
         }
         // If there are more posts, they will be processed by the next AJAX poll
     }
@@ -737,6 +766,93 @@ class DH_Content_Production_Queue {
             'fields' => 'ids',
         ));
         return !empty($q->posts) ? $q->posts[0] : 0;
+    }
+    
+    /**
+     * Update rankings for a city by saving one profile to trigger recalculation
+     * 
+     * @param string $city_slug Area term slug (e.g., 'winter-park-fl')
+     * @param int $niche_id Niche term ID
+     */
+    private function update_city_rankings($city_slug, $niche_id) {
+        // Get one profile from this city with no ranking (or any profile if all have rankings)
+        $profile = get_posts(array(
+            'post_type' => 'profile',
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'tax_query' => array(
+                array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
+                array('taxonomy' => 'niche', 'field' => 'term_id', 'terms' => $niche_id),
+            ),
+            'meta_query' => array(
+                array(
+                    'key' => 'ranking',
+                    'compare' => 'NOT EXISTS',
+                ),
+            ),
+            'fields' => 'ids',
+        ));
+        
+        // If no profiles without rankings, get any profile from this city
+        if (empty($profile)) {
+            $profile = get_posts(array(
+                'post_type' => 'profile',
+                'post_status' => 'publish',
+                'posts_per_page' => 1,
+                'tax_query' => array(
+                    array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
+                    array('taxonomy' => 'niche', 'field' => 'term_id', 'terms' => $niche_id),
+                ),
+                'fields' => 'ids',
+            ));
+        }
+        
+        if (!empty($profile)) {
+            // Trigger save to recalculate all rankings in this city
+            // Use a minimal update to avoid triggering unnecessary hooks
+            wp_update_post(array(
+                'ID' => $profile[0],
+                'post_modified' => current_time('mysql'),
+                'post_modified_gmt' => current_time('mysql', 1),
+            ));
+        }
+    }
+    
+    /**
+     * Purge caches for all posts in a city (profiles, city-listing)
+     * 
+     * @param string $city_slug Area term slug (e.g., 'winter-park-fl')
+     */
+    private function purge_city_caches($city_slug) {
+        // 1. Purge city-listing
+        $city_listing = get_posts(array(
+            'post_type' => 'city-listing',
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'tax_query' => array(
+                array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
+            ),
+            'fields' => 'ids',
+        ));
+        
+        if (!empty($city_listing)) {
+            do_action('litespeed_purge_post', $city_listing[0]);
+        }
+        
+        // 2. Purge all profiles in this city
+        $profiles = get_posts(array(
+            'post_type' => 'profile',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'tax_query' => array(
+                array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
+            ),
+            'fields' => 'ids',
+        ));
+        
+        foreach ($profiles as $profile_id) {
+            do_action('litespeed_purge_post', $profile_id);
+        }
     }
     
     /**
