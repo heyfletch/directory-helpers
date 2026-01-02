@@ -726,10 +726,13 @@ class DH_Content_Production_Queue {
             $published_cities_final = get_option('dh_cpq_published_cities', array());
             if (!empty($published_cities_final) && $niche_id) {
                 foreach ($published_cities_final as $city_slug) {
-                    // Update rankings for this city
+                    // 1. Update rankings for this city
                     $this->update_city_rankings($city_slug, $niche_id);
                     
-                    // Purge caches for this city
+                    // 2. Analyze and update radius for this city
+                    $this->analyze_city_radius($city_slug, $niche_id);
+                    
+                    // 3. Purge caches for this city (after rankings and radius are updated)
                     $this->purge_city_caches($city_slug);
                 }
             }
@@ -815,6 +818,107 @@ class DH_Content_Production_Queue {
                 'post_modified' => current_time('mysql'),
                 'post_modified_gmt' => current_time('mysql', 1),
             ));
+        }
+    }
+    
+    /**
+     * Analyze and update radius for a specific city
+     * 
+     * @param string $city_slug Area term slug (e.g., 'winter-park-fl')
+     * @param int $niche_id Niche term ID
+     */
+    private function analyze_city_radius($city_slug, $niche_id) {
+        global $wpdb;
+        
+        // Get the area term
+        $area_term = get_term_by('slug', $city_slug, 'area');
+        if (!$area_term || is_wp_error($area_term)) {
+            return;
+        }
+        
+        // Get coordinates
+        $lat = get_term_meta($area_term->term_id, 'latitude', true);
+        $lng = get_term_meta($area_term->term_id, 'longitude', true);
+        
+        if (!$lat || !$lng) {
+            return; // Can't do radius analysis without coordinates
+        }
+        
+        // Get settings
+        $options = get_option('directory_helpers_options', array());
+        $min_profiles = isset($options['min_profiles_threshold']) ? intval($options['min_profiles_threshold']) : 10;
+        $max_radius = 30; // Maximum radius to test
+        
+        // Check direct area-tagged profiles with this niche
+        $area_count = count(get_posts(array(
+            'post_type' => 'profile',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'tax_query' => array(
+                'relation' => 'AND',
+                array('taxonomy' => 'area', 'field' => 'term_id', 'terms' => $area_term->term_id),
+                array('taxonomy' => 'niche', 'field' => 'term_id', 'terms' => $niche_id),
+            ),
+            'fields' => 'ids',
+        )));
+        
+        // If sufficient profiles, no proximity needed - clear any existing radius
+        if ($area_count >= $min_profiles) {
+            delete_term_meta($area_term->term_id, 'recommended_radius');
+            return;
+        }
+        
+        // Need proximity search - find optimal radius
+        $radius = 2;
+        $recommended_radius = null;
+        $radius_increment = 3;
+        
+        while ($radius <= $max_radius) {
+            // Bounding box approximation for speed
+            $lat_offset = $radius / 69.0;
+            $lng_offset = $radius / (69.0 * cos(deg2rad($lat)));
+            $lat_min = $lat - $lat_offset;
+            $lat_max = $lat + $lat_offset;
+            $lng_min = $lng - $lng_offset;
+            $lng_max = $lng + $lng_offset;
+            
+            // Fast bounding box count
+            $sql = $wpdb->prepare("
+                SELECT COUNT(DISTINCT p.ID) as total
+                FROM {$wpdb->posts} p
+                INNER JOIN {$wpdb->postmeta} lat ON p.ID = lat.post_id AND lat.meta_key = 'latitude'
+                INNER JOIN {$wpdb->postmeta} lng ON p.ID = lng.post_id AND lng.meta_key = 'longitude'
+                INNER JOIN {$wpdb->term_relationships} tr_niche ON p.ID = tr_niche.object_id
+                INNER JOIN {$wpdb->term_taxonomy} tt_niche ON tr_niche.term_taxonomy_id = tt_niche.term_taxonomy_id 
+                    AND tt_niche.taxonomy = 'niche' AND tt_niche.term_id = %d
+                WHERE p.post_type = 'profile'
+                AND p.post_status = 'publish'
+                AND CAST(lat.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
+                AND CAST(lng.meta_value AS DECIMAL(10,6)) BETWEEN %f AND %f
+            ", $niche_id, $lat_min, $lat_max, $lng_min, $lng_max);
+            
+            $proximity_count = intval($wpdb->get_var($sql));
+            $estimated_total = $area_count + $proximity_count;
+            
+            if ($estimated_total >= $min_profiles) {
+                $recommended_radius = $radius;
+                break;
+            }
+            
+            $radius += $radius_increment;
+            
+            // Use larger increments as we go higher
+            if ($radius > 15) {
+                $radius_increment = 5;
+            }
+        }
+        
+        // Update radius meta (even if max_radius doesn't meet threshold, set it anyway)
+        if ($recommended_radius) {
+            update_term_meta($area_term->term_id, 'recommended_radius', $recommended_radius);
+        } else {
+            // Set max radius as best we can do
+            update_term_meta($area_term->term_id, 'recommended_radius', $max_radius);
         }
     }
     
