@@ -46,6 +46,9 @@
             command = command.replace('{niche}', selectedNiche);
         }
         
+        // Store command on button for later use in polling
+        $btn.data('running-command', command);
+        
         $btn.prop('disabled', true);
         $status.html('<span class="spinner is-active" style="float: none; margin: 0 5px;"></span> ' + dhCliRunner.strings.running);
 
@@ -150,6 +153,15 @@
                             updateGlobalStatus('', 'completed');
                             $('.dh-cli-run-btn').prop('disabled', false);
                             $('.dh-cli-status').html('<span style="color: #46b450;">✓ ' + dhCliRunner.strings.completed + '</span>');
+                            
+                            // Refresh page if this was an Analyze Radius command on term edit page
+                            var runningCommand = $('.dh-cli-run-btn').data('running-command');
+                            $('.dh-cli-run-btn').removeData('running-command'); // Clear stored command
+                            if (runningCommand && runningCommand.indexOf('analyze-radius') !== -1 && window.location.href.indexOf('term.php') !== -1) {
+                                setTimeout(function() {
+                                    window.location.reload();
+                                }, 1000);
+                            }
                         }
                     }
                 }
