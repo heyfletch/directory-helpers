@@ -1,6 +1,6 @@
 <?php
 /**
- * Content Production Queue Module
+ * City Content Production Queue Module
  *
  * Manages automated content publishing queue for city and state listings.
  * Publishes draft posts that meet all content requirements sequentially.
@@ -129,7 +129,7 @@ class DH_Content_Production_Queue {
         
         ?>
         <div class="wrap">
-            <h1><?php esc_html_e('Content Production Queue', 'directory-helpers'); ?></h1>
+            <h1><?php esc_html_e('City Content Production Queue', 'directory-helpers'); ?></h1>
             
             <div class="dh-cpq-status-box" style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin: 20px 0;">
                 <div class="dh-cpq-status-info">
@@ -179,9 +179,6 @@ class DH_Content_Production_Queue {
                         </button>
                         <button type="button" id="dh-open-non-healthy-btn" class="button" style="margin-left: 10px;">
                             <?php esc_html_e('↗️ Open Non-Healthy Cities', 'directory-helpers'); ?>
-                        </button>
-                        <button type="button" id="dh-open-unchecked-btn" class="button" style="margin-left: 10px;">
-                            <?php esc_html_e('↗️ Open Unchecked Cities', 'directory-helpers'); ?>
                         </button>
                         <button type="button" id="dh-refresh-page-btn" class="button" style="margin-left: 10px;">
                             <?php esc_html_e('Refresh Page', 'directory-helpers'); ?>
