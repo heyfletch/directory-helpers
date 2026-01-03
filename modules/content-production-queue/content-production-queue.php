@@ -746,19 +746,24 @@ class DH_Content_Production_Queue {
                 foreach ($published_cities_final as $city_slug) {
                     error_log('DH CPQ: Processing city: ' . $city_slug);
                     
-                    // 1. Update rankings for this city
-                    error_log('DH CPQ: Calling update_city_rankings for ' . $city_slug);
-                    $this->update_city_rankings($city_slug, $niche_id);
-                    
-                    // 2. Analyze and update radius for this city
+                    // 1. Analyze and update radius for this city
                     error_log('DH CPQ: Calling analyze_city_radius for ' . $city_slug);
                     $this->analyze_city_radius($city_slug, $niche_id);
                     
-                    // 3. Purge caches for this city (after rankings and radius are updated)
+                    // 2. Purge caches for this city (after radius is updated)
                     error_log('DH CPQ: Calling purge_city_caches for ' . $city_slug);
                     $this->purge_city_caches($city_slug);
                 }
                 error_log('DH CPQ: Completed post-publishing workflow for all cities');
+                
+                // Trigger efficient background ranking update for all published cities
+                $city_count = count($published_cities_final);
+                if ($city_count > 0) {
+                    error_log('DH CPQ: Triggering background ranking update for ' . $city_count . ' cities');
+                    $command = "wp directory-helpers update-rankings {$niche_slug} --recent={$city_count} > /dev/null 2>&1 &";
+                    shell_exec($command);
+                    error_log('DH CPQ: Background ranking command started: ' . $command);
+                }
             } else {
                 if (empty($published_cities_final)) {
                     error_log('DH CPQ: ISSUE - No published cities found in option');
@@ -800,65 +805,6 @@ class DH_Content_Production_Queue {
             'fields' => 'ids',
         ));
         return !empty($q->posts) ? $q->posts[0] : 0;
-    }
-    
-    /**
-     * Update rankings for a specific city by saving one profile
-     * 
-     * @param string $city_slug Area term slug (e.g., 'winter-park-fl')
-     * @param int $niche_id Niche term ID
-     */
-    private function update_city_rankings($city_slug, $niche_id) {
-        error_log('DH CPQ: update_city_rankings START for ' . $city_slug . ' (niche: ' . $niche_id . ')');
-        
-        // Get one profile from this city with no ranking (or any profile if all have rankings)
-        $profile = get_posts(array(
-            'post_type' => 'profile',
-            'post_status' => 'publish',
-            'posts_per_page' => 1,
-            'tax_query' => array(
-                array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
-                array('taxonomy' => 'niche', 'field' => 'term_id', 'terms' => $niche_id),
-            ),
-            'meta_query' => array(
-                array(
-                    'key' => 'city_rank',
-                    'compare' => 'NOT EXISTS',
-                ),
-            ),
-            'fields' => 'ids',
-        ));
-        
-        error_log('DH CPQ: Found ' . count($profile) . ' profiles without ranking');
-        
-        // If no profiles without rankings, get any profile from this city
-        if (empty($profile)) {
-            $profile = get_posts(array(
-                'post_type' => 'profile',
-                'post_status' => 'publish',
-                'posts_per_page' => 1,
-                'tax_query' => array(
-                    array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
-                    array('taxonomy' => 'niche', 'field' => 'term_id', 'terms' => $niche_id),
-                ),
-                'fields' => 'ids',
-            ));
-            error_log('DH CPQ: Found ' . count($profile) . ' total profiles');
-        }
-        
-        if (!empty($profile)) {
-            error_log('DH CPQ: Updating profile ' . $profile[0] . ' to trigger ranking recalculation');
-            // Trigger save to recalculate all rankings in this city
-            // Use a minimal update to avoid triggering unnecessary hooks
-            wp_update_post(array(
-                'ID' => $profile[0],
-                'post_modified' => current_time('mysql'),
-                'post_modified_gmt' => current_time('mysql', 1),
-            ));
-            error_log('DH CPQ: update_city_rankings COMPLETE for ' . $city_slug);
-        } else {
-            error_log('DH CPQ: update_city_rankings SKIPPED - no profiles found for ' . $city_slug);
-        }
     }
     
     /**
