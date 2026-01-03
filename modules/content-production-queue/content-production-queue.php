@@ -12,6 +12,9 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Include helper function for radius analysis
+require_once __DIR__ . '/analyze-radius-helper.php';
+
 /**
  * Class DH_Content_Production_Queue
  */
@@ -730,6 +733,8 @@ class DH_Content_Production_Queue {
             update_option(self::OPTION_QUEUE_ACTIVE, false);
             update_option(self::OPTION_CURRENT_POST, 0);
             
+            error_log('DH CPQ: DEBUG - Starting post-publishing workflow');
+            
             // Get niche from queue mode option or default to dog-trainer
             $niche_slug = 'dog-trainer'; // Default
             $niche_term = get_term_by('slug', $niche_slug, 'niche');
@@ -743,30 +748,45 @@ class DH_Content_Production_Queue {
             
             if (!empty($published_cities_final) && $niche_id) {
                 error_log('DH CPQ: Starting post-publishing workflow for ' . count($published_cities_final) . ' cities');
-                foreach ($published_cities_final as $city_slug) {
-                    error_log('DH CPQ: Processing city: ' . $city_slug);
-                    
-                    // 1. Purge caches for this city
-                    error_log('DH CPQ: Calling purge_city_caches for ' . $city_slug);
-                    $this->purge_city_caches($city_slug);
-                }
+                // Cities are published, background processes will handle rankings and radius
+                error_log('DH CPQ: Published cities ready for background processing');
                 error_log('DH CPQ: Completed post-publishing workflow for all cities');
                 
-                // Trigger efficient background ranking update for all published cities
+                // Update rankings and analyze radius for all published cities
                 $city_count = count($published_cities_final);
                 if ($city_count > 0) {
-                    error_log('DH CPQ: Triggering background ranking update for ' . $city_count . ' cities');
-                    $command = "wp directory-helpers update-rankings {$niche_slug} --recent={$city_count} > /dev/null 2>&1 &";
-                    shell_exec($command);
-                    error_log('DH CPQ: Background ranking command started: ' . $command);
+                    error_log('DH CPQ: Starting ranking and radius updates for ' . $city_count . ' cities');
                     
-                    // Trigger background analyze-radius for each published city
-                    error_log('DH CPQ: Triggering background analyze-radius for ' . $city_count . ' cities');
                     foreach ($published_cities_final as $city_slug) {
-                        $radius_command = "wp directory-helpers analyze-radius {$niche_slug} {$city_slug} --update-meta > /dev/null 2>&1 &";
-                        shell_exec($radius_command);
-                        error_log('DH CPQ: Background analyze-radius command started: ' . $radius_command);
+                        error_log('DH CPQ: Processing ' . $city_slug);
+                        
+                        // 1. Update rankings by triggering save on one profile
+                        $profile = get_posts(array(
+                            'post_type' => 'profile',
+                            'post_status' => 'publish',
+                            'posts_per_page' => 1,
+                            'tax_query' => array(
+                                array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
+                                array('taxonomy' => 'niche', 'field' => 'term_id', 'terms' => $niche_id),
+                            ),
+                            'fields' => 'ids',
+                        ));
+                        
+                        if (!empty($profile)) {
+                            error_log('DH CPQ: Triggering ranking update for ' . $city_slug . ' via profile ' . $profile[0]);
+                            do_action('acf/save_post', $profile[0]);
+                            error_log('DH CPQ: Ranking update completed for ' . $city_slug);
+                        } else {
+                            error_log('DH CPQ: No profiles found for ' . $city_slug);
+                        }
+                        
+                        // 2. Analyze radius for this city
+                        error_log('DH CPQ: Analyzing radius for ' . $city_slug);
+                        dh_analyze_radius_for_city($city_slug, $niche_id);
+                        error_log('DH CPQ: Radius analysis completed for ' . $city_slug);
                     }
+                    
+                    error_log('DH CPQ: Completed ranking and radius updates for all cities');
                 }
             } else {
                 if (empty($published_cities_final)) {
@@ -809,50 +829,6 @@ class DH_Content_Production_Queue {
             'fields' => 'ids',
         ));
         return !empty($q->posts) ? $q->posts[0] : 0;
-    }
-    
-    /**
-     * Purge caches for a specific city
-     * 
-     * @param string $city_slug Area term slug (e.g., 'winter-park-fl')
-     */
-    private function purge_city_caches($city_slug) {
-        error_log('DH CPQ: purge_city_caches START for ' . $city_slug);
-        
-        // 1. Purge city-listing
-        $city_listing = get_posts(array(
-            'post_type' => 'city-listing',
-            'post_status' => 'publish',
-            'posts_per_page' => 1,
-            'tax_query' => array(
-                array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
-            ),
-            'fields' => 'ids',
-        ));
-        
-        if (!empty($city_listing)) {
-            error_log('DH CPQ: Purging city-listing ' . $city_listing[0]);
-            do_action('litespeed_purge_post', $city_listing[0]);
-        } else {
-            error_log('DH CPQ: No city-listing found for ' . $city_slug);
-        }
-        
-        // 2. Purge all profiles in this city
-        $profiles = get_posts(array(
-            'post_type' => 'profile',
-            'post_status' => 'publish',
-            'posts_per_page' => -1,
-            'tax_query' => array(
-                array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
-            ),
-            'fields' => 'ids',
-        ));
-        
-        error_log('DH CPQ: Purging ' . count($profiles) . ' profiles');
-        foreach ($profiles as $profile_id) {
-            do_action('litespeed_purge_post', $profile_id);
-        }
-        error_log('DH CPQ: purge_city_caches COMPLETE for ' . $city_slug);
     }
     
     /**
