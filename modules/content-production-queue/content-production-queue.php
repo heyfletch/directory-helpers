@@ -784,6 +784,34 @@ class DH_Content_Production_Queue {
                         error_log('DH CPQ: Analyzing radius for ' . $city_slug);
                         dh_analyze_radius_for_city($city_slug, $niche_id);
                         error_log('DH CPQ: Radius analysis completed for ' . $city_slug);
+                        
+                        // 3. Clear cache for city-listing page
+                        $city_listing = get_posts(array(
+                            'post_type' => 'city-listing',
+                            'post_status' => 'publish',
+                            'posts_per_page' => 1,
+                            'tax_query' => array(
+                                array('taxonomy' => 'area', 'field' => 'slug', 'terms' => $city_slug),
+                                array('taxonomy' => 'niche', 'field' => 'term_id', 'terms' => $niche_id),
+                            ),
+                            'fields' => 'ids',
+                        ));
+                        
+                        if (!empty($city_listing)) {
+                            $city_listing_id = $city_listing[0];
+                            error_log('DH CPQ: Clearing cache for city-listing ' . $city_listing_id);
+                            
+                            // Clear LiteSpeed cache
+                            if (function_exists('litespeed_purge_post')) {
+                                do_action('litespeed_purge_post', $city_listing_id);
+                            }
+                            
+                            // Clear WordPress object cache
+                            wp_cache_delete($city_listing_id, 'posts');
+                            wp_cache_delete($city_listing_id, 'post_meta');
+                            
+                            error_log('DH CPQ: Cache cleared for city-listing ' . $city_listing_id);
+                        }
                     }
                     
                     error_log('DH CPQ: Completed ranking and radius updates for all cities');
