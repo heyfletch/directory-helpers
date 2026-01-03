@@ -410,6 +410,52 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
             WP_CLI::line( "  Cities per minute: " . round( ($processed / $total_time) * 60, 1 ) );
         }
 
+        // Clear caches for processed city-listing pages
+        if ( ! empty( $progress['completed_cities'] ) ) {
+            WP_CLI::line( "" );
+            WP_CLI::line( "Clearing caches for processed city-listing pages..." );
+            
+            $cache_cleared = 0;
+            foreach ( $progress['completed_cities'] as $city_term_id ) {
+                // Get city-listing page for this city
+                $city_listings = get_posts([
+                    'post_type' => 'city-listing',
+                    'post_status' => 'publish',
+                    'posts_per_page' => 1,
+                    'tax_query' => [
+                        [
+                            'taxonomy' => 'area',
+                            'field' => 'term_id',
+                            'terms' => $city_term_id,
+                        ],
+                        [
+                            'taxonomy' => 'niche',
+                            'field' => 'term_id',
+                            'terms' => $niche_id,
+                        ]
+                    ],
+                    'fields' => 'ids',
+                ]);
+                
+                if ( ! empty( $city_listings ) ) {
+                    $city_listing_id = $city_listings[0];
+                    
+                    // Clear LiteSpeed cache if available
+                    if ( function_exists( 'litespeed_purge_post' ) ) {
+                        do_action( 'litespeed_purge_post', $city_listing_id );
+                    }
+                    
+                    // Clear WordPress object cache
+                    wp_cache_delete( $city_listing_id, 'posts' );
+                    wp_cache_delete( $city_listing_id, 'post_meta' );
+                    
+                    $cache_cleared++;
+                }
+            }
+            
+            WP_CLI::line( "Cleared caches for {$cache_cleared} city-listing pages." );
+        }
+
         // Clean up progress file on successful completion
         if ( file_exists( $progress_file ) ) {
             unlink( $progress_file );
