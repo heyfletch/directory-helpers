@@ -273,7 +273,16 @@ wp directory-helpers update-rankings dog-trainer --fresh
 wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1
 
 # Single city only (great for testing or fixes)
-wp directory-helpers update-rankings dog-trainer --city=harrisonburg-va</code></pre>
+wp directory-helpers update-rankings dog-trainer --city=harrisonburg-va
+
+# Process last 10 most recent cities
+wp directory-helpers update-rankings dog-trainer --recent=10
+
+# Process last 25 cities with dry run
+wp directory-helpers update-rankings dog-trainer --recent=25 --dry-run
+
+# Process last 5 cities with custom batch size
+wp directory-helpers update-rankings dog-trainer --recent=5 --batch-size=5</code></pre>
 
                     <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
                     <ul style="list-style: disc; margin-left: 20px;">
@@ -290,12 +299,13 @@ wp directory-helpers update-rankings dog-trainer --city=harrisonburg-va</code></
                         <li><strong><?php esc_html_e('Batch Pause:', 'directory-helpers'); ?></strong> <?php esc_html_e('2 seconds (prevents system overload)', 'directory-helpers'); ?></li>
                     </ul>
 
-                    <h4><?php esc_html_e('Single City Mode:', 'directory-helpers'); ?></h4>
+                    <h4><?php esc_html_e('Targeted Processing Modes:', 'directory-helpers'); ?></h4>
                     <ul style="list-style: disc; margin-left: 20px;">
                         <li><?php esc_html_e('Use <code>--city=city-slug</code> to process only one specific city', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Perfect for testing ranking logic or fixing issues in a specific city', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Ignores progress tracking files when using single city mode', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Example: <code>wp directory-helpers update-rankings dog-trainer --city=bethesda-md</code>', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Use <code>--recent=number</code> to process the most recently published city-listings', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Perfect for testing ranking logic, fixing issues, or handling new content', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Ignores progress tracking files when using targeted modes', 'directory-helpers'); ?></li>
+                        <li><?php esc_html_e('Examples: <code>--city=bethesda-md</code> or <code>--recent=15</code>', 'directory-helpers'); ?></li>
                     </ul>
 
                     <h4><?php esc_html_e('Progress Tracking:', 'directory-helpers'); ?></h4>
