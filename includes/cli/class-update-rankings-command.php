@@ -38,12 +38,16 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
      * [--city=<slug>]
      * : Process only a specific city by area term slug (e.g., bethesda-md)
      *
+     * [--recent=<number>]
+     * : Process only the most recently published city-listings (e.g., 15 for last 15)
+     *
      * ## EXAMPLES
      *
      *     wp directory-helpers update-rankings dog-trainer --dry-run
      *     wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1
      *     wp directory-helpers update-rankings dog-trainer --fresh
      *     wp directory-helpers update-rankings dog-trainer --city=bethesda-md
+     *     wp directory-helpers update-rankings dog-trainer --recent=15
      *
      * @when after_wp_load
      */
@@ -77,6 +81,13 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
         $resume = isset( $assoc_args['resume'] );
         $fresh = isset( $assoc_args['fresh'] );
         $single_city = isset( $assoc_args['city'] ) ? sanitize_title( $assoc_args['city'] ) : null;
+        $recent_count = isset( $assoc_args['recent'] ) ? intval( $assoc_args['recent'] ) : null;
+
+        // Validate conflicting parameters
+        if ($single_city && $recent_count) {
+            WP_CLI::error("Cannot use --city and --recent parameters together. Use one or the other.");
+            return;
+        }
 
         // Progress tracking file
         $progress_file = WP_CONTENT_DIR . '/uploads/rankings-update-progress-' . $niche_slug . '.json';
@@ -89,6 +100,9 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
         WP_CLI::line( "Dry run: " . ( $dry_run ? 'Yes' : 'No' ) );
         if ( $resume ) {
             WP_CLI::line( "Resume mode: Yes" );
+        }
+        if ( $recent_count ) {
+            WP_CLI::line( "Recent mode: Processing last {$recent_count} published city-listings" );
         }
         WP_CLI::line( "" );
 
@@ -113,20 +127,31 @@ class DH_Update_Rankings_Command extends WP_CLI_Command {
 
         global $wpdb;
 
-        // Step 1a: Get all published city-listing pages with this niche
+        // Step 1a: Get published city-listing pages with this niche
         WP_CLI::line( "Fetching city-listing pages..." );
-        $city_listings = get_posts([
+        $listing_args = [
             'post_type' => 'city-listing',
             'post_status' => 'publish',
-            'posts_per_page' => -1,
             'tax_query' => [
                 [
                     'taxonomy' => 'niche',
                     'field' => 'term_id',
                     'terms' => $niche_id,
                 ]
-            ]
-        ]);
+            ],
+            'orderby' => 'date',
+            'order' => 'DESC'
+        ];
+        
+        // Limit to recent listings if --recent is specified
+        if ($recent_count) {
+            $listing_args['posts_per_page'] = $recent_count;
+            WP_CLI::line( "Limiting to most recent {$recent_count} city-listing pages..." );
+        } else {
+            $listing_args['posts_per_page'] = -1;
+        }
+        
+        $city_listings = get_posts($listing_args);
 
         if ( empty( $city_listings ) ) {
             WP_CLI::error( "No published city-listing pages found with niche '{$niche_slug}'." );

@@ -822,7 +822,7 @@ class DH_Content_Production_Queue {
             ),
             'meta_query' => array(
                 array(
-                    'key' => 'ranking',
+                    'key' => 'city_rank',
                     'compare' => 'NOT EXISTS',
                 ),
             ),
