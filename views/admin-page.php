@@ -3,6 +3,64 @@
 
     <?php settings_errors('directory_helpers_messages'); ?>
 
+    <!-- Instant Search Cache Management Section -->
+    <div class="directory-helpers-settings" style="margin-bottom: 30px;">
+        <h2><?php esc_html_e('Instant Search Management', 'directory-helpers'); ?></h2>
+        <table class="form-table">
+            <tbody>
+                <tr>
+                    <th scope="row">
+                        <?php esc_html_e('Cache Management', 'directory-helpers'); ?>
+                    </th>
+                    <td>
+                        <?php
+                        $rebuild_url = wp_nonce_url(
+                            admin_url('admin-post.php?action=dh_rebuild_search_cache'),
+                            'dh_rebuild_search_cache'
+                        );
+                        ?>
+                        <a href="<?php echo esc_url($rebuild_url); ?>" class="button button-secondary">
+                            <?php esc_html_e('Rebuild Search Cache Now', 'directory-helpers'); ?>
+                        </a>
+                        <p class="description">
+                            <?php esc_html_e('Manually rebuild the search index. The cache automatically rebuilds when posts are published/unpublished and lasts 1 year.', 'directory-helpers'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label for="dh_search_exclusions"><?php esc_html_e('Search Exclusions', 'directory-helpers'); ?></label>
+                    </th>
+                    <td>
+                        <?php
+                        $excluded_ids = get_option('dh_instant_search_exclusions', array());
+                        $exclusions_text = !empty($excluded_ids) ? implode(', ', $excluded_ids) : '';
+                        ?>
+                        <textarea id="dh_search_exclusions" name="dh_search_exclusions" rows="4" class="large-text" placeholder="<?php esc_attr_e('Enter post IDs to exclude from search, separated by commas or spaces', 'directory-helpers'); ?>"><?php echo esc_textarea($exclusions_text); ?></textarea>
+                        <p class="description">
+                            <?php esc_html_e('Enter post IDs (numbers only) to exclude from instant search results. Use commas or spaces to separate multiple IDs. Exclusions are applied during cache rebuild.', 'directory-helpers'); ?>
+                        </p>
+                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-top: 10px;" onsubmit="document.getElementById('dh_exclusions_hidden').value = document.getElementById('dh_search_exclusions').value;">
+                            <input type="hidden" name="action" value="dh_save_search_exclusions">
+                            <?php wp_nonce_field('dh_save_search_exclusions', '_wpnonce'); ?>
+                            <input type="hidden" id="dh_exclusions_hidden" name="dh_search_exclusions" value="">
+                            <input type="submit" value="<?php esc_attr_e('Save Exclusions', 'directory-helpers'); ?>" class="button button-primary">
+                            <?php
+                            $clear_url = wp_nonce_url(
+                                admin_url('admin-post.php?action=dh_clear_search_exclusions'),
+                                'dh_clear_search_exclusions'
+                            );
+                            ?>
+                            <a href="<?php echo esc_url($clear_url); ?>" class="button button-secondary" onclick="return confirm('<?php esc_attr_e('Are you sure you want to clear all search exclusions?', 'directory-helpers'); ?>');">
+                                <?php esc_html_e('Clear All', 'directory-helpers'); ?>
+                            </a>
+                        </form>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
     <form method="post" action="">
         <?php
         // Nonce for security
@@ -161,26 +219,7 @@
                                 <input type="text" id="instant_search_label_s" name="directory_helpers_options[instant_search_label_s]" value="<?php echo esc_attr($options['instant_search_label_s'] ?? ''); ?>" class="regular-text" placeholder="<?php echo esc_attr__('States', 'directory-helpers'); ?>">
                             </td>
                         </tr>
-                        <tr>
-                            <th scope="row">
-                                <?php esc_html_e('Cache Management', 'directory-helpers'); ?>
-                            </th>
-                            <td>
-                                <?php
-                                $rebuild_url = wp_nonce_url(
-                                    admin_url('admin-post.php?action=dh_rebuild_search_cache'),
-                                    'dh_rebuild_search_cache'
-                                );
-                                ?>
-                                <a href="<?php echo esc_url($rebuild_url); ?>" class="button button-secondary">
-                                    <?php esc_html_e('Rebuild Search Cache Now', 'directory-helpers'); ?>
-                                </a>
-                                <p class="description">
-                                    <?php esc_html_e('Manually rebuild the search index. The cache automatically rebuilds when posts are published/unpublished and lasts 7 days.', 'directory-helpers'); ?>
-                                </p>
-                            </td>
-                        </tr>
-                    </tbody>
+                                            </tbody>
                 </table>
             </div>
 

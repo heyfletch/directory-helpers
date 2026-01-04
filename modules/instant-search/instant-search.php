@@ -12,6 +12,7 @@ if (!class_exists('DH_Instant_Search')) {
         const OPTION_VERSION = 'dh_instant_search_index_version';
         const TRANSIENT_INDEX = 'dh_instant_search_index_json';
         const STATIC_JSON_FILE = 'dh-search-index.txt';
+        const OPTION_EXCLUSIONS = 'dh_instant_search_exclusions';
 
         // Default indexed post types. Adjust defaults here, or use the
         // 'dh_instant_search_post_types' filter to set site-wide types.
@@ -39,6 +40,9 @@ if (!class_exists('DH_Instant_Search')) {
             // Admin actions
             add_action('admin_post_dh_rebuild_search_cache', array($this, 'handle_manual_cache_rebuild'));
             add_action('admin_notices', array($this, 'show_cache_rebuild_notice'));
+            add_action('admin_post_dh_save_search_exclusions', array($this, 'handle_save_exclusions'));
+            add_action('admin_post_dh_clear_search_exclusions', array($this, 'handle_clear_exclusions'));
+            add_action('admin_notices', array($this, 'show_exclusions_notices'));
             
             // WP-CLI command
             if (defined('WP_CLI') && WP_CLI) {
@@ -290,6 +294,7 @@ if (!class_exists('DH_Instant_Search')) {
         // Optimized for large datasets (12K+ posts) with batched processing.
         private function build_index_items() {
             $post_types = apply_filters('dh_instant_search_post_types', $this->default_post_types);
+            $excluded_ids = get_option(self::OPTION_EXCLUSIONS, array());
             
             // Increase limits temporarily for large index builds
             $original_time_limit = ini_get('max_execution_time');
@@ -312,7 +317,7 @@ if (!class_exists('DH_Instant_Search')) {
                 $has_more = true;
                 
                 while ($has_more) {
-                    $q = new WP_Query(array(
+                    $query_args = array(
                         'post_type'      => $pt,
                         'post_status'    => 'publish',
                         'posts_per_page' => $batch_size,
@@ -325,7 +330,14 @@ if (!class_exists('DH_Instant_Search')) {
                         'cache_results'  => false,
                         'update_post_meta_cache' => false,
                         'update_post_term_cache' => false,
-                    ));
+                    );
+                    
+                    // Exclude specified post IDs if any
+                    if (!empty($excluded_ids)) {
+                        $query_args['post__not_in'] = $excluded_ids;
+                    }
+                    
+                    $q = new WP_Query($query_args);
                     
                     $batch_ids = $q->posts;
                     $has_more = (count($batch_ids) === $batch_size);
@@ -475,6 +487,81 @@ if (!class_exists('DH_Instant_Search')) {
                 ?>
                 <div class="notice notice-success is-dismissible">
                     <p><?php _e('Search cache has been successfully rebuilt!', 'directory-helpers'); ?></p>
+                </div>
+                <?php
+            }
+        }
+        
+        /**
+         * Handle saving search exclusions
+         */
+        public function handle_save_exclusions() {
+            if (!current_user_can('manage_options')) {
+                wp_die(__('You do not have permission to perform this action.', 'directory-helpers'));
+            }
+            
+            if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'dh_save_search_exclusions')) {
+                wp_die(__('Security check failed.', 'directory-helpers'));
+            }
+            
+            $exclusions_text = isset($_POST['dh_search_exclusions']) ? sanitize_textarea_field($_POST['dh_search_exclusions']) : '';
+            $excluded_ids = array();
+            
+            if (!empty($exclusions_text)) {
+                $raw_ids = preg_split('/[\\s,]+/', $exclusions_text);
+                foreach ($raw_ids as $id) {
+                    $id = trim($id);
+                    if (is_numeric($id) && $id > 0) {
+                        $excluded_ids[] = (int) $id;
+                    }
+                }
+                $excluded_ids = array_unique($excluded_ids);
+            }
+            
+            update_option(self::OPTION_EXCLUSIONS, $excluded_ids);
+            set_transient('dh_search_exclusions_saved', true, 30);
+            
+            wp_safe_redirect(admin_url('admin.php?page=directory-helpers&tab=instant-search'));
+            exit;
+        }
+        
+        /**
+         * Handle clearing search exclusions
+         */
+        public function handle_clear_exclusions() {
+            if (!current_user_can('manage_options')) {
+                wp_die(__('You do not have permission to perform this action.', 'directory-helpers'));
+            }
+            
+            if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'dh_clear_search_exclusions')) {
+                wp_die(__('Security check failed.', 'directory-helpers'));
+            }
+            
+            update_option(self::OPTION_EXCLUSIONS, array());
+            set_transient('dh_search_exclusions_cleared', true, 30);
+            
+            wp_safe_redirect(admin_url('admin.php?page=directory-helpers&tab=instant-search'));
+            exit;
+        }
+        
+        /**
+         * Show admin notices for exclusions
+         */
+        public function show_exclusions_notices() {
+            if (get_transient('dh_search_exclusions_saved')) {
+                delete_transient('dh_search_exclusions_saved');
+                ?>
+                <div class="notice notice-success is-dismissible">
+                    <p><?php _e('Search exclusions saved successfully!', 'directory-helpers'); ?></p>
+                </div>
+                <?php
+            }
+            
+            if (get_transient('dh_search_exclusions_cleared')) {
+                delete_transient('dh_search_exclusions_cleared');
+                ?>
+                <div class="notice notice-success is-dismissible">
+                    <p><?php _e('Search exclusions cleared!', 'directory-helpers'); ?></p>
                 </div>
                 <?php
             }
