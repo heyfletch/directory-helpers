@@ -61,6 +61,13 @@
         </table>
     </div>
 
+    <?php 
+    // Include CLI Runner section if module is loaded
+    if (class_exists('DH_Admin_CLI_Runner')) {
+        echo DH_Admin_CLI_Runner::get_admin_section_html();
+    }
+    ?>
+
     <form method="post" action="">
         <?php
         // Nonce for security
@@ -68,29 +75,6 @@
         ?>
 
         <div class="directory-helpers-admin">
-            <div class="directory-helpers-modules">
-                <h2><?php esc_html_e('Available Modules', 'directory-helpers'); ?></h2>
-                <p><?php esc_html_e('The following modules are automatically active and available for use.', 'directory-helpers'); ?></p>
-                
-                <table class="form-table">
-                    <tbody>
-                        <?php
-                        $modules = Directory_Helpers::get_instance()->get_modules();
-                        foreach ($modules as $module_id => $module) :
-                        ?>
-                            <tr>
-                                <th scope="row">
-                                    <strong><?php echo esc_html($module['name']); ?></strong>
-                                </th>
-                                <td>
-                                    <p><?php echo esc_html($module['description']); ?></p>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-
             <?php $options = get_option('directory_helpers_options', []); ?>
             <div class="directory-helpers-settings" style="margin-top: 20px;">
                 <h2><?php esc_html_e('AI Content Generator Settings', 'directory-helpers'); ?></h2>
@@ -250,158 +234,7 @@
                         </tr>
                     </tbody>
                 </table>
-                
-                <div style="margin-top: 20px; padding: 15px; background: #f0f6fc; border-left: 4px solid #2271b1;">
-                    <h3 style="margin-top: 0;"><?php esc_html_e('WP-CLI: Analyze Radius Command', 'directory-helpers'); ?></h3>
-                    <p><?php esc_html_e('Use WP-CLI to analyze area terms for published city-listing pages and calculate recommended radius values. Requires a niche slug (e.g., dog-trainer). Only analyzes areas that have published city-listing pages with that niche.', 'directory-helpers'); ?></p>
-                    
-                    <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
-                    <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview results without updating)
-wp directory-helpers analyze-radius dog-trainer --dry-run
-
-# Analyze and update recommended_radius term meta
-wp directory-helpers analyze-radius dog-trainer --update-meta
-
-# Custom thresholds
-wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --max-radius=40 --update-meta
-
-# Single city only
-wp directory-helpers analyze-radius dog-trainer harrisonburg-va --update-meta</code></pre>
-                    
-                    <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
-                    <ul style="list-style: disc; margin-left: 20px;">
-                        <li><?php esc_html_e('Tests radii: 2, 5, 10, 15, 20, 25, 30 miles', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Finds smallest radius that reaches your minimum threshold', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Updates <code>recommended_radius</code> term meta for each area', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Areas with sufficient direct profiles are marked as not needing proximity', 'directory-helpers'); ?></li>
-                    </ul>
-                    
-                    <h4><?php esc_html_e('Single City Mode:', 'directory-helpers'); ?></h4>
-                    <ul style="list-style: disc; margin-left: 20px;">
-                        <li><?php esc_html_e('Add city slug as second argument to analyze only one specific city', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Perfect for testing radius calculations or fixing issues in a specific city', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Example: <code>wp directory-helpers analyze-radius dog-trainer harrisonburg-va --update-meta</code>', 'directory-helpers'); ?></li>
-                    </ul>
-                    
-                    <h4><?php esc_html_e('Radius Priority:', 'directory-helpers'); ?></h4>
-                    <ol style="margin-left: 20px;">
-                        <li><strong><?php esc_html_e('Custom Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(set manually in area term edit screen - absolute)', 'directory-helpers'); ?></li>
-                        <li><strong><?php esc_html_e('Recommended Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(calculated by WP-CLI command - absolute)', 'directory-helpers'); ?></li>
-                        <li><strong><?php esc_html_e('Default City Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(from settings above - absolute)', 'directory-helpers'); ?></li>
-                    </ol>
-                    <p><em><?php esc_html_e('All radius values are absolute - no automatic expansion. Use the WP-CLI command to calculate optimal radius values.', 'directory-helpers'); ?></em></p>
-                    
-                    <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command quarterly or when you add 100+ new profiles to keep radius values optimized.', 'directory-helpers'); ?></p>
-                </div>
-
-                <div style="margin-top: 20px; padding: 15px; background: #f0f8e7; border-left: 4px solid #46b450;">
-                    <h3 style="margin-top: 0;"><?php esc_html_e('WP-CLI: Update Rankings Command', 'directory-helpers'); ?></h3>
-                    <p><?php esc_html_e('Trigger ranking recalculation for ALL profiles across all cities by saving one profile per city. Essential after bulk imports or data changes. Requires a niche slug (e.g., dog-trainer).', 'directory-helpers'); ?></p>
-
-                    <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
-                    <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview cities that would be processed)
-wp directory-helpers update-rankings dog-trainer --dry-run
-
-# Update rankings (smart resume - resumes if progress exists, starts fresh if not)
-wp directory-helpers update-rankings dog-trainer
-
-# Force fresh start (ignore any existing progress)
-wp directory-helpers update-rankings dog-trainer --fresh
-
-# Custom batch settings
-wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1
-
-# Single city only (great for testing or fixes)
-wp directory-helpers update-rankings dog-trainer --city=harrisonburg-va
-
-# Process last 10 most recent cities
-wp directory-helpers update-rankings dog-trainer --recent=10
-
-# Process last 25 cities with dry run
-wp directory-helpers update-rankings dog-trainer --recent=25 --dry-run
-
-# Process last 5 cities with custom batch size
-wp directory-helpers update-rankings dog-trainer --recent=5 --batch-size=5</code></pre>
-
-                    <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
-                    <ul style="list-style: disc; margin-left: 20px;">
-                        <li><?php esc_html_e('Finds all cities with city-listing pages in the specified niche', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Selects one profile per city to trigger ranking recalculation', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Updates city_rank ACF field for all profiles in each city', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Uses bulk database operations for optimal performance', 'directory-helpers'); ?></li>
-                    </ul>
-
-                    <h4><?php esc_html_e('Performance Optimized Defaults:', 'directory-helpers'); ?></h4>
-                    <ul style="list-style: disc; margin-left: 20px;">
-                        <li><strong><?php esc_html_e('Batch Size:', 'directory-helpers'); ?></strong> <?php esc_html_e('20 cities (balances speed vs. memory)', 'directory-helpers'); ?></li>
-                        <li><strong><?php esc_html_e('Delay:', 'directory-helpers'); ?></strong> <?php esc_html_e('0.5 seconds (allows ranking hooks to complete)', 'directory-helpers'); ?></li>
-                        <li><strong><?php esc_html_e('Batch Pause:', 'directory-helpers'); ?></strong> <?php esc_html_e('2 seconds (prevents system overload)', 'directory-helpers'); ?></li>
-                    </ul>
-
-                    <h4><?php esc_html_e('Targeted Processing Modes:', 'directory-helpers'); ?></h4>
-                    <ul style="list-style: disc; margin-left: 20px;">
-                        <li><?php esc_html_e('Use <code>--city=city-slug</code> to process only one specific city', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Use <code>--recent=number</code> to process the most recently published city-listings', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Perfect for testing ranking logic, fixing issues, or handling new content', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Ignores progress tracking files when using targeted modes', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Examples: <code>--city=bethesda-md</code> or <code>--recent=15</code>', 'directory-helpers'); ?></li>
-                    </ul>
-
-                    <h4><?php esc_html_e('Progress Tracking:', 'directory-helpers'); ?></h4>
-                    <ul style="list-style: disc; margin-left: 20px;">
-                        <li><?php esc_html_e('Real-time progress display with city names and profile counts', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Progress files allow resuming interrupted runs', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Estimated completion time based on current progress', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Error handling continues processing even if individual saves fail', 'directory-helpers'); ?></li>
-                    </ul>
-
-                    <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command after bulk profile imports or major data changes. The dry-run mode lets you verify which cities will be processed before committing.', 'directory-helpers'); ?></p>
-                </div>
-
-                <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-left: 4px solid #0073aa;">
-                    <h3 style="margin-top: 0;"><?php esc_html_e('State Rankings Command', 'directory-helpers'); ?></h3>
-                    <p><?php esc_html_e('Update state_rank for all profiles. Processes each state only once using optimized bulk operations.', 'directory-helpers'); ?></p>
-                    
-                    <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
-                    <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview states that would be processed)
-wp directory-helpers update-state-rankings dog-trainer --dry-run
-
-# Update all state rankings
-wp directory-helpers update-state-rankings dog-trainer
-
-# Update a specific state only
-wp directory-helpers update-state-rankings dog-trainer --state=ca</code></pre>
-
-                    <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
-                    <ul style="list-style: disc; margin-left: 20px;">
-                        <li><?php esc_html_e('Finds all states with profiles in the specified niche', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Processes each state ONCE (not per city like the old method)', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Uses bulk database queries to fetch all profile data efficiently', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Updates state_rank ACF field for all profiles in each state', 'directory-helpers'); ?></li>
-                    </ul>
-
-                    <h4><?php esc_html_e('Performance:', 'directory-helpers'); ?></h4>
-                    <ul style="list-style: disc; margin-left: 20px;">
-                        <li><?php esc_html_e('California (1,200+ profiles): ~6 seconds', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('Texas (800+ profiles): ~2 seconds', 'directory-helpers'); ?></li>
-                        <li><?php esc_html_e('All 51 states: ~40 seconds total', 'directory-helpers'); ?></li>
-                    </ul>
-
-                    <p><strong><?php esc_html_e('Recommended Workflow:', 'directory-helpers'); ?></strong></p>
-                    <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Step 1: Run city rankings first
-wp directory-helpers update-rankings dog-trainer
-
-# Step 2: Run state rankings after city rankings complete
-wp directory-helpers update-state-rankings dog-trainer</code></pre>
-                </div>
             </div>
-
-            <?php 
-            // Include CLI Runner section if module is loaded
-            if (class_exists('DH_Admin_CLI_Runner')) {
-                echo DH_Admin_CLI_Runner::get_admin_section_html();
-            }
-            ?>
 
             <div class="directory-helpers-settings" style="margin-top: 20px;">
                 <h2><?php esc_html_e('AI Prompts', 'directory-helpers'); ?></h2>
@@ -770,6 +603,177 @@ Output:
             </ol>
             <p><strong><?php esc_html_e('Example:', 'directory-helpers'); ?></strong> <?php esc_html_e('Profile has area terms "milwaukee-wi" and "waukesha-wi". ACF city field = "Milwaukee". Result: Uses "milwaukee-wi" for rankings and display.', 'directory-helpers'); ?></p>
             <p><em><?php esc_html_e('This ensures accurate city rankings and badge display for profiles serving multiple cities.', 'directory-helpers'); ?></em></p>
+        </div>
+        
+        <!-- WP-CLI Commands Documentation -->
+        <h2 style="margin-top: 40px;"><?php esc_html_e('WP-CLI Commands Reference', 'directory-helpers'); ?></h2>
+        
+        <div class="card" style="max-width: none; margin-top: 20px; background: #f0f6fc; border-left: 4px solid #2271b1;">
+            <h3 style="margin-top: 0;"><?php esc_html_e('WP-CLI: Analyze Radius Command', 'directory-helpers'); ?></h3>
+            <p><?php esc_html_e('Use WP-CLI to analyze area terms for published city-listing pages and calculate recommended radius values. Requires a niche slug (e.g., dog-trainer). Only analyzes areas that have published city-listing pages with that niche.', 'directory-helpers'); ?></p>
+            
+            <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
+            <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview results without updating)
+wp directory-helpers analyze-radius dog-trainer --dry-run
+
+# Analyze and update recommended_radius term meta
+wp directory-helpers analyze-radius dog-trainer --update-meta
+
+# Custom thresholds
+wp directory-helpers analyze-radius dog-trainer --min-profiles=15 --max-radius=40 --update-meta
+
+# Single city only
+wp directory-helpers analyze-radius dog-trainer harrisonburg-va --update-meta</code></pre>
+            
+            <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><?php esc_html_e('Tests radii: 2, 5, 10, 15, 20, 25, 30 miles', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Finds smallest radius that reaches your minimum threshold', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Updates <code>recommended_radius</code> term meta for each area', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Areas with sufficient direct profiles are marked as not needing proximity', 'directory-helpers'); ?></li>
+            </ul>
+            
+            <h4><?php esc_html_e('Single City Mode:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><?php esc_html_e('Add city slug as second argument to analyze only one specific city', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Perfect for testing radius calculations or fixing issues in a specific city', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Example: <code>wp directory-helpers analyze-radius dog-trainer harrisonburg-va --update-meta</code>', 'directory-helpers'); ?></li>
+            </ul>
+            
+            <h4><?php esc_html_e('Radius Priority:', 'directory-helpers'); ?></h4>
+            <ol style="margin-left: 20px;">
+                <li><strong><?php esc_html_e('Custom Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(set manually in area term edit screen - absolute)', 'directory-helpers'); ?></li>
+                <li><strong><?php esc_html_e('Recommended Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(calculated by WP-CLI command - absolute)', 'directory-helpers'); ?></li>
+                <li><strong><?php esc_html_e('Default City Radius', 'directory-helpers'); ?></strong> <?php esc_html_e('(from settings above - absolute)', 'directory-helpers'); ?></li>
+            </ol>
+            <p><em><?php esc_html_e('All radius values are absolute - no automatic expansion. Use the WP-CLI command to calculate optimal radius values.', 'directory-helpers'); ?></em></p>
+            
+            <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command quarterly or when you add 100+ new profiles to keep radius values optimized.', 'directory-helpers'); ?></p>
+        </div>
+
+        <div class="card" style="max-width: none; margin-top: 20px; background: #f0f8e7; border-left: 4px solid #46b450;">
+            <h3 style="margin-top: 0;"><?php esc_html_e('WP-CLI: Update Rankings Command', 'directory-helpers'); ?></h3>
+            <p><?php esc_html_e('Trigger ranking recalculation for ALL profiles across all cities by saving one profile per city. Essential after bulk imports or data changes. Requires a niche slug (e.g., dog-trainer).', 'directory-helpers'); ?></p>
+
+            <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
+            <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview cities that would be processed)
+wp directory-helpers update-rankings dog-trainer --dry-run
+
+# Update rankings (smart resume - resumes if progress exists, starts fresh if not)
+wp directory-helpers update-rankings dog-trainer
+
+# Force fresh start (ignore any existing progress)
+wp directory-helpers update-rankings dog-trainer --fresh
+
+# Custom batch settings
+wp directory-helpers update-rankings dog-trainer --batch-size=10 --delay=1
+
+# Single city only (great for testing or fixes)
+wp directory-helpers update-rankings dog-trainer --city=harrisonburg-va
+
+# Process last 10 most recent cities
+wp directory-helpers update-rankings dog-trainer --recent=10
+
+# Process last 25 cities with dry run
+wp directory-helpers update-rankings dog-trainer --recent=25 --dry-run
+
+# Process last 5 cities with custom batch size
+wp directory-helpers update-rankings dog-trainer --recent=5 --batch-size=5</code></pre>
+
+            <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><?php esc_html_e('Finds all cities with city-listing pages in the specified niche', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Selects one profile per city to trigger ranking recalculation', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Updates city_rank ACF field for all profiles in each city', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Uses bulk database operations for optimal performance', 'directory-helpers'); ?></li>
+            </ul>
+
+            <h4><?php esc_html_e('Performance Optimized Defaults:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><strong><?php esc_html_e('Batch Size:', 'directory-helpers'); ?></strong> <?php esc_html_e('20 cities (balances speed vs. memory)', 'directory-helpers'); ?></li>
+                <li><strong><?php esc_html_e('Delay:', 'directory-helpers'); ?></strong> <?php esc_html_e('0.5 seconds (allows ranking hooks to complete)', 'directory-helpers'); ?></li>
+                <li><strong><?php esc_html_e('Batch Pause:', 'directory-helpers'); ?></strong> <?php esc_html_e('2 seconds (prevents system overload)', 'directory-helpers'); ?></li>
+            </ul>
+
+            <h4><?php esc_html_e('Targeted Processing Modes:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><?php esc_html_e('Use <code>--city=city-slug</code> to process only one specific city', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Use <code>--recent=number</code> to process the most recently published city-listings', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Perfect for testing ranking logic, fixing issues, or handling new content', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Ignores progress tracking files when using targeted modes', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Examples: <code>--city=bethesda-md</code> or <code>--recent=15</code>', 'directory-helpers'); ?></li>
+            </ul>
+
+            <h4><?php esc_html_e('Progress Tracking:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><?php esc_html_e('Real-time progress display with city names and profile counts', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Progress files allow resuming interrupted runs', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Estimated completion time based on current progress', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Error handling continues processing even if individual saves fail', 'directory-helpers'); ?></li>
+            </ul>
+
+            <p><strong><?php esc_html_e('Recommendation:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run this command after bulk profile imports or major data changes. The dry-run mode lets you verify which cities will be processed before committing.', 'directory-helpers'); ?></p>
+        </div>
+
+        <div class="card" style="max-width: none; margin-top: 20px; background: #f9f9f9; border-left: 4px solid #0073aa;">
+            <h3 style="margin-top: 0;"><?php esc_html_e('State Rankings Command', 'directory-helpers'); ?></h3>
+            <p><?php esc_html_e('Update state_rank for all profiles. Processes each state only once using optimized bulk operations.', 'directory-helpers'); ?></p>
+            
+            <h4><?php esc_html_e('Basic Usage:', 'directory-helpers'); ?></h4>
+            <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run (preview states that would be processed)
+wp directory-helpers update-state-rankings dog-trainer --dry-run
+
+# Update all state rankings
+wp directory-helpers update-state-rankings dog-trainer
+
+# Update a specific state only
+wp directory-helpers update-state-rankings dog-trainer --state=ca</code></pre>
+
+            <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><?php esc_html_e('Finds all states with profiles in the specified niche', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Processes each state ONCE (not per city like the old method)', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Uses bulk database queries to fetch all profile data efficiently', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Updates state_rank ACF field for all profiles in each state', 'directory-helpers'); ?></li>
+            </ul>
+
+            <h4><?php esc_html_e('Performance:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><?php esc_html_e('California (1,200+ profiles): ~6 seconds', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Texas (800+ profiles): ~2 seconds', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('All 51 states: ~40 seconds total', 'directory-helpers'); ?></li>
+            </ul>
+
+            <p><strong><?php esc_html_e('Recommended Workflow:', 'directory-helpers'); ?></strong></p>
+            <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Step 1: Run city rankings first
+wp directory-helpers update-rankings dog-trainer
+
+# Step 2: Run state rankings after city rankings complete
+wp directory-helpers update-state-rankings dog-trainer</code></pre>
+        </div>
+        
+        <!-- Available Modules Section (at bottom) -->
+        <div class="card" style="max-width: none; margin-top: 30px;">
+            <h2><?php esc_html_e('Available Modules', 'directory-helpers'); ?></h2>
+            <p><?php esc_html_e('The following modules are automatically active and available for use.', 'directory-helpers'); ?></p>
+            
+            <table class="form-table">
+                <tbody>
+                    <?php
+                    $modules = Directory_Helpers::get_instance()->get_modules();
+                    foreach ($modules as $module_id => $module) :
+                    ?>
+                        <tr>
+                            <th scope="row">
+                                <strong><?php echo esc_html($module['name']); ?></strong>
+                            </th>
+                            <td>
+                                <p><?php echo esc_html($module['description']); ?></p>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
