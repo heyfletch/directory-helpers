@@ -201,11 +201,14 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
 
                 // Bulk delete existing state_rank values
                 $delete_start = microtime(true);
-                $wpdb->query("
-                    DELETE FROM {$wpdb->postmeta}
-                    WHERE post_id IN ({$profile_id_string})
-                    AND meta_key = 'state_rank'
-                ");
+                if (!empty($pids)) {
+                    $profile_id_string = implode(',', array_map('intval', $pids));
+                    $wpdb->query("
+                        DELETE FROM {$wpdb->postmeta}
+                        WHERE post_id IN ({$profile_id_string})
+                        AND meta_key = 'state_rank'
+                    ");
+                }
                 $delete_time = round(microtime(true) - $delete_start, 3);
                 WP_CLI::line("  [Delete] Deleted old ranks in {$delete_time}s");
 
@@ -237,6 +240,33 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
             $total_time = round(microtime(true) - $start_time, 2);
             WP_CLI::line("");
             WP_CLI::success("State rankings update completed! Processed {$total_states} states in {$total_time}s");
+            
+            WP_CLI::line("");
+            WP_CLI::line("=== Clearing Caches ===");
+            
+            // Clear LiteSpeed page cache and object cache specifically
+            $cache_start = microtime(true);
+            if (class_exists('LiteSpeed_Cache_API')) {
+                // Clear object cache only (Redis)
+                if (method_exists('LiteSpeed_Cache_API', 'purge_object_cache')) {
+                    LiteSpeed_Cache_API::purge_object_cache();
+                    WP_CLI::line("✓ LiteSpeed object cache (Redis) cleared sitewide");
+                }
+                
+                // Clear page cache only
+                if (method_exists('LiteSpeed_Cache_API', 'purge_lscache')) {
+                    LiteSpeed_Cache_API::purge_lscache();
+                    WP_CLI::line("✓ LiteSpeed page cache cleared sitewide");
+                }
+                
+                $cache_time = round(microtime(true) - $cache_start, 3);
+                WP_CLI::line("✓ Caches cleared in {$cache_time}s");
+            } else {
+                WP_CLI::line("⚠ LiteSpeed Cache not available");
+            }
+            
+            WP_CLI::line("");
+            WP_CLI::success("All done! Rankings updated and caches cleared sitewide.");
         }
     }
 }
