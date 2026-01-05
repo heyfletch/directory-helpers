@@ -246,18 +246,14 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
             
             // Clear LiteSpeed page cache and object cache specifically
             $cache_start = microtime(true);
-            if (class_exists('LiteSpeed_Cache_API')) {
+            if (class_exists('LiteSpeed\Purge')) {
                 // Clear object cache only (Redis)
-                if (method_exists('LiteSpeed_Cache_API', 'purge_object_cache')) {
-                    LiteSpeed_Cache_API::purge_object_cache();
-                    WP_CLI::line("✓ LiteSpeed object cache (Redis) cleared sitewide");
-                }
+                \LiteSpeed\Purge::purge_all_object();
+                WP_CLI::line("✓ LiteSpeed object cache (Redis) cleared sitewide");
                 
                 // Clear page cache only
-                if (method_exists('LiteSpeed_Cache_API', 'purge_lscache')) {
-                    LiteSpeed_Cache_API::purge_lscache();
-                    WP_CLI::line("✓ LiteSpeed page cache cleared sitewide");
-                }
+                \LiteSpeed\Purge::purge_all_lscache();
+                WP_CLI::line("✓ LiteSpeed page cache cleared sitewide");
                 
                 $cache_time = round(microtime(true) - $cache_start, 3);
                 WP_CLI::line("✓ Caches cleared in {$cache_time}s");
