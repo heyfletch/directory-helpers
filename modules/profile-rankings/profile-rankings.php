@@ -46,16 +46,18 @@ class DH_Profile_Rankings {
      * @return float Calculated score
      */
     private function calculate_ranking_score($rating, $review_count, $boost = 0) {
-        // Formula: (rating * 0.8) + (min(1, log10($review_count + 1) / 2) * 5 * 0.2)
+        // Formula: (rating * 0.9) + (log10($review_count + 1) / 2 * 5 * 0.1) + (boost * 2)
         // This gives 90% weight to rating and 10% to review count using logarithmic scaling
         // The log10 function helps prevent reviews from dominating the score while still giving them weight
         // Adding 1 to review_count prevents log10(0) errors
-        // Dividing by 2 scales the log value (log10(100) = 2, so we divide by 2 to get a value between 0-1)
+        // Dividing by 2 scales the log value for reasonable growth
         // Multiplying by 5 scales it to the same range as ratings (0-5)
+        // Boost is multiplied by 2 to give more granular control
+        // No cap on review component - allows profiles with 1000+ reviews to score higher
         
         $rating_component = $rating * 0.9;
-        $review_component = min(1, log10($review_count + 1) / 2) * 5 * 0.1;
-        return $rating_component + $review_component + (float)$boost;
+        $review_component = (log10($review_count + 1) / 2) * 5 * 0.1;
+        return $rating_component + $review_component + ((float)$boost * 2);
     }
     
     /**
@@ -409,23 +411,25 @@ class DH_Profile_Rankings {
             ];
         }
 
-        // Sort by score descending (using native PHP sorting for performance)
+        // Sort by score descending with stable ordering for precision
+        // Use sprintf to format scores with high precision to avoid float comparison issues
         
-        // Extract scores and review counts for sorting
+        // Extract scores, review counts, and profile IDs for sorting
         $profile_ids = array_keys($scores);
         $score_values = [];
         $review_counts = [];
         
         foreach ($scores as $profile_id => $data) {
-            $score_values[] = $data['score'];
+            // Format score with 15 decimal places for precise comparison
+            $score_values[] = sprintf('%.15f', $data['score']);
             $review_counts[] = $data['review_count'];
         }
         
-        // Use array_multisort for efficient multi-column sorting
+        // Use array_multisort with profile_id as final tie-breaker for stable sorting
         array_multisort(
-            $score_values, SORT_DESC, SORT_NUMERIC,
+            $score_values, SORT_DESC, SORT_STRING,  // String comparison for precise decimal handling
             $review_counts, SORT_DESC, SORT_NUMERIC,
-            $profile_ids
+            $profile_ids, SORT_ASC, SORT_NUMERIC    // Tie-breaker: lower ID wins
         );
         
         // Rebuild scores array in sorted order

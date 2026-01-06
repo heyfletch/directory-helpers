@@ -181,8 +181,8 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                         $boost = (float)$data['boost'];
                         
                         $rating_component = $rating * 0.9;
-                        $review_component = min(1, log10($review_count + 1) / 2) * 5 * 0.1;
-                        $score = $rating_component + $review_component + $boost;
+                        $review_component = (log10($review_count + 1) / 2) * 5 * 0.1;
+                        $score = $rating_component + $review_component + ($boost * 2);
                         
                         $scores[$pid] = ['score' => $score, 'review_count' => $review_count];
                     }
@@ -190,12 +190,25 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 $calc_time = round(microtime(true) - $calc_start, 3);
                 WP_CLI::line("  [Calculate] Calculated scores in {$calc_time}s");
 
-                // Sort by score desc, then review count desc
+                // Sort by score desc, then review count desc with stable ordering
                 $sort_start = microtime(true);
                 $pids = array_keys($scores);
-                $score_vals = array_column($scores, 'score');
-                $review_vals = array_column($scores, 'review_count');
-                array_multisort($score_vals, SORT_DESC, $review_vals, SORT_DESC, $pids);
+                $score_vals = [];
+                $review_vals = [];
+                
+                foreach ($scores as $pid => $data) {
+                    // Format score with 15 decimal places for precise comparison
+                    $score_vals[] = sprintf('%.15f', $data['score']);
+                    $review_vals[] = $data['review_count'];
+                }
+                
+                // Use string comparison for scores and profile ID as tie-breaker
+                array_multisort(
+                    $score_vals, SORT_DESC, SORT_STRING,    // String comparison for precise decimal handling
+                    $review_vals, SORT_DESC, SORT_NUMERIC,
+                    $pids, SORT_ASC, SORT_NUMERIC           // Tie-breaker: lower ID wins
+                );
+                
                 $sort_time = round(microtime(true) - $sort_start, 3);
                 WP_CLI::line("  [Sort] Sorted profiles in {$sort_time}s");
 
