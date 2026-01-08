@@ -590,11 +590,11 @@ class DH_Profile_Badges {
         
         // Check state rank eligibility
         $state_rank = get_field('state_rank', $post_id);
-        $state_terms = get_the_terms($post_id, 'state');
+        $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
         
-        if (!empty($state_terms) && !is_wp_error($state_terms) && $state_rank && $state_rank != 99999) {
+        if ($state_term && $state_rank && $state_rank != 99999) {
             // Get state listing post (cached)
-            $state_post_id = $this->get_state_listing_id($post_id, $state_terms[0]);
+            $state_post_id = $this->get_state_listing_id($post_id, $state_term);
             
             if ($state_post_id) {
                 $profile_count = (int) get_post_meta($state_post_id, '_profile_count', true);
@@ -703,19 +703,19 @@ class DH_Profile_Badges {
             
         } elseif ($badge_type === 'state') {
             $state_rank = get_field('state_rank', $post_id);
-            $state_terms = get_the_terms($post_id, 'state');
+            $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
             
             // Use state description or name for location
-            if (!empty($state_terms) && !is_wp_error($state_terms)) {
-                $data['location'] = !empty($state_terms[0]->description) 
-                    ? $state_terms[0]->description 
-                    : $state_terms[0]->name;
+            if ($state_term) {
+                $data['location'] = !empty($state_term->description) 
+                    ? $state_term->description 
+                    : $state_term->name;
             }
             
             if ($state_rank && $state_rank != 99999) {
                 // Get state listing post (cached)
-                if (!empty($state_terms) && !is_wp_error($state_terms)) {
-                    $state_post_id = $this->get_state_listing_id($post_id, $state_terms[0]);
+                if ($state_term) {
+                    $state_post_id = $this->get_state_listing_id($post_id, $state_term);
                     
                     if ($state_post_id) {
                         $profile_count = (int) get_post_meta($state_post_id, '_profile_count', true);
@@ -1185,9 +1185,9 @@ class DH_Profile_Badges {
             }
         } elseif ($eligible['state']) {
             // Return state name
-            $state_terms = get_the_terms($post_id, 'state');
-            if (!empty($state_terms) && !is_wp_error($state_terms)) {
-                return esc_html($state_terms[0]->name);
+            $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
+            if ($state_term) {
+                return esc_html($state_term->name);
             }
         }
         
@@ -1281,9 +1281,9 @@ class DH_Profile_Badges {
             wp_cache_delete('dh_city_listing_' . $primary_area_term->term_id, 'dh_badges');
         }
         
-        $state_terms = get_the_terms($post_id, 'state');
-        if (!empty($state_terms) && !is_wp_error($state_terms)) {
-            wp_cache_delete('dh_state_listing_' . $state_terms[0]->slug, 'dh_badges');
+        $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
+        if ($state_term) {
+            wp_cache_delete('dh_state_listing_' . $state_term->slug, 'dh_badges');
         }
     }
 }

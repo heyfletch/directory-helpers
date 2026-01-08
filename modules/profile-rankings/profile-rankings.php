@@ -232,14 +232,14 @@ class DH_Profile_Rankings {
         $rating = get_field('rating_value', $post_id);
         $review_count = get_field('rating_votes_count', $post_id);
         
-        // Get state name for the profile
-        $state_terms = get_the_terms($post_id, 'state');
-        if (empty($state_terms) || is_wp_error($state_terms)) {
+        // Get primary state term for the profile
+        $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
+        if (!$state_term) {
             return '';
         }
         
         // Use the term description if available, otherwise use the term name
-        $state_display_name = !empty($state_terms[0]->description) ? $state_terms[0]->description : $state_terms[0]->name;
+        $state_display_name = !empty($state_term->description) ? $state_term->description : $state_term->name;
         
         // If no rating or reviews, show "not yet ranked"
         $state_rank = get_field('state_rank', $post_id);
@@ -258,8 +258,8 @@ class DH_Profile_Rankings {
             'tax_query' => array(
                 array(
                     'taxonomy' => 'state',
-                    'field' => 'slug',
-                    'terms' => $state_terms[0]->slug,
+                    'field' => 'term_id',
+                    'terms' => $state_term->term_id,
                 ),
             ),
             'fields' => 'ids',

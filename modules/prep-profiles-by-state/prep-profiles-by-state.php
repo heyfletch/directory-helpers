@@ -148,12 +148,12 @@ class DH_Prep_Profiles_By_State {
         foreach ($post_ids as $pid) {
             $terms = get_the_terms($pid, 'area');
             if (!empty($terms) && !is_wp_error($terms)) {
-                // If multiple area terms, select the one matching the profile's state
+                // If multiple area terms, select the one matching the profile's primary state
                 $selected_term = $terms[0]; // fallback
                 if (count($terms) > 1) {
-                    $state_terms = get_the_terms($pid, 'state');
-                    if (!empty($state_terms) && !is_wp_error($state_terms)) {
-                        $state_slug = strtolower($state_terms[0]->slug);
+                    $primary_state = DH_Taxonomy_Helpers::get_primary_state_term($pid);
+                    if ($primary_state) {
+                        $state_slug = strtolower($primary_state->slug);
                         foreach ($terms as $term) {
                             // Match area term slug ending with state code (e.g., milford-nh)
                             if (preg_match('/-' . preg_quote($state_slug, '/') . '$/', $term->slug)) {

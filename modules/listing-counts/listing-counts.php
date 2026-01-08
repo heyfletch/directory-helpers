@@ -67,10 +67,10 @@ class DH_Listing_Counts {
             $this->update_city_profile_count($primary_area_term->term_id);
         }
         
-        // Update state counts
-        $state_terms = get_the_terms($post_id, 'state');
-        if (!empty($state_terms) && !is_wp_error($state_terms)) {
-            $this->update_state_counts($state_terms[0]->slug);
+        // Update state counts (use primary state for profiles with multiple states)
+        $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
+        if ($state_term) {
+            $this->update_state_counts($state_term->slug);
         }
     }
     

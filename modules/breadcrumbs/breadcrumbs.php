@@ -484,12 +484,9 @@ class DH_Breadcrumbs {
                 );
             }
             
-            // Get the profile's state term
-            $state_terms = get_the_terms($post->ID, 'state');
-            if ($show_state && !empty($state_terms) && !is_wp_error($state_terms)) {
-                // Get the first state term (or primary term if implemented)
-                $state_term = $state_terms[0];
-                
+            // Get the profile's primary state term
+            $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post->ID);
+            if ($show_state && $state_term) {
                 // Find the corresponding State Listing CPT
                 $state_listing = $this->get_cpt_by_term('state-listing', 'state', $state_term->term_id);
                 

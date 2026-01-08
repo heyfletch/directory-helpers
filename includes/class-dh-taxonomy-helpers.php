@@ -61,6 +61,57 @@ class DH_Taxonomy_Helpers {
     }
     
     /**
+     * Get primary state term for a profile
+     * 
+     * When a profile has multiple state taxonomy terms, this method determines
+     * which one is the "primary" state by matching against the ACF 'state' field.
+     * 
+     * Logic:
+     * 1. If only one state term exists, return it
+     * 2. If multiple state terms exist, match against ACF 'state' field
+     * 3. Fallback to first term if no match found
+     *
+     * @param int $post_id Profile post ID
+     * @return WP_Term|false Primary state term or false if none found
+     */
+    public static function get_primary_state_term($post_id) {
+        $state_terms = get_the_terms($post_id, 'state');
+        if (empty($state_terms) || is_wp_error($state_terms)) {
+            return false;
+        }
+        
+        // Single term - no ambiguity
+        if (count($state_terms) === 1) {
+            return $state_terms[0];
+        }
+        
+        // Multiple terms - use ACF state field to determine primary
+        $acf_state = get_field('state', $post_id);
+        if ($acf_state && is_string($acf_state)) {
+            $acf_state_clean = strtolower(trim($acf_state));
+            
+            foreach ($state_terms as $term) {
+                // Check term description (full state name) first
+                if (!empty($term->description)) {
+                    $desc_clean = strtolower($term->description);
+                    if ($desc_clean === $acf_state_clean || strpos($desc_clean, $acf_state_clean) === 0) {
+                        return $term;
+                    }
+                }
+                
+                // Check term name (may be abbreviation or full name)
+                $term_name_clean = strtolower($term->name);
+                if ($term_name_clean === $acf_state_clean || strpos($term_name_clean, $acf_state_clean) === 0) {
+                    return $term;
+                }
+            }
+        }
+        
+        // Fallback to first term
+        return $state_terms[0];
+    }
+    
+    /**
      * Get city name for a profile
      * 
      * @param int $post_id Profile post ID
@@ -87,17 +138,18 @@ class DH_Taxonomy_Helpers {
     /**
      * Get state name for a profile
      * 
+     * Uses get_primary_state_term() to determine the correct state when
+     * a profile has multiple state terms assigned.
+     * 
      * @param int $post_id Profile post ID
      * @param string $format 'full' for full name, 'abbr' for abbreviation
      * @return string State name or empty string
      */
     public static function get_state_name($post_id, $format = 'full') {
-        $state_terms = get_the_terms($post_id, 'state');
-        if (empty($state_terms) || is_wp_error($state_terms)) {
+        $state_term = self::get_primary_state_term($post_id);
+        if (!$state_term) {
             return '';
         }
-        
-        $state_term = $state_terms[0];
         
         if ($format === 'abbr') {
             // Return abbreviation (term name or slug uppercase)

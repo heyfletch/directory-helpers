@@ -2,6 +2,10 @@
 /**
  * WP-CLI command for updating state rankings.
  * Processes each state only once, avoiding redundant recalculations.
+ * 
+ * IMPORTANT: Only profiles where the state is their PRIMARY state (based on
+ * ACF 'state' field match) are included in each state's ranking. Profiles
+ * tagged with multiple states are only ranked in their primary state.
  */
 
 if (!class_exists('DH_Update_State_Rankings_Command')) {
@@ -134,8 +138,31 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                     continue;
                 }
                 $query_time = round(microtime(true) - $query_start, 3);
+                $initial_count = count($profile_ids);
+                WP_CLI::line("  [Query] Fetched {$initial_count} profile IDs in {$query_time}s");
+                
+                // Filter to only include profiles where this state IS their primary state
+                // This ensures profiles with multiple states are only ranked in their primary state
+                $filter_start = microtime(true);
+                $filtered_profile_ids = [];
+                foreach ($profile_ids as $pid) {
+                    $primary_state = DH_Taxonomy_Helpers::get_primary_state_term($pid);
+                    if ($primary_state && $primary_state->term_id == $state->term_id) {
+                        $filtered_profile_ids[] = $pid;
+                    }
+                }
+                $profile_ids = $filtered_profile_ids;
+                $filter_time = round(microtime(true) - $filter_start, 3);
                 $profile_count = count($profile_ids);
-                WP_CLI::line("  [Query] Fetched {$profile_count} profile IDs in {$query_time}s");
+                $excluded = $initial_count - $profile_count;
+                if ($excluded > 0) {
+                    WP_CLI::line("  [Filter] Excluded {$excluded} profiles (not primary state), {$profile_count} remaining in {$filter_time}s");
+                }
+                
+                if (empty($profile_ids)) {
+                    WP_CLI::line("  No profiles have this as primary state, skipping...");
+                    continue;
+                }
 
                 // Bulk fetch all meta data in one query
                 $meta_start = microtime(true);
