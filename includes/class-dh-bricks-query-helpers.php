@@ -172,18 +172,23 @@ class DH_Bricks_Query_Helpers {
         // Track which profiles have the area term (for prioritization)
         $area_tagged_ids = $area_query->posts;
 
-        // 6. Fetch city_rank for all posts
+        // 6. Fetch city_rank and state_rank for all posts
         $rank_sql = $wpdb->prepare( "
-            SELECT post_id, meta_value 
+            SELECT post_id, meta_key, meta_value 
             FROM {$wpdb->postmeta} 
             WHERE post_id IN (" . implode(',', array_map('intval', $all_post_ids)) . ")
-            AND meta_key = %s
-        ", $city_rank_meta );
+            AND meta_key IN (%s, %s)
+        ", $city_rank_meta, 'state_rank' );
         
         $rank_results = $wpdb->get_results( $rank_sql );
         $city_ranks = [];
+        $state_ranks = [];
         foreach ( $rank_results as $row ) {
-            $city_ranks[ $row->post_id ] = (int) $row->meta_value;
+            if ( $row->meta_key === $city_rank_meta ) {
+                $city_ranks[ $row->post_id ] = (int) $row->meta_value;
+            } elseif ( $row->meta_key === 'state_rank' ) {
+                $state_ranks[ $row->post_id ] = (int) $row->meta_value;
+            }
         }
 
         // 7. Build sortable data structure
@@ -193,22 +198,25 @@ class DH_Bricks_Query_Helpers {
                 'id' => $post_id,
                 'has_area_term' => in_array( $post_id, $area_tagged_ids ),
                 'city_rank' => isset( $city_ranks[ $post_id ] ) ? $city_ranks[ $post_id ] : 999999,
+                'state_rank' => isset( $state_ranks[ $post_id ] ) ? $state_ranks[ $post_id ] : 999999,
                 'distance' => isset( $proximity_data[ $post_id ] ) ? $proximity_data[ $post_id ] : 999999,
             ];
         }
 
-        // 8. Sort: Area-tagged profiles first, then by city_rank, then by distance
+        // 8. Sort: Area-tagged profiles first (by city_rank), then proximity profiles (by state_rank)
         usort( $profiles, function( $a, $b ) {
             // Primary: Area term match (true before false)
             if ( $a['has_area_term'] !== $b['has_area_term'] ) {
                 return $b['has_area_term'] - $a['has_area_term'];
             }
-            // Secondary: city_rank (ascending)
-            if ( $a['city_rank'] !== $b['city_rank'] ) {
+            
+            // For area-tagged profiles: sort by city_rank (unique within city)
+            if ( $a['has_area_term'] && $b['has_area_term'] ) {
                 return $a['city_rank'] - $b['city_rank'];
             }
-            // Tertiary: distance (ascending)
-            return $a['distance'] <=> $b['distance'];
+            
+            // For proximity profiles: sort by state_rank (unique within state)
+            return $a['state_rank'] - $b['state_rank'];
         });
 
         $sorted_ids = wp_list_pluck( $profiles, 'id' );

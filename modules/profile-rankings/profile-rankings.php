@@ -412,7 +412,6 @@ class DH_Profile_Rankings {
         }
 
         // Sort by score descending with stable ordering for precision
-        // Use sprintf to format scores with high precision to avoid float comparison issues
         
         // Extract scores, review counts, and profile IDs for sorting
         $profile_ids = array_keys($scores);
@@ -420,14 +419,13 @@ class DH_Profile_Rankings {
         $review_counts = [];
         
         foreach ($scores as $profile_id => $data) {
-            // Format score with 15 decimal places for precise comparison
-            $score_values[] = sprintf('%.15f', $data['score']);
+            $score_values[] = (float)$data['score'];
             $review_counts[] = $data['review_count'];
         }
         
         // Use array_multisort with profile_id as final tie-breaker for stable sorting
         array_multisort(
-            $score_values, SORT_DESC, SORT_STRING,  // String comparison for precise decimal handling
+            $score_values, SORT_DESC, SORT_NUMERIC,
             $review_counts, SORT_DESC, SORT_NUMERIC,
             $profile_ids, SORT_ASC, SORT_NUMERIC    // Tie-breaker: lower ID wins
         );

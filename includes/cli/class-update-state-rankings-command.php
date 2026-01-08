@@ -197,14 +197,13 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 $review_vals = [];
                 
                 foreach ($scores as $pid => $data) {
-                    // Format score with 15 decimal places for precise comparison
-                    $score_vals[] = sprintf('%.15f', $data['score']);
+                    $score_vals[] = (float)$data['score'];
                     $review_vals[] = $data['review_count'];
                 }
                 
-                // Use string comparison for scores and profile ID as tie-breaker
+                // Use numeric comparison for scores with profile ID as tie-breaker
                 array_multisort(
-                    $score_vals, SORT_DESC, SORT_STRING,    // String comparison for precise decimal handling
+                    $score_vals, SORT_DESC, SORT_NUMERIC,
                     $review_vals, SORT_DESC, SORT_NUMERIC,
                     $pids, SORT_ASC, SORT_NUMERIC           // Tie-breaker: lower ID wins
                 );
