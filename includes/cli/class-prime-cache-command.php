@@ -225,6 +225,60 @@ if (!class_exists('DH_Prime_Cache_Command')) {
         }
 
         /**
+         * Find all numbered sitemaps for a given base name
+         *
+         * @param string $base_name Base sitemap name (e.g., 'city-listing-sitemap')
+         * @return array Array of sitemap filenames
+         */
+        private function find_numbered_sitemaps($base_name) {
+            $sitemaps = array();
+            
+            // Always check the base (no number)
+            $base_sitemap = $base_name . '.xml';
+            $base_url = trailingslashit($this->site_url) . $base_sitemap;
+            if ($this->sitemap_exists($base_url)) {
+                $sitemaps[] = $base_sitemap;
+            }
+            
+            // Check numbered versions (1, 2, 3, etc.)
+            $max_number = 200; // Reasonable limit to prevent infinite loops
+            for ($i = 1; $i <= $max_number; $i++) {
+                $numbered_sitemap = $base_name . $i . '.xml';
+                $numbered_url = trailingslashit($this->site_url) . $numbered_sitemap;
+                
+                if ($this->sitemap_exists($numbered_url)) {
+                    $sitemaps[] = $numbered_sitemap;
+                } else {
+                    // Stop at the first missing number (assuming sequential)
+                    break;
+                }
+            }
+            
+            return $sitemaps;
+        }
+
+        /**
+         * Check if a sitemap exists by making a HEAD request
+         *
+         * @param string $url Full URL to check
+         * @return bool True if sitemap exists
+         */
+        private function sitemap_exists($url) {
+            $response = wp_remote_head($url, array(
+                'timeout' => 10,
+                'user-agent' => $this->user_agent,
+                'sslverify' => false,
+            ));
+
+            if (is_wp_error($response)) {
+                return false;
+            }
+
+            $status_code = wp_remote_retrieve_response_code($response);
+            return $status_code === 200;
+        }
+
+        /**
          * Resolve arguments to URLs (from sitemaps or direct URLs)
          *
          * @param array $args Sitemap filenames, full URLs, or sitemap URLs
@@ -236,29 +290,26 @@ if (!class_exists('DH_Prime_Cache_Command')) {
 
             // Handle presets
             if ($preset) {
-                $presets = array(
-                    'priority' => array(
+                if ($preset === 'priority') {
+                    $args = array(
                         'page-sitemap.xml',
                         'state-listing-sitemap.xml',
                         'certification-sitemap.xml',
-                    ),
-                    'listings' => array(
-                        'city-listing-sitemap.xml',
-                        'state-listing-sitemap.xml',
-                    ),
-                    'profiles' => array(
-                        'profile-sitemap.xml',
-                        'profile-sitemap2.xml',
-                        'profile-sitemap3.xml',
-                    ),
-                );
-
-                if (!isset($presets[$preset])) {
-                    WP_CLI::error("Unknown preset: {$preset}. Available: " . implode(', ', array_keys($presets)));
+                    );
+                } elseif ($preset === 'listings') {
+                    $args = array('state-listing-sitemap.xml');
+                    
+                    // Find all city-listing sitemaps (city-listing-sitemap.xml, city-listing-sitemap1.xml, etc.)
+                    $city_sitemaps = $this->find_numbered_sitemaps('city-listing-sitemap');
+                    $args = array_merge($args, $city_sitemaps);
+                    
+                } elseif ($preset === 'profiles') {
+                    // Find all profile sitemaps (profile-sitemap.xml, profile-sitemap1.xml, etc.)
+                    $args = $this->find_numbered_sitemaps('profile-sitemap');
+                } else {
+                    WP_CLI::error("Unknown preset: {$preset}. Available: priority, listings, profiles");
                     return array();
                 }
-
-                $args = $presets[$preset];
             }
 
             foreach ($args as $arg) {
