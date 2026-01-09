@@ -94,35 +94,36 @@ if (!class_exists('DH_Prime_Cache_Command')) {
             $dry_run = isset($assoc_args['dry-run']);
             $preset = isset($assoc_args['preset']) ? $assoc_args['preset'] : null;
 
-            // Get sitemap URLs
-            $sitemaps = $this->resolve_sitemaps($args, $preset);
+            // Get URLs to process (sitemaps or direct URLs)
+            $all_urls = $this->resolve_urls($args, $preset);
 
-            if (empty($sitemaps)) {
-                WP_CLI::error("No sitemaps specified. Use sitemap filenames or --preset=<name>");
+            if (empty($all_urls)) {
+                WP_CLI::error("No URLs specified. Use sitemap filenames, full URLs, or --preset=<name>");
                 return;
             }
 
-            WP_CLI::line("Sitemaps to process:");
-            foreach ($sitemaps as $sitemap) {
-                WP_CLI::line("  - {$sitemap}");
+            // Count sitemap vs direct URLs
+            $sitemap_count = 0;
+            $direct_count = 0;
+            foreach ($args as $arg) {
+                if (filter_var($arg, FILTER_VALIDATE_URL) && !$this->is_sitemap($arg)) {
+                    $direct_count++;
+                } else {
+                    $sitemap_count++;
+                }
+            }
+
+            if ($sitemap_count > 0) {
+                WP_CLI::line("Sitemaps to process: {$sitemap_count}");
+            }
+            if ($direct_count > 0) {
+                WP_CLI::line("Direct URLs to process: {$direct_count}");
             }
             WP_CLI::line("");
 
             if ($dry_run) {
                 WP_CLI::line("DRY RUN MODE - URLs will be listed but not fetched");
                 WP_CLI::line("");
-            }
-
-            // Collect all URLs from sitemaps
-            $all_urls = array();
-            foreach ($sitemaps as $sitemap_url) {
-                $urls = $this->parse_sitemap($sitemap_url);
-                if ($urls === false) {
-                    WP_CLI::warning("Failed to parse sitemap: {$sitemap_url}");
-                    continue;
-                }
-                WP_CLI::line("Found " . count($urls) . " URLs in " . basename($sitemap_url));
-                $all_urls = array_merge($all_urls, $urls);
             }
 
             // Remove duplicates
@@ -212,14 +213,26 @@ if (!class_exists('DH_Prime_Cache_Command')) {
         }
 
         /**
-         * Resolve sitemap arguments to full URLs
+         * Check if a URL is a sitemap
          *
-         * @param array $args Sitemap filenames or URLs
-         * @param string|null $preset Preset name
-         * @return array Full sitemap URLs
+         * @param string $url URL to check
+         * @return bool True if sitemap
          */
-        private function resolve_sitemaps($args, $preset) {
-            $sitemaps = array();
+        private function is_sitemap($url) {
+            return (strpos($url, 'sitemap.xml') !== false) || 
+                   (strpos($url, 'sitemap_index.xml') !== false) ||
+                   (preg_match('/\/sitemap.*\.xml$/i', $url));
+        }
+
+        /**
+         * Resolve arguments to URLs (from sitemaps or direct URLs)
+         *
+         * @param array $args Sitemap filenames, full URLs, or sitemap URLs
+         * @param string|null $preset Preset name
+         * @return array Array of URLs to prime
+         */
+        private function resolve_urls($args, $preset) {
+            $urls = array();
 
             // Handle presets
             if ($preset) {
@@ -248,18 +261,36 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                 $args = $presets[$preset];
             }
 
-            // Resolve each sitemap to full URL
-            foreach ($args as $sitemap) {
-                if (filter_var($sitemap, FILTER_VALIDATE_URL)) {
-                    // Already a full URL
-                    $sitemaps[] = $sitemap;
+            foreach ($args as $arg) {
+                // If it's a full URL
+                if (filter_var($arg, FILTER_VALIDATE_URL)) {
+                    if ($this->is_sitemap($arg)) {
+                        // Parse sitemap and add its URLs
+                        $sitemap_urls = $this->parse_sitemap($arg);
+                        if ($sitemap_urls !== false) {
+                            WP_CLI::line("Found " . count($sitemap_urls) . " URLs in " . basename($arg));
+                            $urls = array_merge($urls, $sitemap_urls);
+                        } else {
+                            WP_CLI::warning("Failed to parse sitemap: {$arg}");
+                        }
+                    } else {
+                        // Direct URL, add as-is
+                        $urls[] = $arg;
+                    }
                 } else {
-                    // Assume it's a filename, prepend site URL
-                    $sitemaps[] = trailingslashit($this->site_url) . ltrim($sitemap, '/');
+                    // Assume it's a sitemap filename, prepend site URL
+                    $sitemap_url = trailingslashit($this->site_url) . ltrim($arg, '/');
+                    $sitemap_urls = $this->parse_sitemap($sitemap_url);
+                    if ($sitemap_urls !== false) {
+                        WP_CLI::line("Found " . count($sitemap_urls) . " URLs in " . basename($arg));
+                        $urls = array_merge($urls, $sitemap_urls);
+                    } else {
+                        WP_CLI::warning("Failed to parse sitemap: {$arg}");
+                    }
                 }
             }
 
-            return $sitemaps;
+            return $urls;
         }
 
         /**
@@ -349,11 +380,19 @@ if (!class_exists('DH_Prime_Cache_Command')) {
             $status_code = wp_remote_retrieve_response_code($response);
             $headers = wp_remote_retrieve_headers($response);
 
-            // Check for LiteSpeed cache header
+            // Check for cache status - LiteSpeed uses multiple headers
             $cache_status = 'miss';
-            if (isset($headers['x-litespeed-cache'])) {
+            
+            // Check x-qc-cache header (primary LiteSpeed cache status)
+            if (isset($headers['x-qc-cache'])) {
+                $cache_status = (strpos(strtolower($headers['x-qc-cache']), 'hit') !== false) ? 'hit' : 'miss';
+            }
+            // Fallback to x-litespeed-cache header
+            elseif (isset($headers['x-litespeed-cache'])) {
                 $cache_status = (strpos($headers['x-litespeed-cache'], 'hit') !== false) ? 'hit' : 'miss';
-            } elseif (isset($headers['x-cache'])) {
+            }
+            // Fallback to x-cache header
+            elseif (isset($headers['x-cache'])) {
                 $cache_status = (strpos(strtolower($headers['x-cache']), 'hit') !== false) ? 'hit' : 'miss';
             }
 

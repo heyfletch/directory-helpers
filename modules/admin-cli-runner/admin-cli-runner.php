@@ -485,7 +485,21 @@ class DH_Admin_CLI_Runner {
                 <p class="description">
                     <strong><?php esc_html_e('CLI Usage:', 'directory-helpers'); ?></strong><br>
                     <code>wp directory-helpers prime-cache page-sitemap.xml state-listing-sitemap.xml</code><br>
-                    <code>wp directory-helpers prime-cache --preset=priority --delay=200</code>
+                    <code>wp directory-helpers prime-cache https://goodydoggy.com/top/iowa-dog-trainers/</code><br>
+                    <code>wp directory-helpers prime-cache --preset=priority --delay=200 --dry-run</code><br>
+                    <code>wp directory-helpers prime-cache page-sitemap.xml https://goodydoggy.com/about/</code><br><br>
+                    <strong><?php esc_html_e('Sitemap Presets:', 'directory-helpers'); ?></strong><br>
+                    <code>wp directory-helpers prime-cache --preset=priority</code><br>
+                    &nbsp;&nbsp;→ https://goodydoggy.com/page-sitemap.xml<br>
+                    &nbsp;&nbsp;→ https://goodydoggy.com/state-listing-sitemap.xml<br>
+                    &nbsp;&nbsp;→ https://goodydoggy.com/certification-sitemap.xml<br><br>
+                    <code>wp directory-helpers prime-cache --preset=listings</code><br>
+                    &nbsp;&nbsp;→ https://goodydoggy.com/city-listing-sitemap.xml<br>
+                    &nbsp;&nbsp;→ https://goodydoggy.com/state-listing-sitemap.xml<br><br>
+                    <code>wp directory-helpers prime-cache --preset=profiles</code><br>
+                    &nbsp;&nbsp;→ https://goodydoggy.com/profile-sitemap.xml<br>
+                    &nbsp;&nbsp;→ https://goodydoggy.com/profile-sitemap2.xml<br>
+                    &nbsp;&nbsp;→ https://goodydoggy.com/profile-sitemap3.xml
                 </p>
 
             </div>
