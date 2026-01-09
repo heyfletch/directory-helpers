@@ -108,6 +108,7 @@ class DH_Admin_CLI_Runner {
             'update-rankings',
             'update-state-rankings',
             'analyze-radius',
+            'prime-cache',
         );
 
         // Parse command to validate
@@ -445,6 +446,47 @@ class DH_Admin_CLI_Runner {
                     </button>
                     <span class="dh-cli-status"></span>
                 </div>
+
+                <hr style="margin: 30px 0; border-top: 1px solid #ccd0d4;">
+
+                <h3><?php esc_html_e('Cache Priming', 'directory-helpers'); ?></h3>
+                <p><?php esc_html_e('Prime cache for key pages using bot User-Agent (excluded from analytics). Faster than full LiteSpeed crawler.', 'directory-helpers'); ?></p>
+                
+                <div class="dh-cli-actions" style="margin-bottom: 15px;">
+                    <button type="button" class="button button-primary dh-cli-run-btn" 
+                            data-command="prime-cache --preset=priority">
+                        <span class="dashicons dashicons-performance" style="margin-top: 4px;"></span>
+                        <?php esc_html_e('Prime Priority Pages', 'directory-helpers'); ?>
+                    </button>
+                    <span class="dh-cli-status"></span>
+                    <span class="description" style="margin-left: 10px;"><?php esc_html_e('Pages, States, Certifications', 'directory-helpers'); ?></span>
+                </div>
+
+                <div class="dh-cli-actions" style="margin-bottom: 15px;">
+                    <button type="button" class="button dh-cli-run-btn" 
+                            data-command="prime-cache --preset=listings">
+                        <span class="dashicons dashicons-location" style="margin-top: 4px;"></span>
+                        <?php esc_html_e('Prime Listing Pages', 'directory-helpers'); ?>
+                    </button>
+                    <span class="dh-cli-status"></span>
+                    <span class="description" style="margin-left: 10px;"><?php esc_html_e('City & State listings', 'directory-helpers'); ?></span>
+                </div>
+
+                <div class="dh-cli-actions" style="margin-bottom: 20px;">
+                    <button type="button" class="button dh-cli-run-btn" 
+                            data-command="prime-cache --preset=profiles">
+                        <span class="dashicons dashicons-businessman" style="margin-top: 4px;"></span>
+                        <?php esc_html_e('Prime Profile Pages', 'directory-helpers'); ?>
+                    </button>
+                    <span class="dh-cli-status"></span>
+                    <span class="description" style="margin-left: 10px;"><?php esc_html_e('All profiles (may take a while)', 'directory-helpers'); ?></span>
+                </div>
+
+                <p class="description">
+                    <strong><?php esc_html_e('CLI Usage:', 'directory-helpers'); ?></strong><br>
+                    <code>wp directory-helpers prime-cache page-sitemap.xml state-listing-sitemap.xml</code><br>
+                    <code>wp directory-helpers prime-cache --preset=priority --delay=200</code>
+                </p>
 
             </div>
         </div>

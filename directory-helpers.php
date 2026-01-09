@@ -250,12 +250,14 @@ class Directory_Helpers {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-update-rankings-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-update-state-rankings-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-bricks-resign-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-prime-cache-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_state_listing_titles', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers analyze-radius', 'DH_Analyze_Radius_Command' );
         WP_CLI::add_command( 'directory-helpers update-rankings', 'DH_Update_Rankings_Command' );
         WP_CLI::add_command( 'directory-helpers update-state-rankings', 'DH_Update_State_Rankings_Command' );
+        WP_CLI::add_command( 'directory-helpers prime-cache', 'DH_Prime_Cache_Command' );
     }
 
     /**
