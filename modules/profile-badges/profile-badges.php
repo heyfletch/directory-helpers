@@ -429,12 +429,9 @@ class DH_Profile_Badges {
             exit('Invalid badge type');
         }
         
-        // Check if badge type is eligible (profile badge is always eligible)
-        $eligible = $this->get_eligible_badges($post_id);
-        if (!$eligible[$badge_type]) {
-            status_header(404);
-            exit('Badge not available');
-        }
+        // Note: We no longer 404 for ineligible badges. If a profile was once ranked
+        // but dropped out of Top 25, we serve a "Recognized" fallback badge instead
+        // to prevent broken images on trainer websites with embedded badge code.
         
         // Try to get cached SVG (use wp_cache which uses Redis/Memcached when available)
         $cache_key = 'dh_badge_' . $post_id . '_' . $badge_type;
@@ -693,12 +690,18 @@ class DH_Profile_Badges {
                     $profile_count = (int) get_post_meta($city_post_id, '_profile_count', true);
                     $tier_label = $this->get_ranking_tier_label($city_rank, $profile_count);
                     
-                    // Set rank label (may be empty if dropped out of tier)
-                    $data['rank_label'] = $tier_label ? $tier_label : '';
+                    // If dropped out of tier, fallback to "Recognized" instead of empty
+                    // This ensures embedded badges never break
+                    $data['rank_label'] = $tier_label ? $tier_label : 'Recognized';
                     
                     // Link to city-listing page
                     $data['profile_url'] = get_permalink($city_post_id);
                 }
+            }
+            
+            // Ensure we always have a rank_label for city badges (fallback for profiles with no rank data)
+            if (empty($data['rank_label'])) {
+                $data['rank_label'] = 'Recognized';
             }
             
         } elseif ($badge_type === 'state') {
@@ -721,13 +724,19 @@ class DH_Profile_Badges {
                         $profile_count = (int) get_post_meta($state_post_id, '_profile_count', true);
                         $tier_label = $this->get_ranking_tier_label($state_rank, $profile_count);
                         
-                        // Set rank label (may be empty if dropped out of tier)
-                        $data['rank_label'] = $tier_label ? $tier_label : '';
+                        // If dropped out of tier, fallback to "Recognized" instead of empty
+                        // This ensures embedded badges never break
+                        $data['rank_label'] = $tier_label ? $tier_label : 'Recognized';
                         
                         // Link to state-listing page
                         $data['profile_url'] = get_permalink($state_post_id);
                     }
                 }
+            }
+            
+            // Ensure we always have a rank_label for state badges (fallback for profiles with no rank data)
+            if (empty($data['rank_label'])) {
+                $data['rank_label'] = 'Recognized';
             }
             
         } elseif ($badge_type === 'profile') {
