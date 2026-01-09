@@ -484,10 +484,18 @@ class DH_Admin_CLI_Runner {
 
                 <p class="description">
                     <strong><?php esc_html_e('CLI Usage:', 'directory-helpers'); ?></strong><br>
+                    <code>wp directory-helpers prime-cache --preset=profiles --concurrency=4</code><br>
                     <code>wp directory-helpers prime-cache page-sitemap.xml state-listing-sitemap.xml</code><br>
                     <code>wp directory-helpers prime-cache https://goodydoggy.com/top/iowa-dog-trainers/</code><br>
                     <code>wp directory-helpers prime-cache --preset=priority --delay=200 --dry-run</code><br>
                     <code>wp directory-helpers prime-cache page-sitemap.xml https://goodydoggy.com/about/</code><br><br>
+                    <strong><?php esc_html_e('Defaults:', 'directory-helpers'); ?></strong><br>
+                    <code>--concurrency=2</code> (2 concurrent requests, safe default)<br>
+                    <code>--delay=100</code> (milliseconds between batches)<br>
+                    <code>--timeout=30</code> (seconds per request)<br><br>
+                    <strong><?php esc_html_e('Performance Tip:', 'directory-helpers'); ?></strong><br>
+                    Use <code>--concurrency=3-5</code> on multi-CPU servers for 3-5x faster cache priming.<br>
+                    Example: <code>wp directory-helpers prime-cache --preset=profiles --concurrency=4 --delay=200</code><br><br>
                     <strong><?php esc_html_e('Sitemap Presets:', 'directory-helpers'); ?></strong><br>
                     <code>wp directory-helpers prime-cache --preset=priority</code><br>
                     &nbsp;&nbsp;→ https://goodydoggy.com/page-sitemap.xml<br>

@@ -54,6 +54,10 @@ if (!class_exists('DH_Prime_Cache_Command')) {
          * [--timeout=<seconds>]
          * : Request timeout in seconds. Default: 30
          *
+         * [--concurrency=<num>]
+         * : Number of concurrent requests. Default: 2. Recommended: 3-5 for multi-CPU servers.
+         *   Higher values = faster but more server load. Max: 10
+         *
          * [--limit=<num>]
          * : Maximum number of URLs to process. Default: no limit
          *
@@ -90,6 +94,8 @@ if (!class_exists('DH_Prime_Cache_Command')) {
             // Parse options
             $delay_ms = isset($assoc_args['delay']) ? (int) $assoc_args['delay'] : 100;
             $timeout = isset($assoc_args['timeout']) ? (int) $assoc_args['timeout'] : 30;
+            $concurrency = isset($assoc_args['concurrency']) ? (int) $assoc_args['concurrency'] : 2;
+            $concurrency = max(1, min($concurrency, 10)); // Cap at 10 for safety
             $limit = isset($assoc_args['limit']) ? (int) $assoc_args['limit'] : 0;
             $dry_run = isset($assoc_args['dry-run']);
             $preset = isset($assoc_args['preset']) ? $assoc_args['preset'] : null;
@@ -144,7 +150,8 @@ if (!class_exists('DH_Prime_Cache_Command')) {
 
             WP_CLI::line("");
             WP_CLI::line("Total URLs to process: {$total_urls}");
-            WP_CLI::line("Delay between requests: {$delay_ms}ms");
+            WP_CLI::line("Concurrency: {$concurrency} request(s) at a time");
+            WP_CLI::line("Delay between batches: {$delay_ms}ms");
             WP_CLI::line("");
 
             if ($dry_run) {
@@ -163,37 +170,82 @@ if (!class_exists('DH_Prime_Cache_Command')) {
             $cache_hit_count = 0;
             $cache_miss_count = 0;
 
-            foreach ($all_urls as $index => $url) {
-                $num = $index + 1;
-                $result = $this->prime_url($url, $timeout);
-
-                if ($result['success']) {
-                    $success_count++;
-                    $status_char = '✓';
-                    $cache_status = $result['cache_status'];
+            if ($concurrency > 1) {
+                // Process URLs in batches for concurrent requests
+                $batches = array_chunk($all_urls, $concurrency);
+                $processed = 0;
+                
+                foreach ($batches as $batch_index => $batch) {
+                    $results = $this->prime_urls_concurrent($batch, $timeout);
                     
-                    if ($cache_status === 'hit') {
-                        $cache_hit_count++;
-                    } else {
-                        $cache_miss_count++;
+                    foreach ($batch as $batch_pos => $url) {
+                        $processed++;
+                        $result = $results[$url];
+                        
+                        if ($result['success']) {
+                            $success_count++;
+                            $status_char = '✓';
+                            $cache_status = $result['cache_status'];
+                            
+                            if ($cache_status === 'hit') {
+                                $cache_hit_count++;
+                            } else {
+                                $cache_miss_count++;
+                            }
+                            
+                            WP_CLI::line("[{$processed}/{$total_urls}] {$status_char} {$result['status_code']} ({$cache_status}) {$url}");
+                        } else {
+                            $error_count++;
+                            WP_CLI::line("[{$processed}/{$total_urls}] ✗ ERROR: {$result['error']} - {$url}");
+                        }
                     }
                     
-                    WP_CLI::line("[{$num}/{$total_urls}] {$status_char} {$result['status_code']} ({$cache_status}) {$url}");
-                } else {
-                    $error_count++;
-                    WP_CLI::line("[{$num}/{$total_urls}] ✗ ERROR: {$result['error']} - {$url}");
+                    // Delay between batches (convert ms to microseconds)
+                    if ($delay_ms > 0 && $batch_index < count($batches) - 1) {
+                        usleep($delay_ms * 1000);
+                    }
+                    
+                    // Progress update every ~50 URLs
+                    if ($processed % 50 < $concurrency) {
+                        $elapsed = round(microtime(true) - $start_time, 1);
+                        $rate = round($processed / $elapsed, 1);
+                        WP_CLI::line("--- Progress: {$processed}/{$total_urls} ({$rate} URLs/sec) ---");
+                    }
                 }
+            } else {
+                // Sequential processing (original behavior)
+                foreach ($all_urls as $index => $url) {
+                    $num = $index + 1;
+                    $result = $this->prime_url($url, $timeout);
 
-                // Delay between requests (convert ms to microseconds)
-                if ($delay_ms > 0 && $index < $total_urls - 1) {
-                    usleep($delay_ms * 1000);
-                }
+                    if ($result['success']) {
+                        $success_count++;
+                        $status_char = '✓';
+                        $cache_status = $result['cache_status'];
+                        
+                        if ($cache_status === 'hit') {
+                            $cache_hit_count++;
+                        } else {
+                            $cache_miss_count++;
+                        }
+                        
+                        WP_CLI::line("[{$num}/{$total_urls}] {$status_char} {$result['status_code']} ({$cache_status}) {$url}");
+                    } else {
+                        $error_count++;
+                        WP_CLI::line("[{$num}/{$total_urls}] ✗ ERROR: {$result['error']} - {$url}");
+                    }
 
-                // Progress update every 50 URLs
-                if ($num % 50 === 0) {
-                    $elapsed = round(microtime(true) - $start_time, 1);
-                    $rate = round($num / $elapsed, 1);
-                    WP_CLI::line("--- Progress: {$num}/{$total_urls} ({$rate} URLs/sec) ---");
+                    // Delay between requests (convert ms to microseconds)
+                    if ($delay_ms > 0 && $index < $total_urls - 1) {
+                        usleep($delay_ms * 1000);
+                    }
+
+                    // Progress update every 50 URLs
+                    if ($num % 50 === 0) {
+                        $elapsed = round(microtime(true) - $start_time, 1);
+                        $rate = round($num / $elapsed, 1);
+                        WP_CLI::line("--- Progress: {$num}/{$total_urls} ({$rate} URLs/sec) ---");
+                    }
                 }
             }
 
@@ -402,6 +454,89 @@ if (!class_exists('DH_Prime_Cache_Command')) {
             }
 
             return $urls;
+        }
+
+        /**
+         * Prime multiple URLs concurrently using curl_multi
+         *
+         * @param array $urls Array of URLs to fetch
+         * @param int $timeout Request timeout in seconds
+         * @return array Associative array of URL => result
+         */
+        private function prime_urls_concurrent($urls, $timeout) {
+            $mh = curl_multi_init();
+            $handles = array();
+            $results = array();
+            
+            // Initialize all curl handles
+            foreach ($urls as $url) {
+                $ch = curl_init($url);
+                curl_setopt_array($ch, array(
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => $timeout,
+                    CURLOPT_USERAGENT => $this->user_agent,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_HEADER => true,
+                    CURLOPT_NOBODY => false,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS => 5,
+                ));
+                curl_multi_add_handle($mh, $ch);
+                $handles[(int)$ch] = array('url' => $url, 'handle' => $ch);
+            }
+            
+            // Execute all handles
+            $running = null;
+            do {
+                curl_multi_exec($mh, $running);
+                curl_multi_select($mh, 0.1);
+            } while ($running > 0);
+            
+            // Collect results
+            foreach ($handles as $data) {
+                $ch = $data['handle'];
+                $url = $data['url'];
+                $response = curl_multi_getcontent($ch);
+                $info = curl_getinfo($ch);
+                $error = curl_error($ch);
+                
+                if ($error) {
+                    $results[$url] = array(
+                        'success' => false,
+                        'error' => $error,
+                        'status_code' => 0,
+                        'cache_status' => 'error',
+                    );
+                } else {
+                    // Parse headers for cache status
+                    $header_size = $info['header_size'];
+                    $headers = substr($response, 0, $header_size);
+                    $cache_status = 'miss';
+                    
+                    if (preg_match('/x-qc-cache:\s*(hit|miss)/i', $headers, $match)) {
+                        $cache_status = strtolower($match[1]);
+                    } elseif (preg_match('/x-litespeed-cache:\s*([^\r\n]+)/i', $headers, $match)) {
+                        $cache_status = (strpos($match[1], 'hit') !== false) ? 'hit' : 'miss';
+                    } elseif (preg_match('/x-cache:\s*([^\r\n]+)/i', $headers, $match)) {
+                        $cache_status = (strpos(strtolower($match[1]), 'hit') !== false) ? 'hit' : 'miss';
+                    }
+                    
+                    $success = ($info['http_code'] >= 200 && $info['http_code'] < 400);
+                    
+                    $results[$url] = array(
+                        'success' => $success,
+                        'status_code' => $info['http_code'],
+                        'cache_status' => $cache_status,
+                        'error' => $success ? null : "HTTP {$info['http_code']}",
+                    );
+                }
+                
+                curl_multi_remove_handle($mh, $ch);
+                curl_close($ch);
+            }
+            
+            curl_multi_close($mh);
+            return $results;
         }
 
         /**
