@@ -3,6 +3,32 @@
 
     <?php settings_errors('directory_helpers_messages'); ?>
 
+    <!-- Complete Maintenance Workflow -->
+    <div class="directory-helpers-settings" style="margin-bottom: 30px; background: #f0f6fc; border: 1px solid #c3dafe; padding: 20px; border-radius: 4px;">
+        <h2 style="margin-top: 0;"><?php esc_html_e('Complete Maintenance Workflow', 'directory-helpers'); ?></h2>
+        <p class="description" style="margin-bottom: 15px;">
+            <?php esc_html_e('Run these commands in sequence to update rankings, purge caches, and reprime all pages. Copy and paste into terminal.', 'directory-helpers'); ?>
+        </p>
+        <textarea readonly style="width: 100%; height: 200px; font-family: monospace; font-size: 13px; padding: 10px; background: #fff; border: 1px solid #8c8f94; border-radius: 3px;">wp directory-helpers update-state-rankings dog-trainer
+wp directory-helpers update-rankings dog-trainer
+wp directory-helpers analyze-radius dog-trainer --update-meta
+wp litespeed-purge all
+wp dh search rebuild-cache
+wp directory-helpers prime-cache --preset=priority --concurrency=5
+wp directory-helpers prime-cache --preset=listings --concurrency=5
+wp directory-helpers prime-cache --preset=profiles --concurrency=5</textarea>
+        <p class="description" style="margin-top: 10px;">
+            <button type="button" class="button button-secondary" onclick="this.previousElementSibling.select(); document.execCommand('copy'); this.textContent='<?php esc_html_e('Copied!', 'directory-helpers'); ?>'; setTimeout(() => this.textContent='<?php esc_html_e('Copy All Commands', 'directory-helpers'); ?>', 2000);">
+                <?php esc_html_e('Copy All Commands', 'directory-helpers'); ?>
+            </button>
+            <?php esc_html_e('or select individual lines manually', 'directory-helpers'); ?>
+        </p>
+        <p class="description" style="margin-top: 10px;">
+            <strong><?php esc_html_e('Estimated time:', 'directory-helpers'); ?></strong> 
+            <?php esc_html_e('~2-3 hours for complete workflow (profiles take the longest)', 'directory-helpers'); ?>
+        </p>
+    </div>
+
     <!-- Instant Search Cache Management Section -->
     <div class="directory-helpers-settings" style="margin-bottom: 30px;">
         <h2><?php esc_html_e('Instant Search Management', 'directory-helpers'); ?></h2>
