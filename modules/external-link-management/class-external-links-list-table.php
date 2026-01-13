@@ -275,6 +275,7 @@ class DH_External_Links_List_Table extends WP_List_Table {
                 <option value="0" <?php selected($current_status, '0'); ?>><?php esc_html_e('0 (Timeout)', 'directory-helpers'); ?></option>
                 <option value="5xx" <?php selected($current_status, '5xx'); ?>><?php esc_html_e('5xx Server Error', 'directory-helpers'); ?></option>
                 <option value="unchecked" <?php selected($current_status, 'unchecked'); ?>><?php esc_html_e('Not Checked', 'directory-helpers'); ?></option>
+                <option value="override" <?php selected($current_status, 'override'); ?>><?php esc_html_e('Overridden', 'directory-helpers'); ?></option>
             </select>
             
             <select name="post_status_filter">
@@ -384,8 +385,17 @@ class DH_External_Links_List_Table extends WP_List_Table {
                 $where[] = 'l.status_code >= 500 AND l.status_code < 600';
             } elseif ($status_filter === 'unchecked') {
                 $where[] = 'l.status_code IS NULL';
+            } elseif ($status_filter === 'override') {
+                // Show only links with active overrides
+                $where[] = '(l.status_override_code IS NOT NULL AND l.status_override_code > 0 AND l.status_override_expires > NOW())';
+            } elseif ($status_filter === '403') {
+                // 403 filter excludes overridden links
+                $where[] = 'l.status_code = 403';
+                $where[] = '(l.status_override_code IS NULL OR l.status_override_code = 0 OR l.status_override_expires <= NOW())';
             } else {
+                // Other status codes (200, 404, 0, etc.) - exclude overridden links
                 $where[] = 'l.status_code = %d';
+                $where[] = '(l.status_override_code IS NULL OR l.status_override_code = 0 OR l.status_override_expires <= NOW())';
                 $where_values[] = (int) $status_filter;
             }
         }
