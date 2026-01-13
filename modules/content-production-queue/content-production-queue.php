@@ -833,6 +833,14 @@ class DH_Content_Production_Queue {
                 }
             }
             
+            // Rebuild search cache as final step
+            if (class_exists('DH_Instant_Search')) {
+                error_log('DH CPQ: Rebuilding search cache as final step');
+                $instant_search = new DH_Instant_Search();
+                $instant_search->invalidate_and_rebuild_index();
+                error_log('DH CPQ: Search cache rebuilt successfully');
+            }
+            
             // Clean up tracking
             delete_option('dh_cpq_affected_states');
             delete_option('dh_cpq_published_cities');
