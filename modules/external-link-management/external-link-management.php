@@ -33,6 +33,12 @@ class DH_External_Link_Management {
 
         // Per-post meta box
         add_action('add_meta_boxes', array($this, 'register_meta_box'));
+        
+        // Admin menu for all external links page
+        add_action('admin_menu', array($this, 'add_admin_menu'), 25);
+        
+        // Screen options for per-page setting
+        add_filter('set-screen-option', array($this, 'set_screen_option'), 10, 3);
 
         // AJAX: re-check a single link from the meta box
         add_action('wp_ajax_dh_elm_recheck_link', array($this, 'ajax_recheck_link'));
@@ -51,6 +57,130 @@ class DH_External_Link_Management {
         
         // WP All Import Pro hook to scan imported posts (fires for each post)
         add_action('pmxi_saved_post', array($this, 'on_post_imported'), 10, 3);
+    }
+    
+    /**
+     * Add admin menu for External Links page
+     */
+    public function add_admin_menu() {
+        $hook = add_submenu_page(
+            'directory-helpers',
+            __('External Links', 'directory-helpers'),
+            __('External Links', 'directory-helpers'),
+            'manage_options',
+            'dh-external-links',
+            array($this, 'render_external_links_page')
+        );
+        
+        // Add screen options
+        add_action("load-{$hook}", array($this, 'add_screen_options'));
+    }
+    
+    /**
+     * Add screen options for per-page setting
+     */
+    public function add_screen_options() {
+        $option = 'per_page';
+        $args = array(
+            'label'   => __('Links per page', 'directory-helpers'),
+            'default' => 50,
+            'option'  => 'external_links_per_page',
+        );
+        add_screen_option($option, $args);
+    }
+    
+    /**
+     * Save screen option
+     */
+    public function set_screen_option($status, $option, $value) {
+        if ($option === 'external_links_per_page') {
+            return (int) $value;
+        }
+        return $status;
+    }
+    
+    /**
+     * Render External Links admin page
+     */
+    public function render_external_links_page() {
+        // Include the list table class
+        require_once __DIR__ . '/class-external-links-list-table.php';
+        
+        $list_table = new DH_External_Links_List_Table();
+        $list_table->prepare_items();
+        
+        // Get summary stats
+        $stats = $this->get_link_stats();
+        
+        ?>
+        <div class="wrap">
+            <h1 class="wp-heading-inline"><?php esc_html_e('External Links', 'directory-helpers'); ?></h1>
+            
+            <div class="dh-link-stats" style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 15px; margin: 15px 0; display: flex; gap: 20px; flex-wrap: wrap;">
+                <div><strong><?php esc_html_e('Total:', 'directory-helpers'); ?></strong> <?php echo number_format($stats['total']); ?></div>
+                <div style="color: #46b450;"><strong>✅ 200:</strong> <?php echo number_format($stats['ok']); ?></div>
+                <div style="color: #f0b849;"><strong>⚠️ 403:</strong> <?php echo number_format($stats['forbidden']); ?></div>
+                <div style="color: #dc3232;"><strong>🚨 404:</strong> <?php echo number_format($stats['not_found']); ?></div>
+                <div style="color: #999;"><strong>❓ 0:</strong> <?php echo number_format($stats['timeout']); ?></div>
+                <div style="color: #dc3232;"><strong>5xx:</strong> <?php echo number_format($stats['server_error']); ?></div>
+                <div style="color: #999;"><strong><?php esc_html_e('Unchecked:', 'directory-helpers'); ?></strong> <?php echo number_format($stats['unchecked']); ?></div>
+            </div>
+            
+            <?php settings_errors('dh_external_links'); ?>
+            
+            <form method="get">
+                <input type="hidden" name="page" value="dh-external-links" />
+                <?php
+                $list_table->search_box(__('Search Links', 'directory-helpers'), 'link_search');
+                $list_table->display();
+                ?>
+            </form>
+        </div>
+        <?php
+    }
+    
+    /**
+     * Get summary statistics for external links
+     */
+    private function get_link_stats() {
+        global $wpdb;
+        $table = $this->table_name();
+        
+        $stats = array(
+            'total' => 0,
+            'ok' => 0,
+            'forbidden' => 0,
+            'not_found' => 0,
+            'timeout' => 0,
+            'server_error' => 0,
+            'unchecked' => 0,
+        );
+        
+        // Get all stats in one query
+        $results = $wpdb->get_results("
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status_code = 200 THEN 1 ELSE 0 END) as ok,
+                SUM(CASE WHEN status_code = 403 THEN 1 ELSE 0 END) as forbidden,
+                SUM(CASE WHEN status_code = 404 THEN 1 ELSE 0 END) as not_found,
+                SUM(CASE WHEN status_code = 0 THEN 1 ELSE 0 END) as timeout,
+                SUM(CASE WHEN status_code >= 500 AND status_code < 600 THEN 1 ELSE 0 END) as server_error,
+                SUM(CASE WHEN status_code IS NULL THEN 1 ELSE 0 END) as unchecked
+            FROM {$table}
+        ");
+        
+        if ($results && isset($results[0])) {
+            $row = $results[0];
+            $stats['total'] = (int) $row->total;
+            $stats['ok'] = (int) $row->ok;
+            $stats['forbidden'] = (int) $row->forbidden;
+            $stats['not_found'] = (int) $row->not_found;
+            $stats['timeout'] = (int) $row->timeout;
+            $stats['server_error'] = (int) $row->server_error;
+            $stats['unchecked'] = (int) $row->unchecked;
+        }
+        
+        return $stats;
     }
 
     private function table_name() {

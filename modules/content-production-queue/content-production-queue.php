@@ -122,6 +122,10 @@ class DH_Content_Production_Queue {
         // Get ALL draft posts for display (including those missing images)
         $all_draft_posts = $this->get_all_draft_posts();
         
+        // Get link counts for all posts in one efficient batch query
+        $post_ids = wp_list_pluck($all_draft_posts, 'ID');
+        $link_counts = $this->get_link_counts_for_posts($post_ids);
+        
         $current_post_title = '';
         if ($current_post_id && $is_active) {
             $current_post_title = get_the_title($current_post_id);
@@ -191,7 +195,7 @@ class DH_Content_Production_Queue {
             <div class="dh-cpq-draft-posts">
                 <h2><?php esc_html_e('Draft Cities', 'directory-helpers'); ?></h2>
                 <p class="description">
-                    <?php esc_html_e('Posts eligible for publishing must have: Featured Image, Body Image 1, Body Image 2, and Link Health (All Ok or Warning).', 'directory-helpers'); ?>
+                    <?php esc_html_e('Posts eligible for publishing must have: Featured Image, Body Image 1, Body Image 2, Link Health (All Ok or Warning), and 1+ external links.', 'directory-helpers'); ?>
                 </p>
                 
                 <table class="wp-list-table widefat fixed striped">
@@ -211,7 +215,8 @@ class DH_Content_Production_Queue {
                         <?php foreach ($all_draft_posts as $post): ?>
                             <?php
                             $link_health = get_post_meta($post->ID, '_dh_link_health', true);
-                            $link_health_display = $this->get_link_health_display($link_health);
+                            $post_link_count = isset($link_counts[$post->ID]) ? $link_counts[$post->ID] : 0;
+                            $link_health_display = $this->get_link_health_display($link_health, $post_link_count);
                             
                             // Check if all images are present
                             $has_featured = has_post_thumbnail($post->ID);
@@ -269,19 +274,54 @@ class DH_Content_Production_Queue {
     }
     
     /**
-     * Get link health display HTML
+     * Get link health display HTML with link count
      */
-    private function get_link_health_display($health) {
+    private function get_link_health_display($health, $link_count = 0) {
+        $count_text = $link_count > 0 ? ", {$link_count} link" . ($link_count > 1 ? 's' : '') : ', 0 links';
         switch ($health) {
             case 'all_ok':
-                return '<span style="color: #46b450;">✅ All Ok</span>';
+                return '<span style="color: #46b450;">✅ All Ok' . $count_text . '</span>';
             case 'warning':
-                return '<span style="color: #f0b849;">⚠️ Warning</span>';
+                return '<span style="color: #f0b849;">⚠️ Warning' . $count_text . '</span>';
             case 'red_alert':
-                return '<span style="color: #dc3232;">🚨 Red Alert</span>';
+                return '<span style="color: #dc3232;">🚨 Red Alert' . $count_text . '</span>';
             default:
-                return '<span style="color: #999;">❓ Not Checked</span>';
+                return '<span style="color: #999;">❓ Not Checked' . $count_text . '</span>';
         }
+    }
+    
+    /**
+     * Get link counts for multiple posts efficiently (batch query)
+     * 
+     * @param array $post_ids Array of post IDs
+     * @return array Associative array of post_id => link_count
+     */
+    private function get_link_counts_for_posts($post_ids) {
+        if (empty($post_ids)) {
+            return array();
+        }
+        
+        global $wpdb;
+        $table = $wpdb->prefix . 'dh_external_links';
+        
+        $placeholders = implode(',', array_fill(0, count($post_ids), '%d'));
+        $query = $wpdb->prepare(
+            "SELECT post_id, COUNT(*) as link_count FROM {$table} WHERE post_id IN ($placeholders) AND is_duplicate = 0 GROUP BY post_id",
+            $post_ids
+        );
+        
+        $results = $wpdb->get_results($query);
+        
+        // Build associative array
+        $counts = array();
+        foreach ($post_ids as $id) {
+            $counts[$id] = 0; // Default to 0
+        }
+        foreach ($results as $row) {
+            $counts[$row->post_id] = (int) $row->link_count;
+        }
+        
+        return $counts;
     }
     
     /**
@@ -414,6 +454,17 @@ class DH_Content_Production_Queue {
         }
         
         $posts = get_posts($base_args);
+        
+        // Filter out posts with 0 links (must have at least 1 external link)
+        if (!empty($posts)) {
+            $post_ids = wp_list_pluck($posts, 'ID');
+            $link_counts = $this->get_link_counts_for_posts($post_ids);
+            
+            $posts = array_filter($posts, function($post) use ($link_counts) {
+                return isset($link_counts[$post->ID]) && $link_counts[$post->ID] > 0;
+            });
+            $posts = array_values($posts); // Re-index array
+        }
         
         // Sort: all_ok and not_exists first, warnings last
         if ($mode === 'all') {
