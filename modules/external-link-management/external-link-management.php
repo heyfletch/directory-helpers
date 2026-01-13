@@ -2249,4 +2249,90 @@ class DH_External_Link_Management {
         
         return $updated;
     }
+    
+    /**
+     * Bulk delete links by IDs
+     * Called from list table bulk action
+     * 
+     * @param array $link_ids Array of link IDs to delete
+     * @return int Number of links deleted
+     */
+    public function bulk_delete_links($link_ids) {
+        if (empty($link_ids)) {
+            return 0;
+        }
+        
+        global $wpdb;
+        $table = $this->table_name();
+        
+        // Get links with post_id and anchor_text for content replacement
+        $placeholders = implode(',', array_fill(0, count($link_ids), '%d'));
+        $query = $wpdb->prepare(
+            "SELECT id, post_id, anchor_text FROM {$table} WHERE id IN ($placeholders)",
+            $link_ids
+        );
+        $rows = $wpdb->get_results($query);
+        
+        if (!$rows) {
+            return 0;
+        }
+        
+        // Group by post_id for efficient content updates
+        $posts_to_update = array();
+        foreach ($rows as $row) {
+            $post_id = (int) $row->post_id;
+            if (!isset($posts_to_update[$post_id])) {
+                $posts_to_update[$post_id] = array();
+            }
+            $posts_to_update[$post_id][] = array(
+                'id' => (int) $row->id,
+                'anchor_text' => (string) $row->anchor_text,
+            );
+        }
+        
+        // Update post content to remove shortcodes
+        foreach ($posts_to_update as $post_id => $links) {
+            $post = get_post($post_id);
+            if (!$post || !$post->post_content) {
+                continue;
+            }
+            
+            $content = $post->post_content;
+            
+            foreach ($links as $link) {
+                $id = $link['id'];
+                $anchor_text = $link['anchor_text'];
+                
+                // Replace all instances of this shortcode with plain anchor text
+                // Pattern matches: [link id="123" t="..."] or [link id="123"]
+                $pattern = '/\[link\s+id=["\']?' . $id . '["\']?(?:\s+t=["\']([^"\']*)["\'])?\]/i';
+                
+                $content = preg_replace_callback($pattern, function($matches) use ($anchor_text) {
+                    // Use the 't' attribute if present, otherwise use anchor_text from DB
+                    $text = !empty($matches[1]) ? $matches[1] : $anchor_text;
+                    return esc_html($text);
+                }, $content);
+            }
+            
+            // Update post content
+            wp_update_post(array(
+                'ID' => $post_id,
+                'post_content' => $content
+            ));
+            
+            // Recalculate duplicates for this post
+            $this->recalc_duplicates_for_post($post_id);
+        }
+        
+        // Delete all links from database
+        $deleted = 0;
+        foreach ($link_ids as $id) {
+            $result = $wpdb->delete($table, array('id' => (int) $id), array('%d'));
+            if ($result !== false) {
+                $deleted++;
+            }
+        }
+        
+        return $deleted;
+    }
 }

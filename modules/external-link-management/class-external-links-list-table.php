@@ -194,6 +194,7 @@ class DH_External_Links_List_Table extends WP_List_Table {
     public function get_bulk_actions() {
         return array(
             'recheck' => __('Re-check Status', 'directory-helpers'),
+            'delete' => __('Delete', 'directory-helpers'),
         );
     }
     
@@ -201,13 +202,12 @@ class DH_External_Links_List_Table extends WP_List_Table {
      * Process bulk actions
      */
     public function process_bulk_action() {
+        global $dh_external_link_management;
+        
         if ('recheck' === $this->current_action()) {
             $link_ids = isset($_REQUEST['link_ids']) ? array_map('intval', $_REQUEST['link_ids']) : array();
             
             if (!empty($link_ids) && check_admin_referer('bulk-external_links')) {
-                // Get the parent class instance to access http_check_url method
-                global $dh_external_link_management;
-                
                 if ($dh_external_link_management && method_exists($dh_external_link_management, 'bulk_recheck_links')) {
                     $updated = $dh_external_link_management->bulk_recheck_links($link_ids);
                     
@@ -222,6 +222,30 @@ class DH_External_Links_List_Table extends WP_List_Table {
                         'dh_external_links',
                         'recheck_error',
                         __('Error: Unable to re-check links.', 'directory-helpers'),
+                        'error'
+                    );
+                }
+            }
+        }
+        
+        if ('delete' === $this->current_action()) {
+            $link_ids = isset($_REQUEST['link_ids']) ? array_map('intval', $_REQUEST['link_ids']) : array();
+            
+            if (!empty($link_ids) && check_admin_referer('bulk-external_links')) {
+                if ($dh_external_link_management && method_exists($dh_external_link_management, 'bulk_delete_links')) {
+                    $deleted = $dh_external_link_management->bulk_delete_links($link_ids);
+                    
+                    add_settings_error(
+                        'dh_external_links',
+                        'delete_completed',
+                        sprintf(__('%d links deleted successfully.', 'directory-helpers'), $deleted),
+                        'success'
+                    );
+                } else {
+                    add_settings_error(
+                        'dh_external_links',
+                        'delete_error',
+                        __('Error: Unable to delete links.', 'directory-helpers'),
                         'error'
                     );
                 }
