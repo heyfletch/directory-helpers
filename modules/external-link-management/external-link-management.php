@@ -18,6 +18,10 @@ class DH_External_Link_Management {
     const DB_VERSION = '2';
 
     public function __construct() {
+        // Make instance globally accessible for list table
+        global $dh_external_link_management;
+        $dh_external_link_management = $this;
+        
         // Ensure DB exists (immediately and on next init)
         $this->maybe_install_db();
         add_action('init', array($this, 'maybe_install_db'));
@@ -2174,5 +2178,75 @@ class DH_External_Link_Management {
         $this->recalc_duplicates_for_post($post_id);
         
         wp_send_json_success();
+    }
+    
+    /**
+     * Bulk re-check links by IDs
+     * Called from list table bulk action
+     * 
+     * @param array $link_ids Array of link IDs to check
+     * @return int Number of links updated
+     */
+    public function bulk_recheck_links($link_ids) {
+        if (empty($link_ids)) {
+            return 0;
+        }
+        
+        global $wpdb;
+        $table = $this->table_name();
+        
+        // Get links to check
+        $placeholders = implode(',', array_fill(0, count($link_ids), '%d'));
+        $query = $wpdb->prepare(
+            "SELECT id, current_url, status_override_code, status_override_expires FROM {$table} WHERE id IN ($placeholders)",
+            $link_ids
+        );
+        $rows = $wpdb->get_results($query);
+        
+        if (!$rows) {
+            return 0;
+        }
+        
+        $updated = 0;
+        $timeout = 15; // Use standard timeout
+        
+        foreach ($rows as $r) {
+            $url = (string) $r->current_url;
+            if (!$url) {
+                continue;
+            }
+            
+            // Skip if override is active
+            $ovr_exp = isset($r->status_override_expires) && $r->status_override_expires 
+                ? strtotime((string) $r->status_override_expires) 
+                : 0;
+            $ovr_code = isset($r->status_override_code) ? (int) $r->status_override_code : 0;
+            if ($ovr_code && $ovr_exp && $ovr_exp > time()) {
+                continue;
+            }
+            
+            // Check the URL
+            list($code, $text) = $this->http_check_url($url, $timeout);
+            
+            // Update database
+            $result = $wpdb->update(
+                $table,
+                array(
+                    'status_code' => $code,
+                    'status_text' => $text,
+                    'last_checked' => current_time('mysql'),
+                    'updated_at' => current_time('mysql'),
+                ),
+                array('id' => $r->id),
+                array('%d', '%s', '%s', '%s'),
+                array('%d')
+            );
+            
+            if ($result !== false) {
+                $updated++;
+            }
+        }
+        
+        return $updated;
     }
 }

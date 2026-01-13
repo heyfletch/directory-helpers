@@ -205,14 +205,26 @@ class DH_External_Links_List_Table extends WP_List_Table {
             $link_ids = isset($_REQUEST['link_ids']) ? array_map('intval', $_REQUEST['link_ids']) : array();
             
             if (!empty($link_ids) && check_admin_referer('bulk-external_links')) {
-                // Bulk recheck would be handled here
-                // For now, just show a notice
-                add_settings_error(
-                    'dh_external_links',
-                    'recheck_initiated',
-                    sprintf(__('%d links queued for re-checking.', 'directory-helpers'), count($link_ids)),
-                    'success'
-                );
+                // Get the parent class instance to access http_check_url method
+                global $dh_external_link_management;
+                
+                if ($dh_external_link_management && method_exists($dh_external_link_management, 'bulk_recheck_links')) {
+                    $updated = $dh_external_link_management->bulk_recheck_links($link_ids);
+                    
+                    add_settings_error(
+                        'dh_external_links',
+                        'recheck_completed',
+                        sprintf(__('%d links re-checked successfully.', 'directory-helpers'), $updated),
+                        'success'
+                    );
+                } else {
+                    add_settings_error(
+                        'dh_external_links',
+                        'recheck_error',
+                        __('Error: Unable to re-check links.', 'directory-helpers'),
+                        'error'
+                    );
+                }
             }
         }
     }
