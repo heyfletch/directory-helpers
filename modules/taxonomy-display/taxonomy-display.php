@@ -24,6 +24,9 @@ class DH_Taxonomy_Display {
         add_shortcode('dh_city_name', array($this, 'city_name_shortcode'));
         add_shortcode('dh_state_name', array($this, 'state_name_shortcode'));
         add_shortcode('dh_niche_name', array($this, 'niche_name_shortcode'));
+        
+        // Add Bricks Builder integration
+        add_action('init', array($this, 'init_bricks_integration'));
     }
     
     
@@ -123,6 +126,79 @@ class DH_Taxonomy_Display {
         }
         
         return esc_html($niche_name);
+    }
+    
+    /**
+     * Initialize Bricks Builder integration
+     */
+    public function init_bricks_integration() {
+        if (class_exists('Bricks\Integrations\Dynamic_Data\Providers')) {
+            add_filter('bricks/dynamic_tags_list', array($this, 'add_bricks_taxonomy_tags'));
+            add_filter('bricks/dynamic_data/render_tag', array($this, 'render_bricks_taxonomy_tags'), 20, 3);
+            add_filter('bricks/dynamic_data/render_content', array($this, 'render_bricks_taxonomy_content'), 20, 3);
+            add_filter('bricks/frontend/render_data', array($this, 'render_bricks_taxonomy_content'), 20, 2);
+        }
+    }
+    
+    /**
+     * Add taxonomy-related dynamic data tags to Bricks Builder
+     */
+    public function add_bricks_taxonomy_tags($tags) {
+        $taxonomy_tags = [
+            'dh_city_name' => [
+                'name'  => '{dh_city_name}',
+                'label' => 'City Name (Directory Helpers)',
+                'group' => 'Directory Helpers',
+            ],
+        ];
+        
+        // Check for existing tags to prevent duplicates
+        $existing_names = array_column($tags, 'name');
+        
+        foreach ($taxonomy_tags as $key => $tag) {
+            if (!in_array($tag['name'], $existing_names)) {
+                $tags[] = $tag;
+            }
+        }
+        
+        return $tags;
+    }
+    
+    /**
+     * Render individual taxonomy dynamic data tags
+     */
+    public function render_bricks_taxonomy_tags($tag, $post, $context = 'text') {
+        if (!is_string($tag)) {
+            return $tag;
+        }
+        
+        $clean_tag = str_replace(['{', '}'], '', $tag);
+        
+        if ($clean_tag === 'dh_city_name') {
+            return DH_Taxonomy_Helpers::get_city_name(get_the_ID(), true);
+        }
+        
+        return $tag;
+    }
+    
+    /**
+     * Render taxonomy tags in content
+     */
+    public function render_bricks_taxonomy_content($content, $post, $context = 'text') {
+        // Quick check if any taxonomy tags exist
+        if (strpos($content, '{dh_city_name}') === false) {
+            return $content;
+        }
+        
+        $post_id = get_the_ID();
+        
+        // Replace {dh_city_name} tag
+        if (strpos($content, '{dh_city_name}') !== false) {
+            $city_name = DH_Taxonomy_Helpers::get_city_name($post_id, true);
+            $content = str_replace('{dh_city_name}', $city_name, $content);
+        }
+        
+        return $content;
     }
 }
 
