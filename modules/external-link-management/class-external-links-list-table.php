@@ -52,6 +52,25 @@ class DH_External_Links_List_Table extends WP_List_Table {
     }
     
     /**
+     * Define column widths
+     */
+    public function get_column_info() {
+        $columns = $this->get_columns();
+        $hidden = get_hidden_columns($this->screen);
+        $sortable = $this->get_sortable_columns();
+        
+        // Add custom column styles
+        add_action('admin_head', function() {
+            echo '<style>
+                .wp-list-table .column-post_title { width: 12%; }
+                .wp-list-table .column-last_checked { width: 10%; }
+            </style>';
+        });
+        
+        return array($columns, $hidden, $sortable, $this->get_primary_column_name());
+    }
+    
+    /**
      * Define sortable columns
      */
     public function get_sortable_columns() {
@@ -128,6 +147,7 @@ class DH_External_Links_List_Table extends WP_List_Table {
         $override_exp = isset($item['status_override_expires']) && $item['status_override_expires'] 
             ? strtotime($item['status_override_expires']) 
             : 0;
+        $override_reason = isset($item['status_override_reason']) ? $item['status_override_reason'] : '';
         
         // Check if override is active
         $has_override = $override_code && $override_exp && $override_exp > time();
@@ -151,6 +171,9 @@ class DH_External_Links_List_Table extends WP_List_Table {
         $display = $effective_code ?: '—';
         if ($has_override) {
             $display .= ' <small>(override)</small>';
+            if ($override_reason) {
+                $display .= '<br><small style="color: #666; font-style: italic;">' . esc_html($override_reason) . '</small>';
+            }
         }
         
         return sprintf(
@@ -278,7 +301,7 @@ class DH_External_Links_List_Table extends WP_List_Table {
                 <option value="override" <?php selected($current_status, 'override'); ?>><?php esc_html_e('Overridden', 'directory-helpers'); ?></option>
             </select>
             
-            <select name="post_status_filter">
+            <select name="post_status_filter" style="margin-left: 5px;">
                 <option value=""><?php esc_html_e('All Posts', 'directory-helpers'); ?></option>
                 <option value="exists" <?php selected($current_post_status, 'exists'); ?>><?php esc_html_e('Existing Posts', 'directory-helpers'); ?></option>
                 <option value="deleted" <?php selected($current_post_status, 'deleted'); ?>><?php esc_html_e('Deleted Posts', 'directory-helpers'); ?></option>
@@ -291,10 +314,6 @@ class DH_External_Links_List_Table extends WP_List_Table {
                     <?php esc_html_e('Reset Filters', 'directory-helpers'); ?>
                 </a>
             <?php endif; ?>
-            
-            <a href="<?php echo esc_url(admin_url('admin.php?page=dh-external-links')); ?>" class="button" style="margin-left: 5px;">
-                <?php esc_html_e('Reload Page', 'directory-helpers'); ?>
-            </a>
             
             <button type="button" id="dh-open-selected-posts" class="button" style="margin-left: 5px;">
                 <?php esc_html_e('Open Selected Posts', 'directory-helpers'); ?>
@@ -451,7 +470,9 @@ class DH_External_Links_List_Table extends WP_List_Table {
         // Get items
         $offset = ($current_page - 1) * $per_page;
         
-        $query = "SELECT l.*, p.post_title, p.post_type 
+        $query = "SELECT l.id, l.post_id, l.current_url, l.anchor_text, l.status_code, l.status_text, 
+                         l.last_checked, l.status_override_code, l.status_override_expires, l.status_override_reason,
+                         p.post_title, p.post_type 
             FROM {$table} l 
             LEFT JOIN {$wpdb->posts} p ON l.post_id = p.ID 
             WHERE {$where_sql}

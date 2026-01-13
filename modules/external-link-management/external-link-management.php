@@ -121,6 +121,10 @@ class DH_External_Link_Management {
         <div class="wrap">
             <h1 class="wp-heading-inline"><?php esc_html_e('External Links', 'directory-helpers'); ?></h1>
             
+            <a href="<?php echo esc_url(admin_url('admin.php?page=dh-external-links')); ?>" class="page-title-action">
+                <?php esc_html_e('Reload Page', 'directory-helpers'); ?>
+            </a>
+            
             <div class="dh-link-stats" style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 15px; margin: 15px 0; display: flex; gap: 20px; flex-wrap: wrap;">
                 <div><strong><?php esc_html_e('Total:', 'directory-helpers'); ?></strong> <?php echo number_format($stats['total']); ?></div>
                 <div style="color: #46b450;"><strong>✅ 200:</strong> <?php echo number_format($stats['ok']); ?></div>
@@ -166,11 +170,12 @@ class DH_External_Link_Management {
         );
         
         // Get all stats in one query
+        // Note: 403 count excludes overridden links to match filter behavior
         $results = $wpdb->get_results("
             SELECT 
                 COUNT(*) as total,
                 SUM(CASE WHEN status_code = 200 THEN 1 ELSE 0 END) as ok,
-                SUM(CASE WHEN status_code = 403 THEN 1 ELSE 0 END) as forbidden,
+                SUM(CASE WHEN status_code = 403 AND (status_override_code IS NULL OR status_override_code = 0 OR status_override_expires <= NOW()) THEN 1 ELSE 0 END) as forbidden,
                 SUM(CASE WHEN status_code = 404 THEN 1 ELSE 0 END) as not_found,
                 SUM(CASE WHEN status_code = 0 THEN 1 ELSE 0 END) as timeout,
                 SUM(CASE WHEN status_code >= 500 AND status_code < 600 THEN 1 ELSE 0 END) as server_error,
@@ -1384,6 +1389,14 @@ class DH_External_Link_Management {
                             if ($link_id) {
                                 $this->set_link_override($link_id, 200, 'Cloudflare bot challenge');
                             }
+                        } elseif ($this->is_simple_bot_block($body)) {
+                            $code = 200;
+                            $text = 'OK (bot-protected)';
+                            
+                            // Set override for bot-protected links
+                            if ($link_id) {
+                                $this->set_link_override($link_id, 200, 'Simple bot protection detected');
+                            }
                         } elseif ($this->response_has_valid_content($body)) {
                             $code = 200;
                             $text = 'OK (content validated)';
@@ -1411,6 +1424,14 @@ class DH_External_Link_Management {
                 // Set override for Cloudflare-protected links
                 if ($link_id) {
                     $this->set_link_override($link_id, 200, 'Cloudflare bot challenge');
+                }
+            } elseif ($this->is_simple_bot_block($body)) {
+                $code = 200;
+                $text = 'OK (bot-protected)';
+                
+                // Set override for bot-protected links
+                if ($link_id) {
+                    $this->set_link_override($link_id, 200, 'Simple bot protection detected');
                 }
             } elseif ($this->response_has_valid_content($body)) {
                 $code = 200;
@@ -1447,6 +1468,14 @@ class DH_External_Link_Management {
                         // Set override for Cloudflare-protected links
                         if ($link_id) {
                             $this->set_link_override($link_id, 200, 'Cloudflare bot challenge');
+                        }
+                    } elseif ($this->is_simple_bot_block($body)) {
+                        $code = 200;
+                        $text = 'OK (bot-protected)';
+                        
+                        // Set override for bot-protected links
+                        if ($link_id) {
+                            $this->set_link_override($link_id, 200, 'Simple bot protection detected');
                         }
                     } elseif ($this->response_has_valid_content($body)) {
                         $code = 200;
@@ -1540,6 +1569,37 @@ class DH_External_Link_Management {
         }
         
         return false;
+    }
+    
+    /**
+     * Check if 403 response is a simple bot-blocking page (not a real error)
+     * Some sites return minimal 403 pages for bot detection but are actually valid
+     * 
+     * @param string $body Response body
+     * @return bool True if this appears to be bot-blocking, not a real error
+     */
+    private function is_simple_bot_block($body) {
+        // Very short 403 pages (< 1000 bytes) with minimal content are likely bot blocks
+        if (strlen($body) > 1000) {
+            return false;
+        }
+        
+        $body_lower = strtolower($body);
+        
+        // Must contain "403" or "forbidden"
+        $has_403 = (stripos($body_lower, '403') !== false || stripos($body_lower, 'forbidden') !== false);
+        if (!$has_403) {
+            return false;
+        }
+        
+        // Check if it's a minimal error page (very little content)
+        // Count actual content words (exclude HTML tags)
+        $text_only = strip_tags($body);
+        $word_count = str_word_count($text_only);
+        
+        // If page has less than 20 words and contains 403/forbidden, it's likely a simple bot block
+        // Real error pages usually have more explanation, navigation, etc.
+        return $word_count < 20;
     }
     
     /**
