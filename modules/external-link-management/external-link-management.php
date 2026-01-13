@@ -845,28 +845,25 @@ class DH_External_Link_Management {
         $url = esc_url((string)$row->current_url);
         if (!$url) { return $anchor; }
         
-        // DISABLED: Status-based unlinking functionality
-        // Previously only rendered hyperlink when effective status was 200
-        // Now always render as hyperlink regardless of status code
-        /*
-        $effective = 0;
+        // Unlink only for 5xx server errors (500, 502, 503, etc.)
+        // These indicate the server/page is truly broken
         $base = isset($row->status_code) ? (int)$row->status_code : 0;
         $ov_code = isset($row->status_override_code) ? (int)$row->status_override_code : 0;
         $ov_exp  = isset($row->status_override_expires) && $row->status_override_expires ? strtotime((string)$row->status_override_expires) : 0;
         $now_ts = current_time('timestamp');
+        
+        // Calculate effective status code (override takes precedence if active)
+        $effective = $base;
         if ($ov_code && $ov_exp && $ov_exp > $now_ts) {
             $effective = (int)$ov_code;
-        } else {
-            $effective = $base;
         }
-        if ($effective === 200) {
-            // Default attributes: open in new tab with safe rel including nofollow
-            return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer nofollow">' . $anchor . '</a>';
-        }
-        return $anchor;
-        */
         
-        // Always render as hyperlink regardless of status
+        // Unlink for 404 and 5xx errors (truly broken/missing pages)
+        if ($effective === 404 || ($effective >= 500 && $effective < 600)) {
+            return $anchor; // Return plain text, no hyperlink
+        }
+        
+        // All other statuses (200, 403, 0, etc.) render as hyperlink
         return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer nofollow">' . $anchor . '</a>';
     }
 
@@ -1108,7 +1105,7 @@ class DH_External_Link_Management {
         return false;
     }
 
-    private function http_check_url($url, $timeout = 10) {
+    private function http_check_url($url, $timeout = 15) {
         // Multiple user-agent strings to try (latest versions as of October 2025)
         $user_agents = array(
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
@@ -1232,10 +1229,131 @@ class DH_External_Link_Management {
                 if (!is_wp_error($resp4)) {
                     $code = (int) wp_remote_retrieve_response_code($resp4);
                     $text = (string) wp_remote_retrieve_response_message($resp4);
+                    
+                    // Strategy 4: Content-based validation for 403
+                    // If we got HTML content despite 403, the page is likely accessible
+                    if ($code === 403) {
+                        $body = wp_remote_retrieve_body($resp4);
+                        if ($this->response_has_valid_content($body)) {
+                            $code = 200;
+                            $text = 'OK (content validated)';
+                        }
+                    }
                 }
             }
         }
+        
+        // Final content-based validation for persistent 403s
+        // Check if we have a response object with content
+        if ($code === 403 && isset($resp) && !is_wp_error($resp)) {
+            $body = wp_remote_retrieve_body($resp);
+            if ($this->response_has_valid_content($body)) {
+                $code = 200;
+                $text = 'OK (content validated)';
+            }
+        }
+        
+        // Retry logic for 0 status codes (timeouts/connection errors)
+        if ($code === 0) {
+            // Try again with extended timeout
+            sleep(2);
+            $retry_args = $base_args;
+            $retry_args['timeout'] = 15; // Extended timeout (reduced from 30s)
+            $retry_args['headers']['user-agent'] = $user_agents[1]; // Try different UA
+            $retry_resp = wp_remote_get($url, $retry_args);
+            if (!is_wp_error($retry_resp)) {
+                $code = (int) wp_remote_retrieve_response_code($retry_resp);
+                $text = (string) wp_remote_retrieve_response_message($retry_resp);
+                
+                // Content validation for 403 on retry
+                if ($code === 403) {
+                    $body = wp_remote_retrieve_body($retry_resp);
+                    if ($this->response_has_valid_content($body)) {
+                        $code = 200;
+                        $text = 'OK (content validated)';
+                    }
+                }
+            } else {
+                // Still failed after retry - mark as 404 to trigger unlinking
+                $code = 404;
+                $text = 'Not Found (timeout after retry)';
+            }
+        }
+        
         return array($code, $text);
+    }
+    
+    /**
+     * Check if response body contains valid HTML content indicating page is accessible
+     * Sites may return 403 status but still serve content (anti-bot false positive)
+     * 
+     * Strategy: Look for signs of a real, functional page with actual content.
+     * We're not validating HTML correctness - just checking if it's a real page vs error page.
+     * 
+     * @param string $body Response body
+     * @return bool True if content appears to be a real, functional page
+     */
+    private function response_has_valid_content($body) {
+        if (empty($body) || strlen($body) < 500) {
+            return false;
+        }
+        
+        // Must have basic HTML structure
+        $has_html = (
+            stripos($body, '<!doctype html') !== false ||
+            stripos($body, '<html') !== false
+        );
+        
+        if (!$has_html) {
+            return false;
+        }
+        
+        // Check for error page indicators first (these are strong signals of non-functional pages)
+        $error_indicators = array(
+            'page not found',
+            '404',
+            'not found',
+            'error 404',
+            'access denied',
+            'forbidden',
+            'blocked',
+            'captcha',
+            'cloudflare',
+            'rate limit',
+            'too many requests',
+            'service unavailable',
+            'temporarily unavailable',
+            'under maintenance'
+        );
+        
+        $body_lower = strtolower($body);
+        foreach ($error_indicators as $indicator) {
+            if (stripos($body_lower, $indicator) !== false) {
+                // Found error indicator - likely not a real page
+                return false;
+            }
+        }
+        
+        // Check for signs of real content (at least 2 of these)
+        $content_score = 0;
+        
+        // Structural elements that indicate a real page
+        if (stripos($body, '<main') !== false) { $content_score++; }
+        if (stripos($body, '<article') !== false) { $content_score++; }
+        if (stripos($body, '<section') !== false) { $content_score++; }
+        if (stripos($body, '<nav') !== false) { $content_score++; }
+        if (stripos($body, '<header') !== false) { $content_score++; }
+        if (stripos($body, '<footer') !== false) { $content_score++; }
+        
+        // Content elements
+        if (substr_count($body, '<p>') >= 3) { $content_score++; } // Multiple paragraphs
+        if (substr_count($body, '<div') >= 5) { $content_score++; } // Multiple divs
+        if (stripos($body, '<h1') !== false || stripos($body, '<h2') !== false) { $content_score++; } // Headings
+        if (stripos($body, '<img') !== false) { $content_score++; } // Images
+        if (stripos($body, '<a href') !== false) { $content_score++; } // Links
+        
+        // Real pages typically have at least 2-3 of these indicators
+        return $content_score >= 2;
     }
 
     /**
