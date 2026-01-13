@@ -262,6 +262,8 @@ class DH_External_Links_List_Table extends WP_List_Table {
         }
         
         $current_status = isset($_GET['status_filter']) ? sanitize_text_field($_GET['status_filter']) : '';
+        $current_post_status = isset($_GET['post_status_filter']) ? sanitize_text_field($_GET['post_status_filter']) : '';
+        $has_filters = !empty($current_status) || !empty($current_post_status) || !empty($_GET['s']);
         
         ?>
         <div class="alignleft actions">
@@ -274,7 +276,20 @@ class DH_External_Links_List_Table extends WP_List_Table {
                 <option value="5xx" <?php selected($current_status, '5xx'); ?>><?php esc_html_e('5xx Server Error', 'directory-helpers'); ?></option>
                 <option value="unchecked" <?php selected($current_status, 'unchecked'); ?>><?php esc_html_e('Not Checked', 'directory-helpers'); ?></option>
             </select>
+            
+            <select name="post_status_filter">
+                <option value=""><?php esc_html_e('All Posts', 'directory-helpers'); ?></option>
+                <option value="exists" <?php selected($current_post_status, 'exists'); ?>><?php esc_html_e('Existing Posts', 'directory-helpers'); ?></option>
+                <option value="deleted" <?php selected($current_post_status, 'deleted'); ?>><?php esc_html_e('Deleted Posts', 'directory-helpers'); ?></option>
+            </select>
+            
             <?php submit_button(__('Filter', 'directory-helpers'), '', 'filter_action', false); ?>
+            
+            <?php if ($has_filters): ?>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=dh-external-links')); ?>" class="button" style="margin-left: 5px;">
+                    <?php esc_html_e('Reset Filters', 'directory-helpers'); ?>
+                </a>
+            <?php endif; ?>
         </div>
         <?php
     }
@@ -306,6 +321,14 @@ class DH_External_Links_List_Table extends WP_List_Table {
                 $where[] = 'l.status_code = %d';
                 $where_values[] = (int) $status_filter;
             }
+        }
+        
+        // Post status filter (deleted vs existing)
+        $post_status_filter = isset($_GET['post_status_filter']) ? sanitize_text_field($_GET['post_status_filter']) : '';
+        if ($post_status_filter === 'deleted') {
+            $where[] = 'p.ID IS NULL';
+        } elseif ($post_status_filter === 'exists') {
+            $where[] = 'p.ID IS NOT NULL';
         }
         
         // Search
