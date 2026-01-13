@@ -76,6 +76,7 @@ class DH_External_Link_Management {
         add_action("load-{$hook}", array($this, 'add_screen_options'));
     }
     
+    
     /**
      * Add screen options for per-page setting
      */
@@ -125,6 +126,10 @@ class DH_External_Link_Management {
                 <div style="color: #dc3232;"><strong>5xx:</strong> <?php echo number_format($stats['server_error']); ?></div>
                 <div style="color: #999;"><strong><?php esc_html_e('Unchecked:', 'directory-helpers'); ?></strong> <?php echo number_format($stats['unchecked']); ?></div>
             </div>
+            
+            <p class="description" style="margin: 10px 0;">
+                <?php esc_html_e('Status codes shown are from the last check. This page does not re-run status checks.', 'directory-helpers'); ?>
+            </p>
             
             <?php settings_errors('dh_external_links'); ?>
             

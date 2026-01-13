@@ -3,7 +3,7 @@
  * External Links List Table
  * 
  * WP_List_Table implementation for viewing all external links across the site.
- * Compatible with Admin Columns Pro plugin.
+ * Supports WordPress Screen Options for column visibility.
  *
  * @package Directory_Helpers
  */
@@ -26,11 +26,7 @@ class DH_External_Links_List_Table extends WP_List_Table {
             'singular' => 'external_link',
             'plural'   => 'external_links',
             'ajax'     => false,
-            'screen'   => 'dh-external-links', // Unique screen ID for Admin Columns Pro
         ));
-        
-        // Admin Columns Pro compatibility - allow column customization
-        add_filter('manage_dh-external-links_columns', array($this, 'get_columns'));
     }
     
     /**
@@ -87,12 +83,12 @@ class DH_External_Links_List_Table extends WP_List_Table {
         $view_link = get_permalink($item['post_id']);
         
         $actions = array(
-            'edit' => sprintf('<a href="%s">%s</a>', esc_url($edit_link), __('Edit Post', 'directory-helpers')),
+            'edit' => sprintf('<a href="%s" target="_blank">%s</a>', esc_url($edit_link), __('Edit Post', 'directory-helpers')),
             'view' => sprintf('<a href="%s" target="_blank">%s</a>', esc_url($view_link), __('View', 'directory-helpers')),
         );
         
         return sprintf(
-            '<strong><a href="%s">%s</a></strong>%s',
+            '<strong><a href="%s" target="_blank">%s</a></strong>%s',
             esc_url($edit_link),
             esc_html($post->post_title),
             $this->row_actions($actions)
