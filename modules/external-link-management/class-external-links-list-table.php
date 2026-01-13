@@ -290,7 +290,74 @@ class DH_External_Links_List_Table extends WP_List_Table {
                     <?php esc_html_e('Reset Filters', 'directory-helpers'); ?>
                 </a>
             <?php endif; ?>
+            
+            <button type="button" id="dh-open-selected-posts" class="button" style="margin-left: 5px;">
+                <?php esc_html_e('Open Selected Posts', 'directory-helpers'); ?>
+            </button>
         </div>
+        
+        <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            $('#dh-open-selected-posts').on('click', function(e) {
+                e.preventDefault();
+                
+                var selectedPostUrls = [];
+                var selectedRows = $('input[name="link_ids[]"]:checked');
+                
+                if (selectedRows.length === 0) {
+                    alert('<?php esc_html_e('Please select at least one link.', 'directory-helpers'); ?>');
+                    return;
+                }
+                
+                // Collect unique post URLs from selected rows
+                selectedRows.each(function() {
+                    var row = $(this).closest('tr');
+                    // Find the post title column (column-post_title class)
+                    var postCell = row.find('.column-post_title');
+                    
+                    if (postCell.length === 0) {
+                        // Fallback: try finding by position (2nd td after checkbox)
+                        postCell = row.find('td').eq(1);
+                    }
+                    
+                    // Find the main post link (inside <strong> tag)
+                    var postLink = postCell.find('strong a').first();
+                    
+                    // Skip deleted posts (no link or contains "(Deleted)")
+                    if (postLink.length > 0 && postLink.attr('href') && postCell.find('em').length === 0) {
+                        var href = postLink.attr('href');
+                        // Only add unique URLs
+                        if (selectedPostUrls.indexOf(href) === -1) {
+                            selectedPostUrls.push(href);
+                        }
+                    }
+                });
+                
+                if (selectedPostUrls.length === 0) {
+                    alert('<?php esc_html_e('No valid posts to open (selected links may be from deleted posts).', 'directory-helpers'); ?>');
+                    return;
+                }
+                
+                // Open each unique post in a new tab
+                selectedPostUrls.forEach(function(url) {
+                    window.open(url, '_blank');
+                });
+                
+                // Show confirmation
+                var message = selectedPostUrls.length === 1 
+                    ? '<?php esc_html_e('Opened 1 post in a new tab.', 'directory-helpers'); ?>'
+                    : '<?php printf(esc_html__('Opened %s posts in new tabs.', 'directory-helpers'), 'REPLACE'); ?>'.replace('REPLACE', selectedPostUrls.length);
+                
+                // Brief visual feedback
+                var btn = $(this);
+                var originalText = btn.text();
+                btn.text('✓ ' + message.split(' ').slice(1).join(' '));
+                setTimeout(function() {
+                    btn.text(originalText);
+                }, 2000);
+            });
+        });
+        </script>
         <?php
     }
     
