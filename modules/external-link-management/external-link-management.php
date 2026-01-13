@@ -15,7 +15,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class DH_External_Link_Management {
-    const DB_VERSION = '2';
+    const DB_VERSION = '3';
 
     public function __construct() {
         // Make instance globally accessible for list table
@@ -217,6 +217,7 @@ class DH_External_Link_Management {
             last_checked DATETIME,
             status_override_code INT,
             status_override_expires DATETIME,
+            status_override_reason VARCHAR(255),
             ai_suggestion_url TEXT,
             ai_suggestion_sentence TEXT,
             is_duplicate TINYINT(1) NOT NULL DEFAULT 0,
@@ -1244,7 +1245,7 @@ class DH_External_Link_Management {
         return false;
     }
 
-    private function http_check_url($url, $timeout = 15) {
+    private function http_check_url($url, $timeout = 15, $link_id = null) {
         // Multiple user-agent strings to try (latest versions as of October 2025)
         $user_agents = array(
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
@@ -1373,9 +1374,24 @@ class DH_External_Link_Management {
                     // If we got HTML content despite 403, the page is likely accessible
                     if ($code === 403) {
                         $body = wp_remote_retrieve_body($resp4);
-                        if ($this->response_has_valid_content($body)) {
+                        
+                        // Check for Cloudflare challenge - treat as OK since site is working
+                        if ($this->is_cloudflare_challenge($body)) {
+                            $code = 200;
+                            $text = 'OK (Cloudflare protected)';
+                            
+                            // Set override for Cloudflare-protected links
+                            if ($link_id) {
+                                $this->set_link_override($link_id, 200, 'Cloudflare bot challenge');
+                            }
+                        } elseif ($this->response_has_valid_content($body)) {
                             $code = 200;
                             $text = 'OK (content validated)';
+                            
+                            // Set override for this validated 403
+                            if ($link_id) {
+                                $this->set_link_override($link_id, 200, 'Content validated - real page');
+                            }
                         }
                     }
                 }
@@ -1386,9 +1402,24 @@ class DH_External_Link_Management {
         // Check if we have a response object with content
         if ($code === 403 && isset($resp) && !is_wp_error($resp)) {
             $body = wp_remote_retrieve_body($resp);
-            if ($this->response_has_valid_content($body)) {
+            
+            // Check for Cloudflare challenge - treat as OK since site is working
+            if ($this->is_cloudflare_challenge($body)) {
+                $code = 200;
+                $text = 'OK (Cloudflare protected)';
+                
+                // Set override for Cloudflare-protected links
+                if ($link_id) {
+                    $this->set_link_override($link_id, 200, 'Cloudflare bot challenge');
+                }
+            } elseif ($this->response_has_valid_content($body)) {
                 $code = 200;
                 $text = 'OK (content validated)';
+                
+                // Set override for this validated 403
+                if ($link_id) {
+                    $this->set_link_override($link_id, 200, 'Content validated - real page');
+                }
             }
         }
         
@@ -1407,9 +1438,24 @@ class DH_External_Link_Management {
                 // Content validation for 403 on retry
                 if ($code === 403) {
                     $body = wp_remote_retrieve_body($retry_resp);
-                    if ($this->response_has_valid_content($body)) {
+                    
+                    // Check for Cloudflare challenge - treat as OK since site is working
+                    if ($this->is_cloudflare_challenge($body)) {
+                        $code = 200;
+                        $text = 'OK (Cloudflare protected)';
+                        
+                        // Set override for Cloudflare-protected links
+                        if ($link_id) {
+                            $this->set_link_override($link_id, 200, 'Cloudflare bot challenge');
+                        }
+                    } elseif ($this->response_has_valid_content($body)) {
                         $code = 200;
                         $text = 'OK (content validated)';
+                        
+                        // Set override for this validated 403
+                        if ($link_id) {
+                            $this->set_link_override($link_id, 200, 'Content validated - real page');
+                        }
                     }
                 }
             } else {
@@ -1420,6 +1466,80 @@ class DH_External_Link_Management {
         }
         
         return array($code, $text);
+    }
+    
+    /**
+     * Set override status for a link
+     * Marks a link as verified (auto or manual) - uses same logic as "Mark OK" button
+     * 
+     * @param int $link_id Link ID
+     * @param int $override_code Status code to override with (typically 200)
+     * @param string $reason Reason for override (e.g., 'Content validated - real page')
+     */
+    private function set_link_override($link_id, $override_code, $reason = '') {
+        global $wpdb;
+        $table = $this->table_name();
+        
+        // Use far future date for compatibility with manual "Mark OK" behavior
+        // This makes auto-validated links permanent like manually verified ones
+        $expires = '2099-12-31 23:59:59';
+        $now = current_time('mysql');
+        
+        $wpdb->update(
+            $table,
+            array(
+                'status_override_code' => $override_code,
+                'status_override_expires' => $expires,
+                'status_override_reason' => $reason,
+                'status_code' => $override_code,
+                'status_text' => $reason ?: 'Auto-verified',
+                'last_checked' => $now,
+                'updated_at' => $now,
+            ),
+            array('id' => $link_id),
+            array('%d', '%s', '%s', '%d', '%s', '%s', '%s'),
+            array('%d')
+        );
+    }
+    
+    /**
+     * Check if response is a Cloudflare challenge page
+     * Cloudflare returns "Just a moment..." pages for bot detection
+     * These indicate the site is likely working, just blocking automated requests
+     * 
+     * @param string $body Response body
+     * @return bool True if this is a Cloudflare challenge page
+     */
+    private function is_cloudflare_challenge($body) {
+        if (empty($body)) {
+            return false;
+        }
+        
+        $body_lower = strtolower($body);
+        
+        // Check for Cloudflare challenge indicators
+        // Must have the specific challenge title AND at least one other indicator
+        $has_challenge_title = (stripos($body_lower, 'just a moment') !== false);
+        
+        if (!$has_challenge_title) {
+            return false;
+        }
+        
+        $cf_indicators = array(
+            'checking your browser',
+            'cf-browser-verification',
+            'cf_chl_',
+            'challenge-platform',
+            'ray id'
+        );
+        
+        foreach ($cf_indicators as $indicator) {
+            if (stripos($body_lower, $indicator) !== false) {
+                return true; // Has title + at least one other indicator
+            }
+        }
+        
+        return false;
     }
     
     /**
@@ -1567,7 +1687,7 @@ class DH_External_Link_Management {
             $ovr_code = isset($r->status_override_code) ? (int)$r->status_override_code : 0;
             if ($ovr_code && $ovr_exp && $ovr_exp > time()) { continue; }
             
-            list($code, $text) = $this->http_check_url($url, $timeout);
+            list($code, $text) = $this->http_check_url($url, $timeout, $r->id);
             $wpdb->update(
                 $table,
                 array(
@@ -2226,7 +2346,7 @@ class DH_External_Link_Management {
             }
             
             // Check the URL
-            list($code, $text) = $this->http_check_url($url, $timeout);
+            list($code, $text) = $this->http_check_url($url, $timeout, $r->id);
             
             // Update database
             $result = $wpdb->update(

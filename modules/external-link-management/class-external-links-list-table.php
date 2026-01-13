@@ -292,6 +292,10 @@ class DH_External_Links_List_Table extends WP_List_Table {
                 </a>
             <?php endif; ?>
             
+            <a href="<?php echo esc_url(admin_url('admin.php?page=dh-external-links')); ?>" class="button" style="margin-left: 5px;">
+                <?php esc_html_e('Reload Page', 'directory-helpers'); ?>
+            </a>
+            
             <button type="button" id="dh-open-selected-posts" class="button" style="margin-left: 5px;">
                 <?php esc_html_e('Open Selected Posts', 'directory-helpers'); ?>
             </button>
