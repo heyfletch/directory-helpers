@@ -216,8 +216,7 @@ class DH_Prep_Pro {
             if (preg_match('/\s-\s[A-Za-z]{2}$/', $term->name)) {
                 $new_name = trim(preg_replace('/\s-\s[A-Za-z]{2}$/', '', $term->name));
                 if ($new_name && $new_name !== $term->name) {
-                    // DISABLED: Stop removing "- ST" suffix from area term names
-                    // wp_update_term((int)$term->term_id, 'area', array('name' => $new_name));
+                    wp_update_term((int)$term->term_id, 'area', array('name' => $new_name));
                 }
             }
         }
