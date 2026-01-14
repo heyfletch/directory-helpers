@@ -366,8 +366,7 @@ class DH_External_Link_Management {
             echo '</tr>';
         }
         echo '</tbody></table>';
-        echo '<p style="margin-top:8px;color:#666;">' . esc_html__('First occurrence of a URL is stored and converted to a shortcode. Subsequent occurrences are unlinked and not stored as records.', 'directory-helpers') . '</p>';
-
+        
         // Inline JS for per-link recheck
         ?>
         <script type="text/javascript">
