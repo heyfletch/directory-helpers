@@ -898,7 +898,6 @@ class DH_External_Link_Management {
                     e.preventDefault();
                     var tr = delBtn.closest('tr');
                     if(!tr){ return; }
-                    if(!window.confirm('Delete this link record? This cannot be undone.')){ return; }
                     delBtn.disabled = true;
                     var fd4 = new FormData();
                     fd4.append('action','dh_elm_delete_link');
