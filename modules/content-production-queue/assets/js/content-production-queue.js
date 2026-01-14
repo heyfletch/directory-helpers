@@ -357,9 +357,15 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     showNotice(dhContentQueue.successMessageThumb, 'success');
                     
-                    // Open city listing in new tab
+                    // Open city listing in new tab (background)
                     const editUrl = 'post.php?post=' + postId + '&action=edit';
-                    window.open(editUrl, '_blank');
+                    const a = document.createElement('a');
+                    a.href = editUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
                 } else {
                     const errorMsg = response.data && response.data.message 
                         ? response.data.message 
