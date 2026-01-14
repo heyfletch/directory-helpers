@@ -340,10 +340,6 @@ jQuery(document).ready(function($) {
         const postId = link.data('post-id');
         const nonce = link.data('nonce');
         
-        if (!confirm('Generate a new featured image for this post?')) {
-            return;
-        }
-        
         // Add loading state
         link.css('opacity', '0.5').css('pointer-events', 'none');
         
