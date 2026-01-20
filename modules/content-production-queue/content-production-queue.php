@@ -161,11 +161,9 @@ class DH_Content_Production_Queue {
                         <button type="button" id="dh-start-cpq-healthy-btn" class="button button-primary" data-mode="healthy">
                             <?php esc_html_e('Publish Healthy Cities', 'directory-helpers'); ?>
                         </button>
-                        <?php /* Hidden for future use
-                        <button type="button" id="dh-start-cpq-all-btn" class="button button-secondary" data-mode="all" title="<?php esc_attr_e('Publish Cities including Link Health Warnings or Unchecked', 'directory-helpers'); ?>" style="margin-left: 10px;">
+                        <button type="button" id="dh-start-cpq-all-btn" class="button" data-mode="all" title="<?php esc_attr_e('Publish Cities including Link Health Warnings or Unchecked', 'directory-helpers'); ?>" style="margin-left: 10px; background-color: #f0b849; color: #000; border-color: #dba617;">
                             <?php esc_html_e('Publish All Cities', 'directory-helpers'); ?>
                         </button>
-                        */ ?>
                     <?php elseif ($is_active): ?>
                         <button type="button" id="dh-stop-cpq-btn" class="button button-secondary">
                             <?php esc_html_e('Stop Queue', 'directory-helpers'); ?>
@@ -173,6 +171,9 @@ class DH_Content_Production_Queue {
                     <?php else: ?>
                         <button type="button" class="button button-primary" disabled>
                             <?php esc_html_e('Publish Healthy Cities', 'directory-helpers'); ?>
+                        </button>
+                        <button type="button" class="button" disabled style="margin-left: 10px; background-color: #f0b849; color: #000; border-color: #dba617;">
+                            <?php esc_html_e('Publish All Cities', 'directory-helpers'); ?>
                         </button>
                         <p class="description"><?php esc_html_e('No eligible posts to publish', 'directory-helpers'); ?></p>
                     <?php endif; ?>
