@@ -288,13 +288,13 @@ class DH_Content_Production_Queue {
         $count_text = "{$link_count} links, {$ok_count} ok";
         switch ($health) {
             case 'all_ok':
-                return '<span style="color: #46b450;">✅ Perfect' . ', ' . $count_text . '</span>';
+                return '<span style="color: #46b450;">✅ All OK' . ', ' . $count_text . '</span>';
             case 'warning':
-                return '<span style="color: #f0b849;">⚠️ Ok' . ', ' . $count_text . '</span>';
+                return '<span style="color: #f0b849;">' . $count_text . '</span>';
             case 'red_alert':
-                return '<span style="color: #dc3232;">🚨 Bad' . ', ' . $count_text . '</span>';
+                return '<span style="color: #dc3232;">' . $count_text . '</span>';
             default:
-                return '<span style="color: #999;">❓ Not Checked' . ', ' . $count_text . '</span>';
+                return '<span style="color: #999;">❓ Unchecked' . ', ' . $count_text . '</span>';
         }
     }
     
