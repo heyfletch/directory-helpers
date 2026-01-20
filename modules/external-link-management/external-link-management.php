@@ -1001,12 +1001,12 @@ class DH_External_Link_Management {
             $effective = (int)$ov_code;
         }
         
-        // Unlink for 404 and 5xx errors (truly broken/missing pages)
-        if ($effective === 404 || ($effective >= 500 && $effective < 600)) {
+        // Unlink for 404, 0/timeout, and 5xx errors (truly broken/missing/unreachable pages)
+        if ($effective === 404 || $effective === 0 || ($effective >= 500 && $effective < 600)) {
             return $anchor; // Return plain text, no hyperlink
         }
         
-        // All other statuses (200, 403, 0, etc.) render as hyperlink
+        // All other statuses (200, 403, etc.) render as hyperlink
         return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer nofollow">' . $anchor . '</a>';
     }
 
