@@ -125,6 +125,7 @@ class DH_Content_Production_Queue {
         // Get link counts for all posts in one efficient batch query
         $post_ids = wp_list_pluck($all_draft_posts, 'ID');
         $link_counts = $this->get_link_counts_for_posts($post_ids);
+        $ok_link_counts = $this->get_ok_link_counts_for_posts($post_ids);
         
         $current_post_title = '';
         if ($current_post_id && $is_active) {
@@ -217,7 +218,8 @@ class DH_Content_Production_Queue {
                             <?php
                             $link_health = get_post_meta($post->ID, '_dh_link_health', true);
                             $post_link_count = isset($link_counts[$post->ID]) ? $link_counts[$post->ID] : 0;
-                            $link_health_display = $this->get_link_health_display($link_health, $post_link_count);
+                            $post_ok_count = isset($ok_link_counts[$post->ID]) ? $ok_link_counts[$post->ID] : 0;
+                            $link_health_display = $this->get_link_health_display($link_health, $post_link_count, $post_ok_count);
                             
                             // Check if all images are present
                             $has_featured = has_post_thumbnail($post->ID);
@@ -277,22 +279,22 @@ class DH_Content_Production_Queue {
     /**
      * Get link health display HTML with link count
      */
-    private function get_link_health_display($health, $link_count = 0) {
+    private function get_link_health_display($health, $link_count = 0, $ok_count = 0) {
         // Special case: 0 links should show "No Links" regardless of health status
         if ($link_count === 0) {
             return '<span style="color: #999;">🫙 No Links</span>';
         }
         
-        $count_text = $link_count > 0 ? ", {$link_count} link" . ($link_count > 1 ? 's' : '') : ', 0 links';
+        $count_text = "{$link_count} links, {$ok_count} ok";
         switch ($health) {
             case 'all_ok':
-                return '<span style="color: #46b450;">✅ All Ok' . $count_text . '</span>';
+                return '<span style="color: #46b450;">✅ Perfect' . ', ' . $count_text . '</span>';
             case 'warning':
-                return '<span style="color: #f0b849;">⚠️ Warning' . $count_text . '</span>';
+                return '<span style="color: #f0b849;">⚠️ Ok' . ', ' . $count_text . '</span>';
             case 'red_alert':
-                return '<span style="color: #dc3232;">🚨 Red Alert' . $count_text . '</span>';
+                return '<span style="color: #dc3232;">🚨 Bad' . ', ' . $count_text . '</span>';
             default:
-                return '<span style="color: #999;">❓ Not Checked' . $count_text . '</span>';
+                return '<span style="color: #999;">❓ Not Checked' . ', ' . $count_text . '</span>';
         }
     }
     
@@ -325,6 +327,41 @@ class DH_Content_Production_Queue {
         }
         foreach ($results as $row) {
             $counts[$row->post_id] = (int) $row->link_count;
+        }
+        
+        return $counts;
+    }
+    
+    /**
+     * Get count of 200 status links for multiple posts efficiently (batch query)
+     * 
+     * @param array $post_ids Array of post IDs
+     * @return array Associative array of post_id => ok_count (200 status links)
+     */
+    private function get_ok_link_counts_for_posts($post_ids) {
+        if (empty($post_ids)) {
+            return array();
+        }
+        
+        global $wpdb;
+        $table = $wpdb->prefix . 'dh_external_links';
+        
+        $placeholders = implode(',', array_fill(0, count($post_ids), '%d'));
+        $query = $wpdb->prepare(
+            "SELECT post_id, COUNT(*) as ok_count FROM {$table} 
+             WHERE post_id IN ($placeholders) AND is_duplicate = 0 AND status_code = 200 GROUP BY post_id",
+            $post_ids
+        );
+        
+        $results = $wpdb->get_results($query);
+        
+        // Build associative array
+        $counts = array();
+        foreach ($post_ids as $id) {
+            $counts[$id] = 0; // Default to 0
+        }
+        foreach ($results as $row) {
+            $counts[$row->post_id] = (int) $row->ok_count;
         }
         
         return $counts;
