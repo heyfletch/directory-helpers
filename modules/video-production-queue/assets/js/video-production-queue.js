@@ -8,10 +8,6 @@ jQuery(document).ready(function($) {
         
         const button = $(this);
         
-        if (!confirm('Start video production queue? This will begin processing posts automatically.')) {
-            return;
-        }
-        
         button.prop('disabled', true);
         button.text('Starting...');
         
