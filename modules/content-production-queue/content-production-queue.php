@@ -285,10 +285,10 @@ class DH_Content_Production_Queue {
             return '<span style="color: #999;">🫙 No Links</span>';
         }
         
-        $count_text = "{$link_count} links, {$ok_count} ok";
+        $count_text = "{$ok_count} of {$link_count}";
         switch ($health) {
             case 'all_ok':
-                return '<span style="color: #46b450;">✅ All OK' . ', ' . $count_text . '</span>';
+                return '<span style="color: #46b450;">✅ ' . $count_text . '</span>';
             case 'warning':
                 return '<span style="color: #f0b849;">' . $count_text . '</span>';
             case 'red_alert':
