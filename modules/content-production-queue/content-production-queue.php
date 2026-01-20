@@ -503,8 +503,8 @@ class DH_Content_Production_Queue {
         
         $posts = get_posts($base_args);
         
-        // Filter out posts with 0 links (must have at least 1 external link)
-        if (!empty($posts)) {
+        // Filter out posts with 0 links for healthy mode only (all mode includes no-links posts)
+        if (!empty($posts) && $mode === 'healthy') {
             $post_ids = wp_list_pluck($posts, 'ID');
             $link_counts = $this->get_link_counts_for_posts($post_ids);
             
