@@ -12,10 +12,15 @@ jQuery(document).ready(function($) {
             ? 'Start publishing healthy cities only? This will publish posts with "All Ok" link health.'
             : 'Start publishing all cities? This will include posts with link health warnings.';
         
+        console.log('Button clicked:', mode);
+        console.log('Button data:', button.data());
+        
         if (!confirm(confirmMsg)) {
+            console.log('User cancelled confirmation');
             return;
         }
         
+        console.log('User confirmed, proceeding with AJAX');
         button.prop('disabled', true);
         button.text('Starting...');
         
@@ -28,6 +33,7 @@ jQuery(document).ready(function($) {
                 mode: mode
             },
             success: function(response) {
+                console.log('AJAX success response:', response);
                 if (response.success) {
                     showNotice(response.data.message, 'success');
                     
@@ -48,6 +54,7 @@ jQuery(document).ready(function($) {
                     // Start batch processing
                     startBatchProcessing();
                 } else {
+                    console.log('AJAX returned error response:', response);
                     button.prop('disabled', false);
                     const originalText = mode === 'healthy' ? 'Publish Healthy Cities' : 'Publish All Cities';
                     button.text(originalText);
@@ -59,6 +66,7 @@ jQuery(document).ready(function($) {
                 }
             },
             error: function(xhr, status, error) {
+                console.log('AJAX error:', {xhr: xhr, status: status, error: error});
                 button.prop('disabled', false);
                 button.text('Start Publishing Queue');
                 showNotice('Error: ' + error, 'error');
