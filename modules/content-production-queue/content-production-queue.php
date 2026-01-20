@@ -278,6 +278,11 @@ class DH_Content_Production_Queue {
      * Get link health display HTML with link count
      */
     private function get_link_health_display($health, $link_count = 0) {
+        // Special case: 0 links should show "No Links" regardless of health status
+        if ($link_count === 0) {
+            return '<span style="color: #999;">🫙 No Links</span>';
+        }
+        
         $count_text = $link_count > 0 ? ", {$link_count} link" . ($link_count > 1 ? 's' : '') : ', 0 links';
         switch ($health) {
             case 'all_ok':
@@ -434,7 +439,7 @@ class DH_Content_Production_Queue {
                 ),
             );
         } else {
-            // Include warnings
+            // Include all statuses (all_ok, warning, red_alert, and not checked)
             $base_args['meta_query'][] = array(
                 'relation' => 'OR',
                 array(
@@ -445,6 +450,11 @@ class DH_Content_Production_Queue {
                 array(
                     'key' => '_dh_link_health',
                     'value' => 'warning',
+                    'compare' => '=',
+                ),
+                array(
+                    'key' => '_dh_link_health',
+                    'value' => 'red_alert',
                     'compare' => '=',
                 ),
                 array(
