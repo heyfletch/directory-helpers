@@ -437,6 +437,7 @@ class DH_Video_Production_Queue {
         // Get post data
         $post_url = get_permalink($post_id);
         $post_title = wp_strip_all_tags(get_the_title($post_id));
+        $post_content = wp_strip_all_tags($post->post_content);
         
         // Get featured image URL
         $featured_image_url = '';
@@ -481,6 +482,7 @@ class DH_Video_Production_Queue {
             'postId' => $post_id,
             'postUrl' => $post_url,
             'postTitle' => $post_title,
+            'postContent' => $post_content,
             'keyword' => $keyword,
             'videoTitle' => $video_title,
             'youtubeDescription' => $youtube_description,
