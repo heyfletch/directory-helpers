@@ -20,6 +20,9 @@ if ( ! class_exists( 'DH_Migrate_Main_Image_Command' ) ) {
          * [--limit=<number>]
          * : Limit the number of profiles to process (useful for testing).
          *
+         * [--post-id=<number>]
+         * : Process a specific profile by post ID.
+         *
          * [--force]
          * : Process profiles even if they already have a featured image (will NOT override existing featured images, but will show them in the report).
          *
@@ -33,6 +36,9 @@ if ( ! class_exists( 'DH_Migrate_Main_Image_Command' ) ) {
          *
          *     # Migrate first 10 profiles
          *     wp directory-helpers migrate-main-image --limit=10
+         *
+         *     # Migrate a specific profile
+         *     wp directory-helpers migrate-main-image --post-id=12345
          *
          *     # Migrate all profiles
          *     wp directory-helpers migrate-main-image
@@ -50,39 +56,77 @@ if ( ! class_exists( 'DH_Migrate_Main_Image_Command' ) ) {
 
             $dry_run = isset( $assoc_args['dry-run'] );
             $limit = isset( $assoc_args['limit'] ) ? intval( $assoc_args['limit'] ) : -1;
+            $post_id = isset( $assoc_args['post-id'] ) ? intval( $assoc_args['post-id'] ) : 0;
             $force = isset( $assoc_args['force'] );
             $regenerate_thumbs = isset( $assoc_args['regenerate-thumbs'] );
 
             WP_CLI::line( '=== Main Image to Featured Image Migration ===' );
             WP_CLI::line( 'Post Type: profile' );
             WP_CLI::line( 'Dry run: ' . ( $dry_run ? 'Yes' : 'No' ) );
-            WP_CLI::line( 'Limit: ' . ( $limit > 0 ? $limit : 'None (all profiles)' ) );
+            
+            if ( $post_id > 0 ) {
+                WP_CLI::line( 'Post ID: ' . $post_id );
+            } else {
+                WP_CLI::line( 'Limit: ' . ( $limit > 0 ? $limit : 'None (all profiles)' ) );
+            }
+            
             WP_CLI::line( 'Regenerate Thumbnails: ' . ( $regenerate_thumbs ? 'Yes' : 'No' ) );
             WP_CLI::line( '' );
 
-            // Query for profiles with main_image field
-            $query_args = [
-                'post_type' => 'profile',
-                'post_status' => 'any',
-                'posts_per_page' => $limit,
-                'fields' => 'ids',
-                'meta_query' => [
-                    [
-                        'key' => 'main_image',
-                        'compare' => 'EXISTS',
+            // Handle specific post ID
+            if ( $post_id > 0 ) {
+                $post = get_post( $post_id );
+                
+                if ( ! $post || $post->post_type !== 'profile' ) {
+                    WP_CLI::error( "Post ID {$post_id} is not a valid profile post." );
+                    return;
+                }
+                
+                $main_image = get_field( 'main_image', $post_id );
+                if ( empty( $main_image ) ) {
+                    WP_CLI::error( "Profile ID {$post_id} does not have a main_image value." );
+                    return;
+                }
+                
+                $profile_ids = [ $post_id ];
+            } else {
+                // Query for profiles with main_image field that has a value
+                global $wpdb;
+                
+                $query_args = [
+                    'post_type' => 'profile',
+                    'post_status' => 'any',
+                    'posts_per_page' => $limit,
+                    'fields' => 'ids',
+                    'meta_query' => [
+                        [
+                            'key' => 'main_image',
+                            'compare' => 'EXISTS',
+                        ],
+                        [
+                            'key' => 'main_image',
+                            'value' => '',
+                            'compare' => '!=',
+                        ],
                     ],
-                ],
-            ];
+                ];
 
-            $query = new WP_Query( $query_args );
-            $profile_ids = $query->posts;
+                $query = new WP_Query( $query_args );
+                $profile_ids = $query->posts;
+            }
+            
             $total = count( $profile_ids );
 
-            WP_CLI::line( "Found {$total} profile(s) with main_image field." );
+            if ( $post_id > 0 ) {
+                WP_CLI::line( "Processing profile ID {$post_id}..." );
+            } else {
+                WP_CLI::line( "Found {$total} profile(s) with main_image value." );
+            }
+            
             WP_CLI::line( '' );
 
             if ( $total === 0 ) {
-                WP_CLI::success( 'No profiles found with main_image field. Nothing to migrate.' );
+                WP_CLI::success( 'No profiles found with main_image value. Nothing to migrate.' );
                 return;
             }
 
@@ -108,7 +152,7 @@ if ( ! class_exists( 'DH_Migrate_Main_Image_Command' ) ) {
                 // Get main_image ACF field
                 $main_image = get_field( 'main_image', $profile_id );
 
-                // Skip if no main_image value
+                // Skip if no main_image value (shouldn't happen with optimized query, but safety check)
                 if ( empty( $main_image ) ) {
                     $skipped_no_image++;
                     continue;
@@ -167,10 +211,8 @@ if ( ! class_exists( 'DH_Migrate_Main_Image_Command' ) ) {
                     // Clear main_image field
                     delete_field( 'main_image', $profile_id );
 
-                    // Clear any LiteSpeed cache for this post
-                    if ( class_exists( 'LiteSpeed_Cache_API' ) ) {
-                        LiteSpeed_Cache_API::purge_post( $profile_id );
-                    }
+                    // Purge LiteSpeed cache for this profile
+                    do_action( 'litespeed_purge_post', $profile_id );
                 }
 
                 $migrated++;
@@ -194,9 +236,8 @@ if ( ! class_exists( 'DH_Migrate_Main_Image_Command' ) ) {
                 
                 if ( $migrated > 0 ) {
                     WP_CLI::line( '' );
-                    WP_CLI::line( 'Recommended next steps:' );
-                    WP_CLI::line( '1. Verify a few migrated profiles to ensure images display correctly' );
-                    WP_CLI::line( '2. Consider purging and rebuilding cache if needed' );
+                    WP_CLI::line( 'Note: LiteSpeed cache automatically purged for each migrated profile.' );
+                    WP_CLI::line( 'Verify a few profiles to ensure featured images display correctly.' );
                 }
             }
         }
