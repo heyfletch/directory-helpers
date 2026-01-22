@@ -252,6 +252,7 @@ class Directory_Helpers {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-bricks-resign-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-prime-cache-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-migrate-years-experience-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-migrate-main-image-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_state_listing_titles', 'DH_Deduplicate_Area_Terms_Command' );
@@ -260,6 +261,7 @@ class Directory_Helpers {
         WP_CLI::add_command( 'directory-helpers update-state-rankings', 'DH_Update_State_Rankings_Command' );
         WP_CLI::add_command( 'directory-helpers prime-cache', 'DH_Prime_Cache_Command' );
         WP_CLI::add_command( 'directory-helpers migrate-years-experience', 'DH_Migrate_Years_Experience_Command' );
+        WP_CLI::add_command( 'directory-helpers migrate-main-image', 'DH_Migrate_Main_Image_Command' );
     }
 
     /**
