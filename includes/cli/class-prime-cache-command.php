@@ -186,6 +186,7 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                             $success_count++;
                             $status_char = '✓';
                             $cache_status = $result['cache_status'];
+                            $timing = $result['timing'];
                             
                             if ($cache_status === 'hit') {
                                 $cache_hit_count++;
@@ -193,7 +194,7 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                                 $cache_miss_count++;
                             }
                             
-                            WP_CLI::line("[{$processed}/{$total_urls}] {$status_char} {$result['status_code']} ({$cache_status}) {$url}");
+                            WP_CLI::line("[{$processed}/{$total_urls}] {$status_char} {$result['status_code']} ({$cache_status}) DNS:{$timing['namelookup_time']}ms Connect:{$timing['connect_time']}ms TTFB:{$timing['starttransfer_time']}ms Total:{$timing['total_time']}ms {$url}");
                         } else {
                             $error_count++;
                             WP_CLI::line("[{$processed}/{$total_urls}] ✗ ERROR: {$result['error']} - {$url}");
@@ -214,14 +215,14 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                 }
             } else {
                 // Sequential processing (original behavior)
-                foreach ($all_urls as $index => $url) {
-                    $num = $index + 1;
+                foreach ($all_urls as $num => $url) {
                     $result = $this->prime_url($url, $timeout);
-
+                    
                     if ($result['success']) {
                         $success_count++;
                         $status_char = '✓';
                         $cache_status = $result['cache_status'];
+                        $timing = $result['timing'];
                         
                         if ($cache_status === 'hit') {
                             $cache_hit_count++;
@@ -229,22 +230,22 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                             $cache_miss_count++;
                         }
                         
-                        WP_CLI::line("[{$num}/{$total_urls}] {$status_char} {$result['status_code']} ({$cache_status}) {$url}");
+                        WP_CLI::line("[" . ($num + 1) . "/{$total_urls}] {$status_char} {$result['status_code']} ({$cache_status}) DNS:{$timing['namelookup_time']}ms Connect:{$timing['connect_time']}ms TTFB:{$timing['starttransfer_time']}ms Total:{$timing['total_time']}ms {$url}");
                     } else {
                         $error_count++;
-                        WP_CLI::line("[{$num}/{$total_urls}] ✗ ERROR: {$result['error']} - {$url}");
+                        WP_CLI::line("[" . ($num + 1) . "/{$total_urls}] ✗ ERROR: {$result['error']} - {$url}");
                     }
-
-                    // Delay between requests (convert ms to microseconds)
-                    if ($delay_ms > 0 && $index < $total_urls - 1) {
-                        usleep($delay_ms * 1000);
-                    }
-
+                    
                     // Progress update every 50 URLs
-                    if ($num % 50 === 0) {
+                    if (($num + 1) % 50 === 0) {
                         $elapsed = round(microtime(true) - $start_time, 1);
-                        $rate = round($num / $elapsed, 1);
-                        WP_CLI::line("--- Progress: {$num}/{$total_urls} ({$rate} URLs/sec) ---");
+                        $rate = round(($num + 1) / $elapsed, 1);
+                        WP_CLI::line("--- Progress: " . ($num + 1) . "/{$total_urls} ({$rate} URLs/sec) ---");
+                    }
+                    
+                    // Delay between requests
+                    if ($delay_ms > 0 && $num < $total_urls - 1) {
+                        usleep($delay_ms * 1000);
                     }
                 }
             }
@@ -506,6 +507,12 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                         'error' => $error,
                         'status_code' => 0,
                         'cache_status' => 'error',
+                        'timing' => array(
+                            'namelookup_time' => 0,
+                            'connect_time' => 0,
+                            'starttransfer_time' => 0,
+                            'total_time' => 0,
+                        ),
                     );
                 } else {
                     // Parse headers for cache status
@@ -528,6 +535,12 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                         'status_code' => $info['http_code'],
                         'cache_status' => $cache_status,
                         'error' => $success ? null : "HTTP {$info['http_code']}",
+                        'timing' => array(
+                            'namelookup_time' => round($info['namelookup_time'] * 1000, 1), // ms
+                            'connect_time' => round($info['connect_time'] * 1000, 1), // ms
+                            'starttransfer_time' => round($info['starttransfer_time'] * 1000, 1), // ms (TTFB)
+                            'total_time' => round($info['total_time'] * 1000, 1), // ms
+                        ),
                     );
                 }
                 
@@ -544,9 +557,10 @@ if (!class_exists('DH_Prime_Cache_Command')) {
          *
          * @param string $url URL to fetch
          * @param int $timeout Request timeout in seconds
-         * @return array Result with success, status_code, cache_status, error
+         * @return array Result with success, status_code, cache_status, error, timing
          */
         private function prime_url($url, $timeout) {
+            $start = microtime(true);
             $response = wp_remote_get($url, array(
                 'timeout' => $timeout,
                 'user-agent' => $this->user_agent,
@@ -560,6 +574,12 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                     'error' => $response->get_error_message(),
                     'status_code' => 0,
                     'cache_status' => 'error',
+                    'timing' => array(
+                        'namelookup_time' => 0,
+                        'connect_time' => 0,
+                        'starttransfer_time' => 0,
+                        'total_time' => round((microtime(true) - $start) * 1000, 1),
+                    ),
                 );
             }
 
@@ -582,13 +602,17 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                 $cache_status = (strpos(strtolower($headers['x-cache']), 'hit') !== false) ? 'hit' : 'miss';
             }
 
-            $success = ($status_code >= 200 && $status_code < 400);
-
             return array(
-                'success' => $success,
+                'success' => ($status_code >= 200 && $status_code < 400),
                 'status_code' => $status_code,
                 'cache_status' => $cache_status,
-                'error' => $success ? null : "HTTP {$status_code}",
+                'error' => null,
+                'timing' => array(
+                    'namelookup_time' => 0, // Not available in wp_remote_get
+                    'connect_time' => 0,
+                    'starttransfer_time' => 0,
+                    'total_time' => round((microtime(true) - $start) * 1000, 1),
+                ),
             );
         }
     }
