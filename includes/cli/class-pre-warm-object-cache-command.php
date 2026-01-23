@@ -39,6 +39,10 @@ if (!class_exists('DH_Pre_Warm_Object_Cache_Command')) {
             WP_CLI::line("Warming profile count query...");
             $this->warm_profile_count_query();
 
+            // Warm ranking queries
+            WP_CLI::line("Warming ranking queries...");
+            $this->warm_ranking_queries();
+
             $total_time = round(microtime(true) - $start_time, 2);
             WP_CLI::line("");
             WP_CLI::line("=== Object Cache Pre-warming Complete ===");
@@ -122,6 +126,116 @@ if (!class_exists('DH_Pre_Warm_Object_Cache_Command')) {
             } else {
                 WP_CLI::warning("  Failed to load profile count");
             }
+        }
+
+        /**
+         * Warm ranking queries (what listing pages use)
+         */
+        private function warm_ranking_queries() {
+            // Warm city ranking queries
+            $cities = get_posts(array(
+                'post_type' => 'city-listing',
+                'post_status' => 'publish',
+                'fields' => 'ids',
+                'posts_per_page' => 100, // Sample of cities
+                'no_found_rows' => true,
+                'orderby' => 'rand',
+            ));
+
+            $city_warmed = 0;
+            foreach ($cities as $city_id) {
+                // Simulate the ranking query that listing pages use
+                $profiles = get_posts(array(
+                    'post_type' => 'profile',
+                    'post_status' => 'publish',
+                    'posts_per_page' => 10,
+                    'no_found_rows' => true,
+                    'meta_query' => array(
+                        array(
+                            'key' => 'city_rank',
+                            'value' => 0,
+                            'compare' => '>',
+                            'type' => 'NUMERIC',
+                        ),
+                    ),
+                    'orderby' => array(
+                        'city_rank' => 'ASC',
+                    ),
+                ));
+                
+                if (!empty($profiles)) {
+                    $city_warmed++;
+                }
+            }
+
+            // Warm state ranking queries  
+            $states = get_terms(array(
+                'taxonomy' => 'state',
+                'fields' => 'ids',
+                'count' => false,
+                'hide_empty' => false,
+            ));
+
+            $state_warmed = 0;
+            foreach ($states as $state_id) {
+                // Simulate state ranking query
+                $profiles = get_posts(array(
+                    'post_type' => 'profile',
+                    'post_status' => 'publish',
+                    'posts_per_page' => 10,
+                    'no_found_rows' => true,
+                    'meta_query' => array(
+                        array(
+                            'key' => 'state_rank',
+                            'value' => 0,
+                            'compare' => '>',
+                            'type' => 'NUMERIC',
+                        ),
+                    ),
+                    'orderby' => array(
+                        'state_rank' => 'ASC',
+                    ),
+                ));
+                
+                if (!empty($profiles)) {
+                    $state_warmed++;
+                }
+            }
+
+            // Warm area-based profile queries
+            $areas = get_terms(array(
+                'taxonomy' => 'area',
+                'fields' => 'ids',
+                'count' => false,
+                'hide_empty' => false,
+                'number' => 50, // Sample of areas
+            ));
+
+            $area_warmed = 0;
+            foreach ($areas as $area_id) {
+                // Simulate area-based query
+                $profiles = get_posts(array(
+                    'post_type' => 'profile',
+                    'post_status' => 'publish',
+                    'posts_per_page' => 10,
+                    'no_found_rows' => true,
+                    'tax_query' => array(
+                        array(
+                            'taxonomy' => 'area',
+                            'field' => 'term_id',
+                            'terms' => $area_id,
+                        ),
+                    ),
+                ));
+                
+                if (!empty($profiles)) {
+                    $area_warmed++;
+                }
+            }
+
+            WP_CLI::line("  Warmed {$city_warmed} city ranking queries");
+            WP_CLI::line("  Warmed {$state_warmed} state ranking queries");
+            WP_CLI::line("  Warmed {$area_warmed} area-based profile queries");
         }
     }
 }

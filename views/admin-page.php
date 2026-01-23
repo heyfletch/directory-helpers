@@ -9,10 +9,11 @@
         <p class="description" style="margin-bottom: 15px;">
             <?php esc_html_e('Run these commands in sequence to update rankings, purge caches, and reprime all pages. Copy and paste into terminal.', 'directory-helpers'); ?>
         </p>
-        <textarea readonly style="width: 100%; height: 200px; font-family: monospace; font-size: 13px; padding: 10px; background: #fff; border: 1px solid #8c8f94; border-radius: 3px;">wp directory-helpers update-state-rankings dog-trainer
-wp directory-helpers update-rankings dog-trainer
-wp directory-helpers analyze-radius dog-trainer --update-meta
-wp litespeed-purge all
+        <textarea readonly style="width: 100%; height: 200px; font-family: monospace; font-size: 13px; padding: 10px; background: #fff; border: 1px solid #8c8f94; border-radius: 3px;">wp directory-helpers update-state-rankings dog-trainer               # Clears page cache and Redis
+wp directory-helpers update-rankings dog-trainer                     # Clears Redis object cache
+wp directory-helpers analyze-radius dog-trainer --update-meta        # Does not clear cache
+wp litespeed-purge all                                               # Clears page cache and Redis
+wp directory-helpers pre-warm-object-cache                           # Warms some object cache
 wp dh search rebuild-cache
 wp directory-helpers prime-cache --preset=priority --concurrency=5
 wp directory-helpers prime-cache --preset=listings --concurrency=5
