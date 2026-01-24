@@ -777,7 +777,13 @@ class DH_Content_Production_Queue {
             if ($result !== false) {
                 // Clear WordPress object cache so the post shows as published
                 clean_post_cache($post->ID);
-                
+
+                // Submit to IndexNow API
+                $permalink = get_permalink($post->ID);
+                if ($permalink && class_exists('DH_IndexNow_Helper')) {
+                    DH_IndexNow_Helper::submit_urls($permalink);
+                }
+
                 // Update profile count for city-listings so they appear in video queue
                 if ($post->post_type === 'city-listing') {
                     $area_terms = get_the_terms($post->ID, 'area');

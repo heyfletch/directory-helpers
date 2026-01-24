@@ -27,6 +27,7 @@ define('DIRECTORY_HELPERS_BASENAME', plugin_basename(__FILE__));
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-taxonomy-helpers.php';
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-bricks-query-helpers.php';
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-acf-fields.php';
+require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-indexnow-helper.php';
 
 /**
  * Main plugin class
@@ -255,6 +256,7 @@ class Directory_Helpers {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-migrate-main-image-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-pre-warm-object-cache-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-pre-warm-rankings-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-indexnow-backfill-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_state_listing_titles', 'DH_Deduplicate_Area_Terms_Command' );
@@ -266,6 +268,7 @@ class Directory_Helpers {
         WP_CLI::add_command( 'directory-helpers migrate-main-image', 'DH_Migrate_Main_Image_Command' );
         WP_CLI::add_command( 'directory-helpers pre-warm-object-cache', 'DH_Pre_Warm_Object_Cache_Command' );
         WP_CLI::add_command( 'directory-helpers pre-warm-rankings', 'DH_Pre_Warm_Rankings_Command' );
+        WP_CLI::add_command( 'directory-helpers indexnow backfill', 'DH_IndexNow_Backfill_Command' );
     }
 
     /**

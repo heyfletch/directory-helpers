@@ -381,10 +381,12 @@ class DH_Prep_Pro {
         }
         
         $published_count = 0;
+        $published_profile_ids = array();
         foreach ($profile_ids as $pid) {
             if (get_post_status($pid) !== 'publish') {
                 wp_update_post(array('ID' => $pid, 'post_status' => 'publish'));
                 $published_count++;
+                $published_profile_ids[] = $pid;
             }
         }
         
@@ -412,7 +414,21 @@ class DH_Prep_Pro {
                 update_field('city_rank', 999, $pid); // Placeholder rank
             }
         }
-        
+
+        // 7. Submit published profiles to IndexNow API
+        if (!empty($published_profile_ids) && class_exists('DH_IndexNow_Helper')) {
+            $urls_to_submit = array();
+            foreach ($published_profile_ids as $pid) {
+                $permalink = get_permalink($pid);
+                if ($permalink) {
+                    $urls_to_submit[] = $permalink;
+                }
+            }
+            if (!empty($urls_to_submit)) {
+                DH_IndexNow_Helper::submit_urls($urls_to_submit);
+            }
+        }
+
         // Save tracking
         $this->save_tracking($profile_ids, $created_city_ids, $state_slug);
         
