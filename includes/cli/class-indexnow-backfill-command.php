@@ -41,9 +41,9 @@ class DH_IndexNow_Backfill_Command {
      * ---
      *
      * [--batch-size=<number>]
-     * : URLs per IndexNow batch (1-10000, recommended: 100-500)
+     * : URLs per IndexNow batch (1-10000)
      * ---
-     * default: 100
+     * default: 10000
      * ---
      *
      * [--dry-run]
@@ -60,8 +60,8 @@ class DH_IndexNow_Backfill_Command {
      *     # Backfill all city-listings
      *     wp directory-helpers indexnow backfill --post-type=city-listing
      *
-     *     # Submit with smaller batches (recommended for large volumes)
-     *     wp directory-helpers indexnow backfill --post-type=city-listing --batch-size=250
+     *     # Submit with smaller batches (if needed)
+     *     wp directory-helpers indexnow backfill --post-type=city-listing --batch-size=500
      *
      *     # Dry run to see what would be submitted
      *     wp directory-helpers indexnow backfill --dry-run
@@ -72,7 +72,7 @@ class DH_IndexNow_Backfill_Command {
         $limit = isset($assoc_args['limit']) ? absint($assoc_args['limit']) : 0;
         $offset = isset($assoc_args['offset']) ? absint($assoc_args['offset']) : 0;
         $post_type = isset($assoc_args['post-type']) ? sanitize_text_field($assoc_args['post-type']) : 'all';
-        $batch_size = isset($assoc_args['batch-size']) ? absint($assoc_args['batch-size']) : 100;
+        $batch_size = isset($assoc_args['batch-size']) ? absint($assoc_args['batch-size']) : 10000;
         $dry_run = isset($assoc_args['dry-run']);
 
         // Determine post types to process
@@ -89,8 +89,8 @@ class DH_IndexNow_Backfill_Command {
         WP_CLI::log('Starting IndexNow backfill...');
         if ($dry_run) {
             WP_CLI::warning('DRY RUN MODE - No URLs will be submitted');
-        } else {
-            WP_CLI::log(sprintf('Batch size: %d URLs per request (with 2s delay between batches)', $batch_size));
+        } elseif ($batch_size < 10000) {
+            WP_CLI::log(sprintf('Batch size: %d URLs per request', $batch_size));
         }
 
         $total_urls = array();

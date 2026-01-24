@@ -66,10 +66,10 @@ class DH_IndexNow_Helper {
      * Submit URLs to IndexNow API
      *
      * @param string|array $urls Single URL string or array of URLs
-     * @param int $batch_size Optional batch size (default: 100, max: 10000)
+     * @param int $batch_size Optional batch size (default: 10000, max: 10000)
      * @return array Results array with success/error info
      */
-    public static function submit_urls($urls, $batch_size = 100) {
+    public static function submit_urls($urls, $batch_size = 10000) {
         // Normalize input to array
         if (is_string($urls)) {
             $urls = array($urls);
@@ -114,11 +114,6 @@ class DH_IndexNow_Helper {
 
         foreach ($url_chunks as $batch_index => $batch_urls) {
             $batch_num = $batch_index + 1;
-
-            // Add delay between batches (skip first batch)
-            if ($batch_num > 1) {
-                sleep(2); // 2 second delay between batches
-            }
 
             // Build request payload
             $payload = array(
