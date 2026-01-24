@@ -35,7 +35,12 @@ class DH_IndexNow_Helper {
         $options = get_option('rank-math-options-instant-indexing', array());
 
         if (!empty($options)) {
-            // Check for 'api_key' (most common)
+            // Check for 'indexnow_api_key' (RankMath standard)
+            if (isset($options['indexnow_api_key']) && !empty(trim($options['indexnow_api_key']))) {
+                return trim($options['indexnow_api_key']);
+            }
+
+            // Check for 'api_key' (possible variant)
             if (isset($options['api_key']) && !empty(trim($options['api_key']))) {
                 return trim($options['api_key']);
             }
@@ -53,7 +58,7 @@ class DH_IndexNow_Helper {
         }
 
         // API key not found in any location
-        error_log('DH IndexNow: API key not found. Checked rank-math-options-instant-indexing (api_key, apiKey) and instant_indexing_settings (api_key)');
+        error_log('DH IndexNow: API key not found. Checked rank-math-options-instant-indexing (indexnow_api_key, api_key, apiKey) and instant_indexing_settings (api_key)');
         return false;
     }
 
@@ -76,8 +81,8 @@ class DH_IndexNow_Helper {
 
         // Get API key
         $api_key = self::get_api_key();
-        if (empty($api_key)) {
-            return array('success' => false, 'error' => 'API key not configured in RankMath settings');
+        if ($api_key === false) {
+            return array('success' => false, 'error' => 'API key not configured. Check RankMath Instant Indexing settings.');
         }
 
         // Get site URL for host and keyLocation

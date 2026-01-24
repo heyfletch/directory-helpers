@@ -11,6 +11,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Bricks Builder (theme framework)
 - Advanced Custom Fields (ACF) Pro
 - Redis Object Cache (recommended for performance)
+- Open Litespeed and LiteSpeed Cache plugin
+- RankMath
+- Admin Columns Pro (ability to add columns to admin tables)
+- AnalyticsWP (custom traffic analytics)
+- Automatic.css
+- Perfmatters
+- WP All Import Pro
+- WP All Export Pro
+- Fluent Forms Pro
+- xCloud hosting panel
+- Ubuntu 22
 
 ## Post Types & Taxonomies
 
