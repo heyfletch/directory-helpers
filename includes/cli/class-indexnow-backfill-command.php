@@ -40,6 +40,12 @@ class DH_IndexNow_Backfill_Command {
      * default: all
      * ---
      *
+     * [--batch-size=<number>]
+     * : URLs per IndexNow batch (1-10000, recommended: 100-500)
+     * ---
+     * default: 100
+     * ---
+     *
      * [--dry-run]
      * : Show what would be submitted without actually submitting
      *
@@ -54,6 +60,9 @@ class DH_IndexNow_Backfill_Command {
      *     # Backfill all city-listings
      *     wp directory-helpers indexnow backfill --post-type=city-listing
      *
+     *     # Submit with smaller batches (recommended for large volumes)
+     *     wp directory-helpers indexnow backfill --post-type=city-listing --batch-size=250
+     *
      *     # Dry run to see what would be submitted
      *     wp directory-helpers indexnow backfill --dry-run
      *
@@ -63,6 +72,7 @@ class DH_IndexNow_Backfill_Command {
         $limit = isset($assoc_args['limit']) ? absint($assoc_args['limit']) : 0;
         $offset = isset($assoc_args['offset']) ? absint($assoc_args['offset']) : 0;
         $post_type = isset($assoc_args['post-type']) ? sanitize_text_field($assoc_args['post-type']) : 'all';
+        $batch_size = isset($assoc_args['batch-size']) ? absint($assoc_args['batch-size']) : 100;
         $dry_run = isset($assoc_args['dry-run']);
 
         // Determine post types to process
@@ -79,6 +89,8 @@ class DH_IndexNow_Backfill_Command {
         WP_CLI::log('Starting IndexNow backfill...');
         if ($dry_run) {
             WP_CLI::warning('DRY RUN MODE - No URLs will be submitted');
+        } else {
+            WP_CLI::log(sprintf('Batch size: %d URLs per request (with 2s delay between batches)', $batch_size));
         }
 
         $total_urls = array();
@@ -135,7 +147,7 @@ class DH_IndexNow_Backfill_Command {
             if (!$dry_run && !empty($urls)) {
                 WP_CLI::log('Submitting to IndexNow API...');
 
-                $result = DH_IndexNow_Helper::submit_urls($urls);
+                $result = DH_IndexNow_Helper::submit_urls($urls, $batch_size);
 
                 // Check for early errors (API key missing, invalid host, etc.)
                 if (!$result['success'] && isset($result['error'])) {

@@ -66,9 +66,10 @@ class DH_IndexNow_Helper {
      * Submit URLs to IndexNow API
      *
      * @param string|array $urls Single URL string or array of URLs
+     * @param int $batch_size Optional batch size (default: 100, max: 10000)
      * @return array Results array with success/error info
      */
-    public static function submit_urls($urls) {
+    public static function submit_urls($urls, $batch_size = 100) {
         // Normalize input to array
         if (is_string($urls)) {
             $urls = array($urls);
@@ -98,17 +99,26 @@ class DH_IndexNow_Helper {
         // Build key location URL
         $key_location = trailingslashit($site_url) . $api_key . '.txt';
 
+        // Validate and cap batch size
+        $batch_size = max(1, min($batch_size, self::MAX_BATCH_SIZE));
+
         // Process URLs in batches
-        $url_chunks = array_chunk($urls, self::MAX_BATCH_SIZE);
+        $url_chunks = array_chunk($urls, $batch_size);
         $results = array(
             'success' => true,
             'total_urls' => count($urls),
             'batches' => count($url_chunks),
+            'batch_size' => $batch_size,
             'batch_results' => array(),
         );
 
         foreach ($url_chunks as $batch_index => $batch_urls) {
             $batch_num = $batch_index + 1;
+
+            // Add delay between batches (skip first batch)
+            if ($batch_num > 1) {
+                sleep(2); // 2 second delay between batches
+            }
 
             // Build request payload
             $payload = array(

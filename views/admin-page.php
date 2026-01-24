@@ -809,12 +809,24 @@ wp directory-helpers indexnow backfill --post-type=profile
 wp directory-helpers indexnow backfill --post-type=city-listing --limit=100
 
 # Submit with offset (process in chunks)
-wp directory-helpers indexnow backfill --offset=1000 --limit=1000</code></pre>
+wp directory-helpers indexnow backfill --offset=1000 --limit=1000
+
+# Use smaller batch sizes to avoid spam detection (RECOMMENDED for large volumes)
+wp directory-helpers indexnow backfill --post-type=city-listing --batch-size=250</code></pre>
+
+            <h4><?php esc_html_e('Batch Size Recommendations:', 'directory-helpers'); ?></h4>
+            <p style="background: #fff3cd; padding: 10px; border-left: 3px solid #f0ad4e;"><?php esc_html_e('⚠️ Large batches (1000+ URLs) may trigger spam filters. Use --batch-size=100-500 for better indexing success.', 'directory-helpers'); ?></p>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><strong><?php esc_html_e('Default:', 'directory-helpers'); ?></strong> <?php esc_html_e('100 URLs per batch (recommended)', 'directory-helpers'); ?></li>
+                <li><strong><?php esc_html_e('Large volume:', 'directory-helpers'); ?></strong> <?php esc_html_e('250-500 URLs per batch', 'directory-helpers'); ?></li>
+                <li><strong><?php esc_html_e('Maximum:', 'directory-helpers'); ?></strong> <?php esc_html_e('10,000 URLs per batch (IndexNow limit)', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('2-second delay automatically added between batches', 'directory-helpers'); ?></li>
+            </ul>
 
             <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
             <ul style="list-style: disc; margin-left: 20px;">
                 <li><?php esc_html_e('Retrieves Bing API key from RankMath Instant Indexing settings', 'directory-helpers'); ?></li>
-                <li><?php esc_html_e('Submits URLs in batches of up to 10,000 (IndexNow limit)', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Submits URLs in configurable batches with automatic delays', 'directory-helpers'); ?></li>
                 <li><?php esc_html_e('HTTP 200/202 response codes indicate successful submission', 'directory-helpers'); ?></li>
                 <li><?php esc_html_e('Non-blocking requests - does not slow down publishing workflow', 'directory-helpers'); ?></li>
                 <li><?php esc_html_e('Error logging to PHP error_log for troubleshooting', 'directory-helpers'); ?></li>
