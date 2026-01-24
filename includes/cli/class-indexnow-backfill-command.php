@@ -35,7 +35,7 @@ class DH_IndexNow_Backfill_Command {
      * ---
      *
      * [--post-type=<type>]
-     * : Post type to process (profile, city-listing, or 'all')
+     * : Post type to process (profile, city-listing, state-listing, or 'all')
      * ---
      * default: all
      * ---
@@ -45,11 +45,14 @@ class DH_IndexNow_Backfill_Command {
      *
      * ## EXAMPLES
      *
-     *     # Backfill all profiles and city-listings
+     *     # Backfill all profiles, city-listings, and state-listings
      *     wp directory-helpers indexnow backfill
      *
      *     # Backfill first 100 profiles only
      *     wp directory-helpers indexnow backfill --post-type=profile --limit=100
+     *
+     *     # Backfill all city-listings
+     *     wp directory-helpers indexnow backfill --post-type=city-listing
      *
      *     # Dry run to see what would be submitted
      *     wp directory-helpers indexnow backfill --dry-run
@@ -65,11 +68,11 @@ class DH_IndexNow_Backfill_Command {
         // Determine post types to process
         $post_types = array();
         if ($post_type === 'all') {
-            $post_types = array('profile', 'city-listing');
-        } elseif (in_array($post_type, array('profile', 'city-listing'), true)) {
+            $post_types = array('profile', 'city-listing', 'state-listing');
+        } elseif (in_array($post_type, array('profile', 'city-listing', 'state-listing'), true)) {
             $post_types = array($post_type);
         } else {
-            WP_CLI::error("Invalid post type. Use 'profile', 'city-listing', or 'all'");
+            WP_CLI::error("Invalid post type. Use 'profile', 'city-listing', 'state-listing', or 'all'");
             return;
         }
 
@@ -134,6 +137,19 @@ class DH_IndexNow_Backfill_Command {
 
                 $result = DH_IndexNow_Helper::submit_urls($urls);
 
+                // Check for early errors (API key missing, invalid host, etc.)
+                if (!$result['success'] && isset($result['error'])) {
+                    WP_CLI::warning($result['error']);
+                    WP_CLI::log('');
+                    WP_CLI::log('To fix this:');
+                    WP_CLI::log('  1. Install and activate RankMath SEO plugin');
+                    WP_CLI::log('  2. Go to RankMath → Instant Indexing');
+                    WP_CLI::log('  3. Add your Bing Webmaster Tools API key');
+                    WP_CLI::log('');
+                    $total_urls = array_merge($total_urls, $urls);
+                    continue; // Skip to next post type
+                }
+
                 if ($result['success']) {
                     WP_CLI::success(sprintf(
                         'Successfully submitted %d URLs in %d batch(es)',
@@ -148,13 +164,15 @@ class DH_IndexNow_Backfill_Command {
                     ));
 
                     // Show error details
-                    foreach ($result['batch_results'] as $batch_result) {
-                        if (!$batch_result['success']) {
-                            WP_CLI::log(sprintf(
-                                '  Batch %d: FAILED - %s',
-                                $batch_result['batch'],
-                                isset($batch_result['error']) ? $batch_result['error'] : 'HTTP ' . $batch_result['http_code']
-                            ));
+                    if (isset($result['batch_results']) && is_array($result['batch_results'])) {
+                        foreach ($result['batch_results'] as $batch_result) {
+                            if (!$batch_result['success']) {
+                                WP_CLI::log(sprintf(
+                                    '  Batch %d: FAILED - %s',
+                                    $batch_result['batch'],
+                                    isset($batch_result['error']) ? $batch_result['error'] : 'HTTP ' . $batch_result['http_code']
+                                ));
+                            }
                         }
                     }
                 }

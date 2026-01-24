@@ -26,19 +26,35 @@ class DH_IndexNow_Helper {
     const MAX_BATCH_SIZE = 10000;
 
     /**
-     * Get Bing API key from RankMath settings
+     * Get IndexNow API key from RankMath settings
      *
-     * @return string API key or empty string if not found
+     * @return string|false API key or false if not found
      */
     private static function get_api_key() {
+        // Try RankMath Instant Indexing option (main plugin)
         $options = get_option('rank-math-options-instant-indexing', array());
-        $api_key = isset($options['bing_api_key']) ? trim($options['bing_api_key']) : '';
 
-        if (empty($api_key)) {
-            error_log('DH IndexNow: RankMath Bing API key not found in rank-math-options-instant-indexing');
+        if (!empty($options)) {
+            // Check for 'api_key' (most common)
+            if (isset($options['api_key']) && !empty(trim($options['api_key']))) {
+                return trim($options['api_key']);
+            }
+
+            // Check for 'apiKey' (camelCase variant)
+            if (isset($options['apiKey']) && !empty(trim($options['apiKey']))) {
+                return trim($options['apiKey']);
+            }
         }
 
-        return $api_key;
+        // Try standalone instant indexing plugin option
+        $standalone_options = get_option('instant_indexing_settings', array());
+        if (!empty($standalone_options) && isset($standalone_options['api_key']) && !empty(trim($standalone_options['api_key']))) {
+            return trim($standalone_options['api_key']);
+        }
+
+        // API key not found in any location
+        error_log('DH IndexNow: API key not found. Checked rank-math-options-instant-indexing (api_key, apiKey) and instant_indexing_settings (api_key)');
+        return false;
     }
 
     /**

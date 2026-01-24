@@ -781,7 +781,56 @@ wp directory-helpers update-rankings dog-trainer
 # Step 2: Run state rankings after city rankings complete
 wp directory-helpers update-state-rankings dog-trainer</code></pre>
         </div>
-        
+
+        <div class="card" style="max-width: none; margin-top: 20px; background: #fff9e6; border-left: 4px solid #f0b429;">
+            <h3 style="margin-top: 0;"><?php esc_html_e('IndexNow Instant Indexing', 'directory-helpers'); ?></h3>
+            <p><?php esc_html_e('Automatically submit URLs to IndexNow API (Bing, Yandex, etc.) for instant indexing. Uses RankMath Bing API key.', 'directory-helpers'); ?></p>
+
+            <h4><?php esc_html_e('Automatic Submission:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><strong><?php esc_html_e('Content Production Queue:', 'directory-helpers'); ?></strong> <?php esc_html_e('Submits URLs automatically when posts are published via the queue', 'directory-helpers'); ?></li>
+                <li><strong><?php esc_html_e('Prep Pro:', 'directory-helpers'); ?></strong> <?php esc_html_e('Batch submits all published profiles at the end of processing', 'directory-helpers'); ?></li>
+                <li><strong><?php esc_html_e('Supported Post Types:', 'directory-helpers'); ?></strong> <?php esc_html_e('profile, city-listing, state-listing', 'directory-helpers'); ?></li>
+            </ul>
+
+            <h4><?php esc_html_e('Manual Backfill Command:', 'directory-helpers'); ?></h4>
+            <p><?php esc_html_e('Submit existing published posts to IndexNow API. Use this for one-time backfills or after bulk imports.', 'directory-helpers'); ?></p>
+
+            <pre style="background: #fff; padding: 10px; border: 1px solid #ddd; overflow-x: auto;"><code># Dry run - preview what would be submitted
+wp directory-helpers indexnow backfill --dry-run
+
+# Submit all published profiles, city-listings, and state-listings
+wp directory-helpers indexnow backfill
+
+# Submit only profiles (useful for testing)
+wp directory-helpers indexnow backfill --post-type=profile
+
+# Submit first 100 city-listings
+wp directory-helpers indexnow backfill --post-type=city-listing --limit=100
+
+# Submit with offset (process in chunks)
+wp directory-helpers indexnow backfill --offset=1000 --limit=1000</code></pre>
+
+            <h4><?php esc_html_e('How It Works:', 'directory-helpers'); ?></h4>
+            <ul style="list-style: disc; margin-left: 20px;">
+                <li><?php esc_html_e('Retrieves Bing API key from RankMath Instant Indexing settings', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Submits URLs in batches of up to 10,000 (IndexNow limit)', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('HTTP 200/202 response codes indicate successful submission', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Non-blocking requests - does not slow down publishing workflow', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Error logging to PHP error_log for troubleshooting', 'directory-helpers'); ?></li>
+            </ul>
+
+            <h4><?php esc_html_e('Setup Required:', 'directory-helpers'); ?></h4>
+            <ol style="margin-left: 20px;">
+                <li><?php esc_html_e('Install and activate RankMath SEO plugin', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Go to RankMath → Instant Indexing', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('Add your Bing Webmaster Tools API key', 'directory-helpers'); ?></li>
+                <li><?php esc_html_e('IndexNow submissions will work automatically', 'directory-helpers'); ?></li>
+            </ol>
+
+            <p><strong><?php esc_html_e('Tip:', 'directory-helpers'); ?></strong> <?php esc_html_e('Run the backfill command after initial setup to submit all existing content, then let automatic submission handle new posts.', 'directory-helpers'); ?></p>
+        </div>
+
         <!-- Available Modules Section (at bottom) -->
         <div class="card" style="max-width: none; margin-top: 30px;">
             <h2><?php esc_html_e('Available Modules', 'directory-helpers'); ?></h2>
