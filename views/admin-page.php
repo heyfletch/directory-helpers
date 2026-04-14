@@ -18,9 +18,9 @@ wp litespeed-purge all                                               # Clears pa
 # Cache Priming
 wp dh search rebuild-cache
 wp directory-helpers pre-warm-object-cache                           
-wp directory-helpers prime-cache --preset=priority --concurrency=5
-wp directory-helpers prime-cache --preset=listings --concurrency=5
-wp directory-helpers prime-cache --preset=profiles --concurrency=5</textarea>
+wp directory-helpers prime-cache --preset=priority --concurrency=7
+wp directory-helpers prime-cache --preset=listings --concurrency=7
+wp directory-helpers prime-cache --preset=profiles --concurrency=7</textarea>
         <p class="description" style="margin-top: 10px;">
             <button type="button" class="button button-secondary" onclick="this.previousElementSibling.select(); document.execCommand('copy'); this.textContent='<?php esc_html_e('Copied!', 'directory-helpers'); ?>'; setTimeout(() => this.textContent='<?php esc_html_e('Copy All Commands', 'directory-helpers'); ?>', 2000);">
                 <?php esc_html_e('Copy All Commands', 'directory-helpers'); ?>
