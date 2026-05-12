@@ -256,55 +256,55 @@
 
     /**
      * Render (or update) the global queue panel / log box.
-     * The panel is injected once and then updated in place.
+     * Only shows active (queued/running) jobs — completed/failed/stopped jobs
+     * are handled inline by applyQueueToButtons and never shown in the panel.
      */
     function renderQueuePanel(queue) {
         var $panel = $('#dh-cli-queue-panel');
 
-        if (!$panel.length) {
-            // Inject panel after the first .dh-cli-actions block, or at the top
-            // of #dh-cli-log-box if that exists.
-            var $anchor = $('#dh-cli-log-box');
-            if (!$anchor.length) {
-                $anchor = $('.dh-cli-actions').first().parent();
+        // Filter to only active jobs.
+        var activeJobs = [];
+        var latestRunning = null;
+        $.each(queue, function(_, job) {
+            if (job.status === 'queued' || job.status === 'running') {
+                activeJobs.push(job);
+                if (job.status === 'running') latestRunning = job;
             }
-            $anchor.after('<div id="dh-cli-queue-panel" style="margin-top:12px;"></div>');
-            $panel = $('#dh-cli-queue-panel');
-        }
+        });
 
-        if (!queue || queue.length === 0) {
-            $panel.html('');
+        // If nothing active, hide and clear the panel entirely.
+        if (activeJobs.length === 0) {
+            if ($panel.length) $panel.html('').hide();
             return;
         }
 
-        var hasActive     = false;
-        var rows          = '';
-        var latestRunning = null;
+        if (!$panel.length) {
+            var $anchor = $('.dh-cli-actions').first().closest('td');
+            if (!$anchor.length) $anchor = $('.dh-cli-actions').first().parent();
+            $anchor.append('<div id="dh-cli-queue-panel" style="margin-top:12px;"></div>');
+            $panel = $('#dh-cli-queue-panel');
+        }
+        $panel.show();
 
-        $.each(queue, function(_, job) {
-            if (job.status === 'queued' || job.status === 'running') hasActive = true;
-            if (job.status === 'running') latestRunning = job;
-
-            var badge = statusBadge(job.status);
-            var stopBtn = (job.status === 'queued' || job.status === 'running')
-                ? '<button type="button" class="button button-small dh-cli-stop-btn" ' +
-                  'data-job-id="' + escHtml(job.id) + '" style="margin-left:6px;">Stop</button>'
-                : '';
-
+        var rows = '';
+        $.each(activeJobs, function(_, job) {
+            var badge   = statusBadge(job.status);
+            var stopBtn = '<button type="button" class="button button-small dh-cli-stop-btn" ' +
+                          'data-job-id="' + escHtml(job.id) + '" style="margin-left:6px;">Stop</button>';
             rows += '<tr>' +
                 '<td style="padding:4px 8px;font-family:monospace;">' + escHtml(job.command) + '</td>' +
-                '<td style="padding:4px 8px;">' + badge + stopBtn + '</td>' +
+                '<td style="padding:4px 8px;white-space:nowrap;">' + badge + stopBtn + '</td>' +
                 '</tr>';
         });
 
-        var stopAllBtn = hasActive
+        var stopAllBtn = activeJobs.length > 1
             ? '<button type="button" class="button button-small dh-cli-stop-all-btn" ' +
               'style="margin-bottom:6px;">Stop All</button> '
             : '';
 
         var logHtml = '';
         if (latestRunning && latestRunning.log) {
-            logHtml = '<div id="dh-cli-log-box" style="margin-top:8px;background:#1d1d1d;color:#eee;' +
+            logHtml = '<div id="dh-cli-log-output" style="margin-top:8px;background:#1d1d1d;color:#eee;' +
                       'padding:10px;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto;' +
                       'white-space:pre-wrap;border-radius:4px;">' +
                       escHtml(latestRunning.log) + '</div>';
@@ -323,7 +323,7 @@
         );
 
         // Auto-scroll log.
-        var logEl = document.getElementById('dh-cli-log-box');
+        var logEl = document.getElementById('dh-cli-log-output');
         if (logEl) logEl.scrollTop = logEl.scrollHeight;
     }
 

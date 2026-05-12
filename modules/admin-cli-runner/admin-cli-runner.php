@@ -38,6 +38,9 @@ class DH_Admin_CLI_Runner {
         // Add term meta boxes for area and state taxonomies
         add_action('area_edit_form_fields',  array($this, 'render_area_term_actions'),  10, 2);
         add_action('state_edit_form_fields', array($this, 'render_state_term_actions'), 10, 2);
+
+        // Add meta box on profile post edit pages
+        add_action('add_meta_boxes', array($this, 'register_profile_meta_box'));
     }
 
     // -------------------------------------------------------------------------
@@ -212,7 +215,7 @@ class DH_Admin_CLI_Runner {
 
         if (in_array($hook, array('post.php', 'post-new.php'))) {
             $post_type = isset($_GET['post']) ? get_post_type($_GET['post']) : (isset($_POST['post_type']) ? sanitize_key($_POST['post_type']) : '');
-            if ($post_type !== 'city-listing') {
+            if (!in_array($post_type, array('city-listing', 'profile'))) {
                 return;
             }
         }
@@ -268,6 +271,7 @@ class DH_Admin_CLI_Runner {
         $allowed_commands = array(
             'update-rankings',
             'update-state-rankings',
+            'update-rankings-for-profile',
             'analyze-radius',
             'prime-cache',
         );
@@ -341,9 +345,8 @@ class DH_Admin_CLI_Runner {
 
         $queue = $this->reap_and_promote();
 
-        // Prune old completed/failed/stopped jobs older than 5 minutes so the
-        // queue doesn't grow unboundedly.
-        $cutoff = time() - 300;
+        // Prune finished jobs quickly (30 s) so they don't appear on other pages.
+        $cutoff = time() - 30;
         $queue = array_filter($queue, function($j) use ($cutoff) {
             if (in_array($j['status'], array('completed', 'failed', 'stopped'))) {
                 return ($j['finished_at'] > $cutoff);
@@ -478,6 +481,62 @@ class DH_Admin_CLI_Runner {
                 </p>
             </td>
         </tr>
+        <?php
+    }
+
+    /**
+     * Register meta box on profile post edit pages
+     */
+    public function register_profile_meta_box() {
+        add_meta_box(
+            'dh-update-rankings-for-profile',
+            __('Update Rankings', 'directory-helpers'),
+            array($this, 'render_profile_meta_box'),
+            'profile',
+            'side',
+            'default'
+        );
+    }
+
+    /**
+     * Render the "Update Rankings" meta box on profile edit pages
+     */
+    public function render_profile_meta_box($post) {
+        $post_id = $post->ID;
+
+        // Collect area terms for display.
+        $area_terms  = get_the_terms($post_id, 'area');
+        $state_terms = get_the_terms($post_id, 'state');
+
+        $area_names  = (!empty($area_terms) && !is_wp_error($area_terms))
+            ? implode(', ', wp_list_pluck($area_terms, 'name'))
+            : '—';
+
+        $primary_state = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
+        $state_display = $primary_state ? $primary_state->name : '—';
+
+        $command = 'update-rankings-for-profile --profile=' . $post_id;
+        ?>
+        <div class="dh-cli-actions">
+            <p style="margin:0 0 8px;">
+                <strong><?php esc_html_e('Cities:', 'directory-helpers'); ?></strong>
+                <span style="color:#555;"><?php echo esc_html($area_names); ?></span>
+            </p>
+            <p style="margin:0 0 10px;">
+                <strong><?php esc_html_e('Primary state:', 'directory-helpers'); ?></strong>
+                <span style="color:#555;"><?php echo esc_html($state_display); ?></span>
+            </p>
+            <button type="button" class="button button-primary dh-cli-run-btn"
+                    data-command="<?php echo esc_attr($command); ?>"
+                    style="width:100%;">
+                <span class="dashicons dashicons-sort" style="margin-top:3px;"></span>
+                <?php esc_html_e('Update All Rankings', 'directory-helpers'); ?>
+            </button>
+            <span class="dh-cli-status" style="display:block;margin-top:6px;"></span>
+        </div>
+        <p class="description" style="margin-top:8px;">
+            <?php esc_html_e('Recalculates city_rank for every city this profile is tagged with, and state_rank for the primary state. Purges page cache for all affected listing pages.', 'directory-helpers'); ?>
+        </p>
         <?php
     }
 
