@@ -1,202 +1,185 @@
 (function($) {
     'use strict';
 
-    var pollInterval = null;
-    var isPolling = false;
+    var pollInterval  = null;
+    var isPolling     = false;
 
-    /**
-     * Initialize CLI runner buttons
-     */
+    // Map of job_id -> { $btn, $status } so we can update the right row.
+    var jobButtonMap  = {};
+
+    // -------------------------------------------------------------------------
+    // Init
+    // -------------------------------------------------------------------------
+
     function init() {
-        // Run command buttons
         $(document).on('click', '.dh-cli-run-btn', function(e) {
             e.preventDefault();
-            var $btn = $(this);
-            var command = $btn.data('command') || $btn.data('command-template');
-            
+            var $btn     = $(this);
+            var command  = $btn.data('command') || $btn.data('command-template');
+
             if (!command) {
                 alert('No command specified');
                 return;
             }
 
+            // Replace {niche} placeholder if present.
+            if (command.indexOf('{niche}') !== -1) {
+                var selectedNiche = $('#dh-cli-niche-select').val() || 'dog-trainer';
+                command = command.replace('{niche}', selectedNiche);
+            }
+
             runCommand($btn, command);
         });
 
-        // Stop command button
         $(document).on('click', '.dh-cli-stop-btn', function(e) {
             e.preventDefault();
-            if (confirm(dhCliRunner.strings.confirm_stop)) {
-                stopCommand();
+            var jobId = $(this).data('job-id');
+            if (jobId) {
+                if (confirm(dhCliRunner.strings.confirm_stop)) {
+                    stopCommand(jobId, false);
+                }
             }
         });
 
-        // Start polling if a command is running
+        $(document).on('click', '.dh-cli-stop-all-btn', function(e) {
+            e.preventDefault();
+            if (confirm(dhCliRunner.strings.confirm_stop_all)) {
+                stopCommand('', true);
+            }
+        });
+
         checkInitialStatus();
     }
 
-    /**
-     * Run a CLI command
-     */
+    // -------------------------------------------------------------------------
+    // Run command
+    // -------------------------------------------------------------------------
+
     function runCommand($btn, command) {
         var $status = $btn.siblings('.dh-cli-status');
-        
-        // If command is a template, replace {niche} with selected niche
-        if (command.indexOf('{niche}') !== -1) {
-            var selectedNiche = $('#dh-cli-niche-select').val() || 'dog-trainer';
-            command = command.replace('{niche}', selectedNiche);
-        }
-        
-        // Store command and button reference for later use in polling
-        $btn.data('running-command', command);
-        $('.dh-cli-run-btn').data('active-button', $btn); // Track which button is active
-        
+
         $btn.prop('disabled', true);
-        $status.html('<span class="spinner is-active" style="float: none; margin: 0 5px;"></span> ' + dhCliRunner.strings.running);
+        $status.html('<span class="spinner is-active" style="float:none;margin:0 5px;"></span>' +
+                     dhCliRunner.strings.queued);
 
         $.ajax({
-            url: dhCliRunner.ajaxUrl,
+            url:  dhCliRunner.ajaxUrl,
             type: 'POST',
             data: {
-                action: 'dh_run_cli_command',
-                nonce: dhCliRunner.nonce,
+                action:  'dh_run_cli_command',
+                nonce:   dhCliRunner.nonce,
                 command: command
             },
             success: function(response) {
                 if (response.success) {
-                    updateGlobalStatus(command, 'running');
+                    var jobId  = response.data.job_id;
+                    var status = response.data.status; // 'queued' or 'running'
+
+                    // Remember which button owns this job.
+                    jobButtonMap[jobId] = { $btn: $btn, $status: $status };
+
+                    setButtonStatus($btn, $status, status, jobId);
+                    renderQueuePanel(response.data.queue);
                     startPolling();
                 } else {
                     $btn.prop('disabled', false);
-                    $status.html('<span style="color: #dc3232;">❌ ' + (response.data.message || dhCliRunner.strings.failed) + '</span>');
-                    // Clear tracking data on error
-                    $btn.removeData('active-button');
+                    $status.html('<span style="color:#dc3232;">&#10007; ' +
+                                 escHtml(response.data.message || dhCliRunner.strings.failed) +
+                                 '</span>');
                 }
             },
-            error: function(response) {
+            error: function() {
                 $btn.prop('disabled', false);
-                $status.html('<span style="color: #dc3232;">❌ ' + (response.data.message || dhCliRunner.strings.failed) + '</span>');
-                // Clear tracking data on error
-                $btn.removeData('active-button');
+                $status.html('<span style="color:#dc3232;">&#10007; ' +
+                             dhCliRunner.strings.failed + '</span>');
             }
         });
     }
 
-    /**
-     * Stop running command
-     */
-    function stopCommand() {
+    // -------------------------------------------------------------------------
+    // Stop command(s)
+    // -------------------------------------------------------------------------
+
+    function stopCommand(jobId, stopAll) {
         $.ajax({
-            url: dhCliRunner.ajaxUrl,
+            url:  dhCliRunner.ajaxUrl,
             type: 'POST',
             data: {
-                action: 'dh_stop_cli_command',
-                nonce: dhCliRunner.nonce
+                action:   'dh_stop_cli_command',
+                nonce:    dhCliRunner.nonce,
+                job_id:   jobId,
+                stop_all: stopAll ? 1 : 0
             },
             success: function(response) {
-                stopPolling();
-                updateGlobalStatus('', 'stopped');
-                
-                // Get the active button and update only its status
-                var $activeBtn = $('.dh-cli-run-btn').data('active-button');
-                if ($activeBtn && $activeBtn.length) {
-                    $activeBtn.prop('disabled', false);
-                    $activeBtn.siblings('.dh-cli-status').html('<span style="color: #f0ad4e;">⚠️ ' + dhCliRunner.strings.stopped + '</span>');
-                } else {
-                    // Fallback: update all buttons if no active button tracked
-                    $('.dh-cli-run-btn').prop('disabled', false);
-                    $('.dh-cli-status').html('<span style="color: #f0ad4e;">⚠️ ' + dhCliRunner.strings.stopped + '</span>');
+                if (response.success) {
+                    renderQueuePanel(response.data.queue);
+                    applyQueueToButtons(response.data.queue);
+
+                    var hasActive = false;
+                    $.each(response.data.queue, function(_, job) {
+                        if (job.status === 'queued' || job.status === 'running') {
+                            hasActive = true;
+                        }
+                    });
+                    if (!hasActive) {
+                        stopPolling();
+                    }
                 }
-                
-                // Clear tracking data
-                $('.dh-cli-run-btn').removeData('active-button');
             }
         });
     }
 
-    /**
-     * Check initial status on page load
-     */
+    // -------------------------------------------------------------------------
+    // Polling
+    // -------------------------------------------------------------------------
+
     function checkInitialStatus() {
         $.ajax({
-            url: dhCliRunner.ajaxUrl,
+            url:  dhCliRunner.ajaxUrl,
             type: 'POST',
             data: {
                 action: 'dh_get_cli_status',
-                nonce: dhCliRunner.nonce
+                nonce:  dhCliRunner.nonce
             },
             success: function(response) {
-                if (response.success && response.data.running) {
-                    startPolling();
+                if (response.success) {
+                    renderQueuePanel(response.data.queue);
+                    applyQueueToButtons(response.data.queue);
+                    if (response.data.has_active) {
+                        startPolling();
+                    }
                 }
             }
         });
     }
 
-    /**
-     * Start polling for status updates
-     */
     function startPolling() {
         if (isPolling) return;
-        isPolling = true;
-        
-        // Show log box
+        isPolling    = true;
         $('#dh-cli-log-box').show();
 
         pollInterval = setInterval(function() {
             $.ajax({
-                url: dhCliRunner.ajaxUrl,
+                url:  dhCliRunner.ajaxUrl,
                 type: 'POST',
                 data: {
                     action: 'dh_get_cli_status',
-                    nonce: dhCliRunner.nonce
+                    nonce:  dhCliRunner.nonce
                 },
                 success: function(response) {
-                    if (response.success) {
-                        // Update log display
-                        if (response.data.log) {
-                            $('#dh-cli-log-output').text(response.data.log);
-                            // Auto-scroll to bottom
-                            var logBox = document.getElementById('dh-cli-log-box');
-                            if (logBox) {
-                                logBox.scrollTop = logBox.scrollHeight;
-                            }
-                        }
-                        
-                        // Update status
-                        if (response.data.status === 'running') {
-                            updateGlobalStatus(response.data.command, 'running');
-                        } else if (response.data.status === 'completed') {
-                            stopPolling();
-                            updateGlobalStatus('', 'completed');
-                            
-                            // Get the active button and update only its status
-                            var $activeBtn = $('.dh-cli-run-btn').data('active-button');
-                            if ($activeBtn && $activeBtn.length) {
-                                $activeBtn.prop('disabled', false);
-                                $activeBtn.siblings('.dh-cli-status').html('<span style="color: #46b450;">✓ ' + dhCliRunner.strings.completed + '</span>');
-                                
-                                // Refresh page if this was an Analyze Radius command on term edit page
-                                var runningCommand = $activeBtn.data('running-command');
-                                if (runningCommand && runningCommand.indexOf('analyze-radius') !== -1 && window.location.href.indexOf('term.php') !== -1) {
-                                    setTimeout(function() {
-                                        window.location.reload();
-                                    }, 1000);
-                                }
-                            }
-                            
-                            // Clear tracking data
-                            $('.dh-cli-run-btn').removeData('running-command');
-                            $('.dh-cli-run-btn').removeData('active-button');
-                        }
+                    if (!response.success) return;
+
+                    renderQueuePanel(response.data.queue);
+                    applyQueueToButtons(response.data.queue);
+
+                    if (!response.data.has_active) {
+                        stopPolling();
                     }
                 }
             });
-        }, 2000); // Poll every 2 seconds
+        }, 2000);
     }
 
-    /**
-     * Stop polling
-     */
     function stopPolling() {
         if (pollInterval) {
             clearInterval(pollInterval);
@@ -205,31 +188,175 @@
         isPolling = false;
     }
 
-    /**
-     * Update global status display
-     */
-    function updateGlobalStatus(command, status) {
-        var $globalStatus = $('#dh-cli-global-status');
-        var $stopBtn = $('.dh-cli-stop-btn');
+    // -------------------------------------------------------------------------
+    // UI helpers
+    // -------------------------------------------------------------------------
 
-        if (status === 'running' && command) {
-            $globalStatus.html('<span style="color: #0073aa;">⏳ ' + command + '</span>');
-            if ($stopBtn.length === 0) {
-                $globalStatus.after('<button type="button" class="button button-small dh-cli-stop-btn" style="margin-left: 10px;">Stop</button>');
-            }
-        } else if (status === 'completed') {
-            $globalStatus.html('<span style="color: #46b450;">✓ Ready</span>');
-            $stopBtn.remove();
-        } else if (status === 'stopped') {
-            $globalStatus.html('<span style="color: #f0ad4e;">⚠️ Stopped</span>');
-            $stopBtn.remove();
-        } else {
-            $globalStatus.html('<span style="color: #46b450;">✓ Ready</span>');
-            $stopBtn.remove();
+    /**
+     * Update a single button's inline status indicator.
+     */
+    function setButtonStatus($btn, $status, status, jobId) {
+        var stopHtml = jobId
+            ? ' <button type="button" class="button button-small dh-cli-stop-btn" ' +
+              'data-job-id="' + escHtml(jobId) + '" style="margin-left:6px;">Stop</button>'
+            : '';
+
+        switch (status) {
+            case 'running':
+                $btn.prop('disabled', true);
+                $status.html('<span class="spinner is-active" style="float:none;margin:0 5px;"></span>' +
+                             '<span style="color:#0073aa;">' + dhCliRunner.strings.running + '</span>' +
+                             stopHtml);
+                break;
+            case 'queued':
+                $btn.prop('disabled', true);
+                $status.html('<span class="spinner is-active" style="float:none;margin:0 5px;"></span>' +
+                             '<span style="color:#666;">' + dhCliRunner.strings.queued + '</span>' +
+                             stopHtml);
+                break;
+            case 'completed':
+                $btn.prop('disabled', false);
+                $status.html('<span style="color:#46b450;">&#10003; ' + dhCliRunner.strings.completed + '</span>');
+                break;
+            case 'failed':
+                $btn.prop('disabled', false);
+                $status.html('<span style="color:#dc3232;">&#10007; ' + dhCliRunner.strings.failed + '</span>');
+                break;
+            case 'stopped':
+                $btn.prop('disabled', false);
+                $status.html('<span style="color:#f0ad4e;">&#9888; ' + dhCliRunner.strings.stopped + '</span>');
+                break;
         }
     }
 
-    // Initialize on document ready
+    /**
+     * Walk the returned queue and update any buttons we're tracking.
+     * Also reload term pages when an analyze-radius job finishes.
+     */
+    function applyQueueToButtons(queue) {
+        $.each(queue, function(_, job) {
+            var entry = jobButtonMap[job.id];
+            if (!entry) return;
+
+            setButtonStatus(entry.$btn, entry.$status, job.status, job.id);
+
+            // Auto-reload term edit page after analyze-radius completes.
+            if ((job.status === 'completed') &&
+                job.command.indexOf('analyze-radius') !== -1 &&
+                window.location.href.indexOf('term.php') !== -1) {
+                setTimeout(function() { window.location.reload(); }, 1000);
+            }
+
+            // Remove from map once terminal state is reached.
+            if (['completed', 'failed', 'stopped'].indexOf(job.status) !== -1) {
+                delete jobButtonMap[job.id];
+            }
+        });
+    }
+
+    /**
+     * Render (or update) the global queue panel / log box.
+     * The panel is injected once and then updated in place.
+     */
+    function renderQueuePanel(queue) {
+        var $panel = $('#dh-cli-queue-panel');
+
+        if (!$panel.length) {
+            // Inject panel after the first .dh-cli-actions block, or at the top
+            // of #dh-cli-log-box if that exists.
+            var $anchor = $('#dh-cli-log-box');
+            if (!$anchor.length) {
+                $anchor = $('.dh-cli-actions').first().parent();
+            }
+            $anchor.after('<div id="dh-cli-queue-panel" style="margin-top:12px;"></div>');
+            $panel = $('#dh-cli-queue-panel');
+        }
+
+        if (!queue || queue.length === 0) {
+            $panel.html('');
+            return;
+        }
+
+        var hasActive     = false;
+        var rows          = '';
+        var latestRunning = null;
+
+        $.each(queue, function(_, job) {
+            if (job.status === 'queued' || job.status === 'running') hasActive = true;
+            if (job.status === 'running') latestRunning = job;
+
+            var badge = statusBadge(job.status);
+            var stopBtn = (job.status === 'queued' || job.status === 'running')
+                ? '<button type="button" class="button button-small dh-cli-stop-btn" ' +
+                  'data-job-id="' + escHtml(job.id) + '" style="margin-left:6px;">Stop</button>'
+                : '';
+
+            rows += '<tr>' +
+                '<td style="padding:4px 8px;font-family:monospace;">' + escHtml(job.command) + '</td>' +
+                '<td style="padding:4px 8px;">' + badge + stopBtn + '</td>' +
+                '</tr>';
+        });
+
+        var stopAllBtn = hasActive
+            ? '<button type="button" class="button button-small dh-cli-stop-all-btn" ' +
+              'style="margin-bottom:6px;">Stop All</button> '
+            : '';
+
+        var logHtml = '';
+        if (latestRunning && latestRunning.log) {
+            logHtml = '<div id="dh-cli-log-box" style="margin-top:8px;background:#1d1d1d;color:#eee;' +
+                      'padding:10px;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto;' +
+                      'white-space:pre-wrap;border-radius:4px;">' +
+                      escHtml(latestRunning.log) + '</div>';
+        }
+
+        $panel.html(
+            stopAllBtn +
+            '<table style="width:100%;border-collapse:collapse;border:1px solid #ccd0d4;">' +
+            '<thead><tr>' +
+            '<th style="padding:4px 8px;background:#f1f1f1;text-align:left;">Command</th>' +
+            '<th style="padding:4px 8px;background:#f1f1f1;text-align:left;">Status</th>' +
+            '</tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+            '</table>' +
+            logHtml
+        );
+
+        // Auto-scroll log.
+        var logEl = document.getElementById('dh-cli-log-box');
+        if (logEl) logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function statusBadge(status) {
+        var colors = {
+            queued:    '#888',
+            running:   '#0073aa',
+            completed: '#46b450',
+            failed:    '#dc3232',
+            stopped:   '#f0ad4e'
+        };
+        var labels = {
+            queued:    'Queued',
+            running:   'Running',
+            completed: 'Completed',
+            failed:    'Failed',
+            stopped:   'Stopped'
+        };
+        var c = colors[status] || '#888';
+        var l = labels[status] || status;
+        return '<span style="display:inline-block;padding:2px 8px;border-radius:3px;' +
+               'background:' + c + ';color:#fff;font-size:11px;">' + escHtml(l) + '</span>';
+    }
+
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    // Initialize on document ready.
     $(document).ready(init);
 
 })(jQuery);

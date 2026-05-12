@@ -3,6 +3,8 @@
  * Admin CLI Runner Module
  *
  * Provides admin UI buttons to trigger WP-CLI commands via background processes.
+ * Supports a configurable number of concurrent jobs; additional requests are queued
+ * and automatically promoted when a running slot opens up.
  *
  * @package Directory_Helpers
  */
@@ -13,29 +15,183 @@ if (!defined('ABSPATH')) {
 
 class DH_Admin_CLI_Runner {
 
-    const OPTION_RUNNING_COMMAND = 'dh_cli_running_command';
-    const OPTION_COMMAND_LOG = 'dh_cli_command_log';
-    const OPTION_COMMAND_STATUS = 'dh_cli_command_status';
+    /**
+     * WP option key that stores the entire job queue (JSON array).
+     */
+    const OPTION_QUEUE = 'dh_cli_queue';
+
+    /**
+     * Maximum number of jobs that may run simultaneously.
+     * Increase this to match your server's thread count.
+     */
+    const MAX_CONCURRENT = 2;
 
     public function __construct() {
         // AJAX handlers
-        add_action('wp_ajax_dh_run_cli_command', array($this, 'ajax_run_command'));
-        add_action('wp_ajax_dh_get_cli_status', array($this, 'ajax_get_status'));
+        add_action('wp_ajax_dh_run_cli_command',  array($this, 'ajax_run_command'));
+        add_action('wp_ajax_dh_get_cli_status',   array($this, 'ajax_get_status'));
         add_action('wp_ajax_dh_stop_cli_command', array($this, 'ajax_stop_command'));
 
         // Enqueue scripts on admin pages
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
 
         // Add term meta boxes for area and state taxonomies
-        add_action('area_edit_form_fields', array($this, 'render_area_term_actions'), 10, 2);
+        add_action('area_edit_form_fields',  array($this, 'render_area_term_actions'),  10, 2);
         add_action('state_edit_form_fields', array($this, 'render_state_term_actions'), 10, 2);
     }
+
+    // -------------------------------------------------------------------------
+    // Queue helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Load the queue from the DB. Returns an array of job objects (assoc arrays).
+     */
+    private function load_queue() {
+        $raw = get_option(self::OPTION_QUEUE, '[]');
+        $queue = json_decode($raw, true);
+        return is_array($queue) ? $queue : array();
+    }
+
+    /**
+     * Persist the queue to the DB.
+     */
+    private function save_queue(array $queue) {
+        update_option(self::OPTION_QUEUE, json_encode(array_values($queue)));
+    }
+
+    /**
+     * Check whether a PID is actually alive on this system.
+     */
+    private function pid_is_alive($pid) {
+        $pid = (int) $pid;
+        if ($pid <= 0) {
+            return false;
+        }
+        // kill -0 does not send a signal; it just checks whether the process exists.
+        exec("kill -0 {$pid} 2>/dev/null", $out, $rc);
+        return $rc === 0;
+    }
+
+    /**
+     * Reap finished jobs and promote queued ones into open slots.
+     * Call this at the start of every status poll.
+     *
+     * @return array The updated queue.
+     */
+    private function reap_and_promote() {
+        $queue = $this->load_queue();
+
+        // 1. Reap: mark running jobs whose process has died as completed/failed.
+        foreach ($queue as &$job) {
+            if ($job['status'] !== 'running') {
+                continue;
+            }
+            if (!$this->pid_is_alive($job['pid'])) {
+                // Process is gone — determine success/failure from log tail.
+                $log_file = $job['log_file'];
+                if ($log_file && file_exists($log_file)) {
+                    $tail = file_get_contents($log_file);
+                    if (strpos($tail, 'Success:') !== false) {
+                        $job['status'] = 'completed';
+                    } elseif (strpos($tail, 'Error:') !== false || strpos($tail, 'Warning:') !== false) {
+                        $job['status'] = 'failed';
+                    } else {
+                        // Log exists but no clear signal — treat as completed.
+                        $job['status'] = 'completed';
+                    }
+                } else {
+                    $job['status'] = 'failed';
+                }
+                $job['finished_at'] = time();
+            }
+        }
+        unset($job);
+
+        // 2. Count open slots.
+        $running_count = count(array_filter($queue, function($j) { return $j['status'] === 'running'; }));
+        $open_slots    = self::MAX_CONCURRENT - $running_count;
+
+        // 3. Promote: move queued jobs into open slots.
+        foreach ($queue as &$job) {
+            if ($open_slots <= 0) {
+                break;
+            }
+            if ($job['status'] !== 'queued') {
+                continue;
+            }
+            $pid = $this->launch_process($job['command'], $job['log_file']);
+            if ($pid) {
+                $job['status']     = 'running';
+                $job['pid']        = $pid;
+                $job['started_at'] = time();
+                $open_slots--;
+            } else {
+                $job['status'] = 'failed';
+            }
+        }
+        unset($job);
+
+        $this->save_queue($queue);
+        return $queue;
+    }
+
+    /**
+     * Launch a WP-CLI command in the background and return its PID (or 0 on failure).
+     */
+    private function launch_process($command, $log_file) {
+        $wp_path = ABSPATH;
+
+        // Find wp-cli executable.
+        $wp_cli_path = false;
+        foreach (array('/usr/local/bin/wp', '/usr/bin/wp', '/opt/homebrew/bin/wp') as $p) {
+            if (file_exists($p)) {
+                $wp_cli_path = $p;
+                break;
+            }
+        }
+        if (!$wp_cli_path) {
+            $found = trim(shell_exec('which wp 2>/dev/null'));
+            if (!empty($found) && file_exists($found)) {
+                $wp_cli_path = $found;
+            }
+        }
+        if (!$wp_cli_path) {
+            return 0;
+        }
+
+        $pid_file = $log_file . '.pid';
+
+        $full_command = sprintf(
+            'cd %s && %s directory-helpers %s --path=%s > %s 2>&1 & echo $! > %s',
+            escapeshellarg($wp_path),
+            escapeshellarg($wp_cli_path),
+            $command,
+            escapeshellarg($wp_path),
+            escapeshellarg($log_file),
+            escapeshellarg($pid_file)
+        );
+
+        exec($full_command);
+
+        // Give the shell a moment to write the PID file.
+        usleep(100000); // 0.1 s
+
+        if (file_exists($pid_file)) {
+            $pid = (int) trim(file_get_contents($pid_file));
+            return $pid > 0 ? $pid : 0;
+        }
+        return 0;
+    }
+
+    // -------------------------------------------------------------------------
+    // Enqueue scripts
+    // -------------------------------------------------------------------------
 
     /**
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook) {
-        // Load on directory-helpers admin page, term edit pages, and post edit pages
         $load_on = array(
             'toplevel_page_directory-helpers',
             'term.php',
@@ -47,7 +203,6 @@ class DH_Admin_CLI_Runner {
             return;
         }
 
-        // Check if we're on area or state term edit
         if ($hook === 'term.php') {
             $taxonomy = isset($_GET['taxonomy']) ? sanitize_key($_GET['taxonomy']) : '';
             if (!in_array($taxonomy, array('area', 'state'))) {
@@ -55,7 +210,6 @@ class DH_Admin_CLI_Runner {
             }
         }
 
-        // Check if we're on city-listing post edit
         if (in_array($hook, array('post.php', 'post-new.php'))) {
             $post_type = isset($_GET['post']) ? get_post_type($_GET['post']) : (isset($_POST['post_type']) ? sanitize_key($_POST['post_type']) : '');
             if ($post_type !== 'city-listing') {
@@ -72,14 +226,17 @@ class DH_Admin_CLI_Runner {
         );
 
         wp_localize_script('dh-cli-runner', 'dhCliRunner', array(
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('dh_cli_runner'),
-            'strings' => array(
-                'running' => __('Running...', 'directory-helpers'),
-                'completed' => __('Completed!', 'directory-helpers'),
-                'failed' => __('Failed', 'directory-helpers'),
-                'stopped' => __('Stopped', 'directory-helpers'),
-                'confirm_stop' => __('Are you sure you want to stop this command?', 'directory-helpers'),
+            'ajaxUrl'      => admin_url('admin-ajax.php'),
+            'nonce'        => wp_create_nonce('dh_cli_runner'),
+            'maxConcurrent' => self::MAX_CONCURRENT,
+            'strings'      => array(
+                'running'      => __('Running…', 'directory-helpers'),
+                'queued'       => __('Queued…', 'directory-helpers'),
+                'completed'    => __('Completed!', 'directory-helpers'),
+                'failed'       => __('Failed', 'directory-helpers'),
+                'stopped'      => __('Stopped', 'directory-helpers'),
+                'confirm_stop' => __('Stop this command?', 'directory-helpers'),
+                'confirm_stop_all' => __('Stop ALL running and queued commands?', 'directory-helpers'),
             ),
         ));
 
@@ -91,8 +248,12 @@ class DH_Admin_CLI_Runner {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // AJAX handlers
+    // -------------------------------------------------------------------------
+
     /**
-     * AJAX: Run a CLI command
+     * AJAX: Enqueue (and possibly immediately start) a CLI command.
      */
     public function ajax_run_command() {
         check_ajax_referer('dh_cli_runner', 'nonce');
@@ -102,8 +263,8 @@ class DH_Admin_CLI_Runner {
         }
 
         $command = isset($_POST['command']) ? sanitize_text_field($_POST['command']) : '';
-        
-        // Whitelist of allowed commands
+
+        // Whitelist of allowed commands.
         $allowed_commands = array(
             'update-rankings',
             'update-state-rankings',
@@ -111,80 +272,65 @@ class DH_Admin_CLI_Runner {
             'prime-cache',
         );
 
-        // Parse command to validate
-        $parts = explode(' ', $command);
+        $parts        = explode(' ', $command);
         $base_command = isset($parts[0]) ? $parts[0] : '';
 
         if (!in_array($base_command, $allowed_commands)) {
             wp_send_json_error(array('message' => 'Command not allowed: ' . $base_command));
         }
 
-        // Check if a command is already running
-        $running = get_option(self::OPTION_RUNNING_COMMAND, '');
-        if (!empty($running)) {
-            wp_send_json_error(array('message' => 'Another command is already running: ' . $running));
+        // Reap dead jobs first so we have an accurate count.
+        $queue = $this->reap_and_promote();
+
+        // Reject duplicate: same command already queued or running.
+        foreach ($queue as $job) {
+            if (in_array($job['status'], array('queued', 'running')) && $job['command'] === $command) {
+                wp_send_json_error(array('message' => 'This command is already queued or running.'));
+            }
         }
 
-        // Build full WP-CLI command with logging
-        $wp_path = ABSPATH;
-        $log_file = wp_upload_dir()['basedir'] . '/dh-cli-log-' . time() . '.log';
-        
-        // Find wp-cli executable - try common paths
-        $wp_cli_path = false;
-        $possible_paths = array(
-            '/usr/local/bin/wp',
-            '/usr/bin/wp',
-            '/opt/homebrew/bin/wp',
-            exec('which wp 2>/dev/null'),
+        // Build a unique log file for this job.
+        $log_file = wp_upload_dir()['basedir'] . '/dh-cli-log-' . time() . '-' . mt_rand(1000, 9999) . '.log';
+
+        $job_id = uniqid('dhjob_', true);
+        $new_job = array(
+            'id'          => $job_id,
+            'command'     => $command,
+            'status'      => 'queued',
+            'pid'         => 0,
+            'log_file'    => $log_file,
+            'queued_at'   => time(),
+            'started_at'  => 0,
+            'finished_at' => 0,
         );
-        
-        foreach ($possible_paths as $path) {
-            if (!empty($path) && file_exists($path)) {
-                $wp_cli_path = $path;
+
+        $queue[] = $new_job;
+        $this->save_queue($queue);
+
+        // Immediately try to promote (may launch right away if a slot is free).
+        $queue = $this->reap_and_promote();
+
+        // Find this job's current status.
+        $job_status = 'queued';
+        foreach ($queue as $j) {
+            if ($j['id'] === $job_id) {
+                $job_status = $j['status'];
                 break;
             }
         }
-        
-        if (!$wp_cli_path) {
-            wp_send_json_error(array('message' => 'WP-CLI not found. Tried: ' . implode(', ', $possible_paths)));
-        }
-        
-        $full_command = sprintf(
-            'cd %s && %s directory-helpers %s --path=%s > %s 2>&1 & echo $! > %s.pid',
-            escapeshellarg($wp_path),
-            escapeshellarg($wp_cli_path),
-            $command,
-            escapeshellarg($wp_path),
-            escapeshellarg($log_file),
-            escapeshellarg($log_file)
-        );
 
-        // Store command state
-        update_option(self::OPTION_RUNNING_COMMAND, $command);
-        update_option(self::OPTION_COMMAND_STATUS, 'running');
-        update_option(self::OPTION_COMMAND_LOG, 'Started: ' . $command . "\nLog file: " . $log_file . "\n");
-        update_option('dh_cli_log_file', $log_file);
-        update_option('dh_cli_log_size', 0);
-        update_option('dh_cli_log_check_time', time());
-
-        // Execute command in background
-        exec($full_command);
-
-        // Store PID for tracking
-        $pid_file = $log_file . '.pid';
-        if (file_exists($pid_file)) {
-            $pid = trim(file_get_contents($pid_file));
-            update_option('dh_cli_command_pid', $pid);
-        }
-        
         wp_send_json_success(array(
-            'message' => 'Command started: ' . $command,
-            'command' => $command,
+            'message' => $job_status === 'running'
+                ? 'Command started: ' . $command
+                : 'Command queued: ' . $command,
+            'job_id'  => $job_id,
+            'status'  => $job_status,
+            'queue'   => $this->queue_for_response($queue),
         ));
     }
 
     /**
-     * AJAX: Get command status
+     * AJAX: Return full queue state (reaps dead jobs, promotes queued ones).
      */
     public function ajax_get_status() {
         check_ajax_referer('dh_cli_runner', 'nonce');
@@ -193,77 +339,35 @@ class DH_Admin_CLI_Runner {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $running = get_option(self::OPTION_RUNNING_COMMAND, '');
-        $status = get_option(self::OPTION_COMMAND_STATUS, 'idle');
-        $log = get_option(self::OPTION_COMMAND_LOG, '');
+        $queue = $this->reap_and_promote();
 
-        // Check if the command process is still running
-        if ($status === 'running' && !empty($running)) {
-            $log_file = get_option('dh_cli_log_file', '');
-            $last_size = (int) get_option('dh_cli_log_size', 0);
-            $last_check = (int) get_option('dh_cli_log_check_time', 0);
-            $current_time = time();
-            
-            $is_running = false;
-            $current_size = 0;
-            
-            if ($log_file && file_exists($log_file)) {
-                $current_size = filesize($log_file);
-                clearstatcache(true, $log_file);
-                
-                // Check if log file is still growing (command still running)
-                if ($current_size > $last_size) {
-                    $is_running = true;
-                    update_option('dh_cli_log_size', $current_size);
-                    update_option('dh_cli_log_check_time', $current_time);
-                } elseif ($current_time - $last_check < 10) {
-                    // Give it 10 seconds of no growth before declaring complete
-                    $is_running = true;
-                } else {
-                    // Log file hasn't grown in 10+ seconds, check for Success message
-                    $log_content = file_get_contents($log_file);
-                    if (strpos($log_content, 'Success:') !== false || strpos($log_content, 'Error:') !== false) {
-                        $is_running = false;
-                    } else {
-                        // Still running but slow
-                        $is_running = true;
-                    }
-                }
-                
-                // Get last 500 chars of log for display
-                $log_tail = substr(file_get_contents($log_file), -2000);
-                $log = "Command: {$running}\nLog file: {$log_file}\nSize: {$current_size} bytes\n\n--- Recent output ---\n{$log_tail}";
-            } else {
-                // Log file doesn't exist yet, still starting
-                if ($current_time - $last_check < 30) {
-                    $is_running = true;
-                    $log = "Command starting... waiting for log file.\nLog file: {$log_file}";
-                }
+        // Prune old completed/failed/stopped jobs older than 5 minutes so the
+        // queue doesn't grow unboundedly.
+        $cutoff = time() - 300;
+        $queue = array_filter($queue, function($j) use ($cutoff) {
+            if (in_array($j['status'], array('completed', 'failed', 'stopped'))) {
+                return ($j['finished_at'] > $cutoff);
             }
-            
-            if (!$is_running) {
-                update_option(self::OPTION_COMMAND_STATUS, 'completed');
-                update_option(self::OPTION_RUNNING_COMMAND, '');
-                update_option('dh_cli_command_pid', 0);
-                $status = 'completed';
-                
-                if ($log_file && file_exists($log_file)) {
-                    $log_content = file_get_contents($log_file);
-                    $log = "Completed!\n\n" . substr($log_content, -3000);
-                }
+            return true;
+        });
+        $this->save_queue($queue);
+
+        $has_active = false;
+        foreach ($queue as $j) {
+            if (in_array($j['status'], array('queued', 'running'))) {
+                $has_active = true;
+                break;
             }
         }
 
         wp_send_json_success(array(
-            'running' => !empty($running),
-            'command' => $running,
-            'status' => $status,
-            'log' => $log,
+            'has_active' => $has_active,
+            'queue'      => $this->queue_for_response($queue),
         ));
     }
 
     /**
-     * AJAX: Stop running command
+     * AJAX: Stop one job (by job_id) or all jobs.
      */
     public function ajax_stop_command() {
         check_ajax_referer('dh_cli_runner', 'nonce');
@@ -272,33 +376,89 @@ class DH_Admin_CLI_Runner {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        // Kill any running WP-CLI directory-helpers processes
-        exec("pkill -f 'wp directory-helpers'");
+        $job_id   = isset($_POST['job_id']) ? sanitize_text_field($_POST['job_id']) : '';
+        $stop_all = !empty($_POST['stop_all']);
 
-        update_option(self::OPTION_RUNNING_COMMAND, '');
-        update_option(self::OPTION_COMMAND_STATUS, 'stopped');
+        $queue = $this->load_queue();
 
-        wp_send_json_success(array('message' => 'Command stopped'));
+        foreach ($queue as &$job) {
+            if (!in_array($job['status'], array('queued', 'running'))) {
+                continue;
+            }
+            if (!$stop_all && $job['id'] !== $job_id) {
+                continue;
+            }
+
+            // Kill the process if running.
+            if ($job['status'] === 'running' && $job['pid'] > 0) {
+                exec("kill -TERM {$job['pid']} 2>/dev/null");
+                // Give child processes a moment to die, then SIGKILL.
+                usleep(200000);
+                exec("kill -KILL {$job['pid']} 2>/dev/null");
+            }
+            $job['status']      = 'stopped';
+            $job['finished_at'] = time();
+        }
+        unset($job);
+
+        $this->save_queue($queue);
+
+        wp_send_json_success(array(
+            'message' => $stop_all ? 'All commands stopped.' : 'Command stopped.',
+            'queue'   => $this->queue_for_response($queue),
+        ));
     }
+
+    // -------------------------------------------------------------------------
+    // Response helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Build a sanitised queue array suitable for JSON response.
+     * Includes the last 2000 chars of each job's log file.
+     */
+    private function queue_for_response(array $queue) {
+        $out = array();
+        foreach ($queue as $job) {
+            $log_tail = '';
+            if (!empty($job['log_file']) && file_exists($job['log_file'])) {
+                $log_tail = substr(file_get_contents($job['log_file']), -2000);
+            }
+            $out[] = array(
+                'id'          => $job['id'],
+                'command'     => $job['command'],
+                'status'      => $job['status'],
+                'pid'         => $job['pid'],
+                'queued_at'   => $job['queued_at'],
+                'started_at'  => $job['started_at'],
+                'finished_at' => $job['finished_at'],
+                'log'         => $log_tail,
+            );
+        }
+        return $out;
+    }
+
+    // -------------------------------------------------------------------------
+    // Term meta boxes
+    // -------------------------------------------------------------------------
 
     /**
      * Render action buttons for area term edit page
      */
     public function render_area_term_actions($term, $taxonomy) {
-        // Only render once per page load
         static $area_rendered = false;
         if ($area_rendered) {
             return;
         }
         $area_rendered = true;
-        
+
         $term_slug = $term->slug;
         ?>
         <tr class="form-field">
             <th scope="row"><?php esc_html_e('Quick Actions', 'directory-helpers'); ?></th>
             <td>
                 <div class="dh-cli-actions">
-                    <button type="button" class="button dh-cli-run-btn" 
+                    <button type="button" class="button dh-cli-run-btn"
                             data-command="update-rankings dog-trainer --city=<?php echo esc_attr($term_slug); ?>">
                         <span class="dashicons dashicons-sort"></span>
                         <?php esc_html_e('Update Rankings', 'directory-helpers'); ?>
@@ -306,7 +466,7 @@ class DH_Admin_CLI_Runner {
                     <span class="dh-cli-status"></span>
                 </div>
                 <div class="dh-cli-actions" style="margin-top: 10px;">
-                    <button type="button" class="button dh-cli-run-btn" 
+                    <button type="button" class="button dh-cli-run-btn"
                             data-command="analyze-radius dog-trainer <?php echo esc_attr($term_slug); ?> --update-meta">
                         <span class="dashicons dashicons-location-alt"></span>
                         <?php esc_html_e('Analyze Radius', 'directory-helpers'); ?>
@@ -325,20 +485,19 @@ class DH_Admin_CLI_Runner {
      * Render action buttons for state term edit page
      */
     public function render_state_term_actions($term, $taxonomy) {
-        // Only render once per page load
         static $state_rendered = false;
         if ($state_rendered) {
             return;
         }
         $state_rendered = true;
-        
+
         $term_slug = $term->slug;
         ?>
         <tr class="form-field">
             <th scope="row"><?php esc_html_e('Quick Actions', 'directory-helpers'); ?></th>
             <td>
                 <div class="dh-cli-actions">
-                    <button type="button" class="button dh-cli-run-btn" 
+                    <button type="button" class="button dh-cli-run-btn"
                             data-command="update-state-rankings dog-trainer --state=<?php echo esc_attr($term_slug); ?>">
                         <span class="dashicons dashicons-sort"></span>
                         <?php esc_html_e('Update State Rankings', 'directory-helpers'); ?>
@@ -352,170 +511,4 @@ class DH_Admin_CLI_Runner {
         </tr>
         <?php
     }
-
-    /**
-     * Get HTML for admin page CLI runner section
-     */
-    public static function get_admin_section_html() {
-        $running = get_option(self::OPTION_RUNNING_COMMAND, '');
-        $status = get_option(self::OPTION_COMMAND_STATUS, 'idle');
-        
-        // Get all niche terms
-        $niches = get_terms(array(
-            'taxonomy' => 'niche',
-            'hide_empty' => false,
-            'orderby' => 'name',
-        ));
-        
-        $default_niche = 'dog-trainer';
-        
-        ob_start();
-        ?>
-        <div class="directory-helpers-settings" style="margin-top: 20px;">
-            <h2><?php esc_html_e('Run Commands', 'directory-helpers'); ?></h2>
-            <p class="description"><?php esc_html_e('Run ranking and radius analysis commands directly from the admin. Commands run in the background.', 'directory-helpers'); ?></p>
-            
-            <div class="dh-cli-runner-panel" style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin: 15px 0;">
-                
-                <div class="dh-cli-status-box" style="margin-bottom: 20px; padding: 10px; background: #f9f9f9; border-radius: 4px;">
-                    <strong><?php esc_html_e('Status:', 'directory-helpers'); ?></strong>
-                    <span id="dh-cli-global-status">
-                        <?php if (!empty($running)): ?>
-                            <span style="color: #0073aa;">⏳ <?php echo esc_html($running); ?></span>
-                        <?php else: ?>
-                            <span style="color: #46b450;">✓ <?php esc_html_e('Ready', 'directory-helpers'); ?></span>
-                        <?php endif; ?>
-                    </span>
-                    <?php if (!empty($running)): ?>
-                        <button type="button" class="button button-small dh-cli-stop-btn" style="margin-left: 10px;">
-                            <?php esc_html_e('Stop', 'directory-helpers'); ?>
-                        </button>
-                    <?php endif; ?>
-                </div>
-                
-                <div id="dh-cli-log-box" style="display: none; margin-bottom: 20px; padding: 15px; background: #1e1e1e; border-radius: 4px; max-height: 300px; overflow-y: auto;">
-                    <pre id="dh-cli-log-output" style="color: #d4d4d4; margin: 0; white-space: pre-wrap; font-size: 12px; font-family: monospace;"></pre>
-                </div>
-
-                <div style="margin-bottom: 20px; padding: 15px; background: #f0f8ff; border: 1px solid #b3d9ff; border-radius: 4px;">
-                    <label for="dh-cli-niche-select" style="display: block; margin-bottom: 8px;">
-                        <strong><?php esc_html_e('Select Niche:', 'directory-helpers'); ?></strong>
-                    </label>
-                    <select id="dh-cli-niche-select" style="min-width: 200px; padding: 5px;">
-                        <?php if (!is_wp_error($niches) && !empty($niches)): ?>
-                            <?php foreach ($niches as $niche): ?>
-                                <option value="<?php echo esc_attr($niche->slug); ?>" <?php selected($niche->slug, $default_niche); ?>>
-                                    <?php echo esc_html($niche->name); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <option value="dog-trainer"><?php esc_html_e('Dog Trainer', 'directory-helpers'); ?></option>
-                        <?php endif; ?>
-                    </select>
-                </div>
-
-                <h3 style="margin-top: 0;"><?php esc_html_e('City Rankings', 'directory-helpers'); ?></h3>
-                <p><?php esc_html_e('Update city_rank for all profiles. Takes ~12 minutes for 1000 cities.', 'directory-helpers'); ?></p>
-                <div class="dh-cli-actions" style="margin-bottom: 20px;">
-                    <button type="button" class="button button-primary dh-cli-run-btn" 
-                            data-command-template="update-rankings {niche}">
-                        <span class="dashicons dashicons-sort" style="margin-top: 4px;"></span>
-                        <?php esc_html_e('Update City Rankings', 'directory-helpers'); ?>
-                    </button>
-                    <span class="dh-cli-status"></span>
-                </div>
-
-                <h3><?php esc_html_e('State Rankings', 'directory-helpers'); ?></h3>
-                <p><?php esc_html_e('Update state_rank for all profiles. Takes ~80 seconds for all states (optimized bulk operations).', 'directory-helpers'); ?></p>
-                <div class="dh-cli-actions" style="margin-bottom: 20px;">
-                    <button type="button" class="button button-primary dh-cli-run-btn" 
-                            data-command-template="update-state-rankings {niche}">
-                        <span class="dashicons dashicons-sort" style="margin-top: 4px;"></span>
-                        <?php esc_html_e('Update State Rankings', 'directory-helpers'); ?>
-                    </button>
-                    <span class="dh-cli-status"></span>
-                </div>
-
-                <h3><?php esc_html_e('Radius Analysis', 'directory-helpers'); ?></h3>
-                <p><?php esc_html_e('Analyze and update recommended radius for all cities. Takes ~15-20 minutes.', 'directory-helpers'); ?></p>
-                <div class="dh-cli-actions" style="margin-bottom: 20px;">
-                    <button type="button" class="button button-primary dh-cli-run-btn" 
-                            data-command-template="analyze-radius {niche} --update-meta">
-                        <span class="dashicons dashicons-location-alt" style="margin-top: 4px;"></span>
-                        <?php esc_html_e('Analyze Radius (All Cities)', 'directory-helpers'); ?>
-                    </button>
-                    <span class="dh-cli-status"></span>
-                </div>
-
-                <hr style="margin: 30px 0; border-top: 1px solid #ccd0d4;">
-
-                <h3><?php esc_html_e('Cache Priming', 'directory-helpers'); ?></h3>
-                <p><?php esc_html_e('Prime cache for key pages using bot User-Agent (excluded from analytics). Faster than full LiteSpeed crawler.', 'directory-helpers'); ?></p>
-                
-                <div class="dh-cli-actions" style="margin-bottom: 15px;">
-                    <button type="button" class="button button-primary dh-cli-run-btn" 
-                            data-command="prime-cache --preset=priority">
-                        <span class="dashicons dashicons-performance" style="margin-top: 4px;"></span>
-                        <?php esc_html_e('Prime Priority Pages', 'directory-helpers'); ?>
-                    </button>
-                    <span class="dh-cli-status"></span>
-                    <span class="description" style="margin-left: 10px;"><?php esc_html_e('Pages, States, Certifications', 'directory-helpers'); ?></span>
-                </div>
-
-                <div class="dh-cli-actions" style="margin-bottom: 15px;">
-                    <button type="button" class="button dh-cli-run-btn" 
-                            data-command="prime-cache --preset=listings">
-                        <span class="dashicons dashicons-location" style="margin-top: 4px;"></span>
-                        <?php esc_html_e('Prime Listing Pages', 'directory-helpers'); ?>
-                    </button>
-                    <span class="dh-cli-status"></span>
-                    <span class="description" style="margin-left: 10px;"><?php esc_html_e('City & State listings', 'directory-helpers'); ?></span>
-                </div>
-
-                <div class="dh-cli-actions" style="margin-bottom: 20px;">
-                    <button type="button" class="button dh-cli-run-btn" 
-                            data-command="prime-cache --preset=profiles">
-                        <span class="dashicons dashicons-businessman" style="margin-top: 4px;"></span>
-                        <?php esc_html_e('Prime Profile Pages', 'directory-helpers'); ?>
-                    </button>
-                    <span class="dh-cli-status"></span>
-                    <span class="description" style="margin-left: 10px;"><?php esc_html_e('All profiles (may take a while)', 'directory-helpers'); ?></span>
-                </div>
-
-                <p class="description">
-                    <strong><?php esc_html_e('CLI Usage:', 'directory-helpers'); ?></strong><br>
-                    <code>wp directory-helpers prime-cache --preset=profiles --concurrency=4</code><br>
-                    <code>wp directory-helpers prime-cache page-sitemap.xml state-listing-sitemap.xml</code><br>
-                    <code>wp directory-helpers prime-cache https://goodydoggy.com/top/iowa-dog-trainers/</code><br>
-                    <code>wp directory-helpers prime-cache --preset=priority --delay=200 --dry-run</code><br>
-                    <code>wp directory-helpers prime-cache page-sitemap.xml https://goodydoggy.com/about/</code><br><br>
-                    <strong><?php esc_html_e('Defaults:', 'directory-helpers'); ?></strong><br>
-                    <code>--concurrency=2</code> (2 concurrent requests, safe default)<br>
-                    <code>--delay=100</code> (milliseconds between batches)<br>
-                    <code>--timeout=30</code> (seconds per request)<br><br>
-                    <strong><?php esc_html_e('Performance Tip:', 'directory-helpers'); ?></strong><br>
-                    Use <code>--concurrency=3-5</code> on multi-CPU servers for 3-5x faster cache priming.<br>
-                    Example: <code>wp directory-helpers prime-cache --preset=profiles --concurrency=4 --delay=200</code><br><br>
-                    <strong><?php esc_html_e('Sitemap Presets:', 'directory-helpers'); ?></strong><br>
-                    <code>wp directory-helpers prime-cache --preset=priority</code><br>
-                    &nbsp;&nbsp;→ https://goodydoggy.com/page-sitemap.xml<br>
-                    &nbsp;&nbsp;→ https://goodydoggy.com/state-listing-sitemap.xml<br>
-                    &nbsp;&nbsp;→ https://goodydoggy.com/certification-sitemap.xml<br><br>
-                    <code>wp directory-helpers prime-cache --preset=listings</code><br>
-                    &nbsp;&nbsp;→ https://goodydoggy.com/city-listing-sitemap.xml<br>
-                    &nbsp;&nbsp;→ https://goodydoggy.com/state-listing-sitemap.xml<br><br>
-                    <code>wp directory-helpers prime-cache --preset=profiles</code><br>
-                    &nbsp;&nbsp;→ https://goodydoggy.com/profile-sitemap.xml<br>
-                    &nbsp;&nbsp;→ https://goodydoggy.com/profile-sitemap2.xml<br>
-                    &nbsp;&nbsp;→ https://goodydoggy.com/profile-sitemap3.xml
-                </p>
-
-            </div>
-        </div>
-        <?php
-        return ob_get_clean();
-    }
 }
-
-// Initialize
-new DH_Admin_CLI_Runner();
