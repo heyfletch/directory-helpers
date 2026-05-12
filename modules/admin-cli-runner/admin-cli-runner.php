@@ -512,8 +512,9 @@ class DH_Admin_CLI_Runner {
             ? implode(', ', wp_list_pluck($area_terms, 'name'))
             : '—';
 
-        $primary_state = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
-        $state_display = $primary_state ? $primary_state->name : '—';
+        $state_names = (!empty($state_terms) && !is_wp_error($state_terms))
+            ? implode(', ', wp_list_pluck($state_terms, 'name'))
+            : '—';
 
         $command = 'update-rankings-for-profile --profile=' . $post_id;
         ?>
@@ -523,8 +524,8 @@ class DH_Admin_CLI_Runner {
                 <span style="color:#555;"><?php echo esc_html($area_names); ?></span>
             </p>
             <p style="margin:0 0 10px;">
-                <strong><?php esc_html_e('Primary state:', 'directory-helpers'); ?></strong>
-                <span style="color:#555;"><?php echo esc_html($state_display); ?></span>
+                <strong><?php esc_html_e('States:', 'directory-helpers'); ?></strong>
+                <span style="color:#555;"><?php echo esc_html($state_names); ?></span>
             </p>
             <button type="button" class="button button-primary dh-cli-run-btn"
                     data-command="<?php echo esc_attr($command); ?>"
@@ -535,7 +536,7 @@ class DH_Admin_CLI_Runner {
             <span class="dh-cli-status" style="display:block;margin-top:6px;"></span>
         </div>
         <p class="description" style="margin-top:8px;">
-            <?php esc_html_e('Recalculates city_rank for every city this profile is tagged with, and state_rank for the primary state. Purges page cache for all affected listing pages.', 'directory-helpers'); ?>
+            <?php esc_html_e('Recalculates city_rank for every city this profile is tagged with, and state_rank for every state. Purges page cache for all affected listing pages.', 'directory-helpers'); ?>
         </p>
         <?php
     }
