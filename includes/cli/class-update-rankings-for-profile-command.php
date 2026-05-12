@@ -78,12 +78,15 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
         }
         WP_CLI::line( '' );
 
-        // ── Primary state term ────────────────────────────────────────────────
-        $primary_state = DH_Taxonomy_Helpers::get_primary_state_term( $profile_id );
-        if ( $primary_state ) {
-            WP_CLI::line( "Primary state: {$primary_state->name} (ID {$primary_state->term_id})" );
-        } else {
-            WP_CLI::line( "Primary state: none found" );
+        // ── All state terms on this profile ───────────────────────────────────
+        $state_terms = get_the_terms( $profile_id, 'state' );
+        if ( empty( $state_terms ) || is_wp_error( $state_terms ) ) {
+            $state_terms = [];
+        }
+
+        WP_CLI::line( "State terms (" . count( $state_terms ) . "):" );
+        foreach ( $state_terms as $t ) {
+            WP_CLI::line( "  • {$t->name} (ID {$t->term_id}, slug: {$t->slug})" );
         }
         WP_CLI::line( '' );
 
@@ -92,8 +95,11 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
             foreach ( $area_terms as $t ) {
                 WP_CLI::line( "  • {$t->name}" );
             }
-            if ( $primary_state ) {
-                WP_CLI::line( "Would recalculate state_rank for: {$primary_state->name}" );
+            if ( ! empty( $state_terms ) ) {
+                WP_CLI::line( "Would recalculate state_rank for:" );
+                foreach ( $state_terms as $t ) {
+                    WP_CLI::line( "  • {$t->name}" );
+                }
             }
             WP_CLI::success( 'Dry run complete — no changes made.' );
             return;
@@ -134,40 +140,38 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
         }
         WP_CLI::line( '' );
 
-        // ── Recalculate state_rank for the primary state ───────────────────────
-        if ( $primary_state ) {
+        // ── Recalculate state_rank for every state term on the profile ────────
+        if ( ! empty( $state_terms ) ) {
             WP_CLI::line( "=== State Rankings ===" );
-            $t_start = microtime( true );
-            WP_CLI::line( "Processing state: {$primary_state->name} (ID {$primary_state->term_id})" );
+            foreach ( $state_terms as $state_term ) {
+                $t_start = microtime( true );
+                WP_CLI::line( "Processing state: {$state_term->name} (ID {$state_term->term_id})" );
 
-            $this->recalculate_state_rank_for_state( $primary_state );
+                $this->recalculate_state_rank_for_state( $state_term );
 
-            $t_elapsed = round( microtime( true ) - $t_start, 2 );
-            WP_CLI::line( "  → state_rank updated in {$t_elapsed}s" );
+                $t_elapsed = round( microtime( true ) - $t_start, 2 );
+                WP_CLI::line( "  → state_rank updated in {$t_elapsed}s" );
 
-            // Find the matching state-listing page.
-            $state_listing_ids = get_posts( array(
-                'post_type'      => 'state-listing',
-                'post_status'    => 'publish',
-                'posts_per_page' => 1,
-                'fields'         => 'ids',
-                'tax_query'      => array(
-                    array(
-                        'taxonomy' => 'state',
-                        'field'    => 'term_id',
-                        'terms'    => $primary_state->term_id,
+                // Find the matching state-listing page.
+                $state_listing_ids = get_posts( array(
+                    'post_type'      => 'state-listing',
+                    'post_status'    => 'publish',
+                    'posts_per_page' => 1,
+                    'fields'         => 'ids',
+                    'tax_query'      => array(
+                        array(
+                            'taxonomy' => 'state',
+                            'field'    => 'term_id',
+                            'terms'    => $state_term->term_id,
+                        ),
                     ),
-                ),
-            ) );
-            if ( ! empty( $state_listing_ids ) ) {
-                $affected_state_listing_ids[] = $state_listing_ids[0];
+                ) );
+                if ( ! empty( $state_listing_ids ) ) {
+                    $affected_state_listing_ids[] = $state_listing_ids[0];
+                }
             }
             WP_CLI::line( '' );
         }
-
-        // ── Flush object cache ────────────────────────────────────────────────
-        wp_cache_flush();
-        WP_CLI::line( "✓ WordPress object cache (Redis) flushed" );
 
         // ── Purge LiteSpeed page cache for affected listing pages ─────────────
         WP_CLI::line( '' );
