@@ -172,8 +172,8 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                     SELECT post_id, meta_key, meta_value
                     FROM {$wpdb->postmeta}
                     WHERE post_id IN ({$profile_id_placeholders})
-                    AND meta_key IN (%s, %s, %s)
-                ", array_merge($profile_ids, array('rating_value', 'rating_votes_count', 'ranking_boost'))));
+                    AND meta_key IN (%s, %s, %s, %s)
+                ", array_merge($profile_ids, array('rating_value', 'rating_votes_count', 'ranking_boost', 'featured'))));
                 $meta_fetch_time = round(microtime(true) - $meta_start, 3);
                 WP_CLI::line("  [Meta] Fetched meta for {$profile_count} profiles in {$meta_fetch_time}s");
 
@@ -181,7 +181,7 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 $organize_start = microtime(true);
                 $profile_meta = [];
                 foreach ($profile_ids as $pid) {
-                    $profile_meta[$pid] = ['rating' => null, 'review_count' => null, 'boost' => 0];
+                    $profile_meta[$pid] = ['rating' => null, 'review_count' => null, 'boost' => 0, 'featured' => 0];
                 }
                 foreach ($meta_results as $row) {
                     if ($row->meta_key === 'rating_value') {
@@ -190,6 +190,8 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                         $profile_meta[$row->post_id]['review_count'] = $row->meta_value;
                     } elseif ($row->meta_key === 'ranking_boost') {
                         $profile_meta[$row->post_id]['boost'] = $row->meta_value ?: 0;
+                    } elseif ($row->meta_key === 'featured') {
+                        $profile_meta[$row->post_id]['featured'] = $row->meta_value ?: 0;
                     }
                 }
                 $organize_time = round(microtime(true) - $organize_start, 3);
@@ -200,18 +202,23 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 $scores = [];
                 foreach ($profile_ids as $pid) {
                     $data = $profile_meta[$pid];
-                    if (empty($data['rating']) || empty($data['review_count'])) {
-                        $scores[$pid] = ['score' => -1, 'review_count' => 0];
-                    } else {
+                    $is_featured = ((float) $data['featured']) > 0;
+
+                    if (!empty($data['rating']) && !empty($data['review_count'])) {
                         $rating = (float)$data['rating'];
                         $review_count = (int)$data['review_count'];
                         $boost = (float)$data['boost'];
-                        
+
                         $rating_component = $rating * 0.9;
                         $review_component = (log10($review_count + 1) / 2) * 5 * 0.1;
                         $score = $rating_component + $review_component + ($boost * 2);
-                        
-                        $scores[$pid] = ['score' => $score, 'review_count' => $review_count];
+
+                        $scores[$pid] = ['score' => $score, 'review_count' => $review_count, 'is_featured' => $is_featured];
+                    } elseif ($is_featured) {
+                        // Featured but unrated: real score (boost-driven) so they sort to the top.
+                        $scores[$pid] = ['score' => ((float) $data['boost']) * 2, 'review_count' => 0, 'is_featured' => true];
+                    } else {
+                        $scores[$pid] = ['score' => -1, 'review_count' => 0, 'is_featured' => false];
                     }
                 }
                 $calc_time = round(microtime(true) - $calc_start, 3);
@@ -220,16 +227,19 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 // Sort by score desc, then review count desc with stable ordering
                 $sort_start = microtime(true);
                 $pids = array_keys($scores);
+                $featured_vals = [];
                 $score_vals = [];
                 $review_vals = [];
-                
+
                 foreach ($scores as $pid => $data) {
+                    $featured_vals[] = !empty($data['is_featured']) ? 1 : 0;
                     $score_vals[] = (float)$data['score'];
                     $review_vals[] = $data['review_count'];
                 }
-                
-                // Use numeric comparison for scores with profile ID as tie-breaker
+
+                // Featured first, then score, review count, with profile ID as tie-breaker
                 array_multisort(
+                    $featured_vals, SORT_DESC, SORT_NUMERIC,
                     $score_vals, SORT_DESC, SORT_NUMERIC,
                     $review_vals, SORT_DESC, SORT_NUMERIC,
                     $pids, SORT_ASC, SORT_NUMERIC           // Tie-breaker: lower ID wins
@@ -256,9 +266,10 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 $insert_values = [];
                 $rank = 1;
                 foreach ($pids as $pid) {
-                    $rank_value = ($scores[$pid]['score'] < 0) ? 99999 : $rank;
+                    $is_featured = !empty($scores[$pid]['is_featured']);
+                    $rank_value = (!$is_featured && $scores[$pid]['score'] < 0) ? 99999 : $rank;
                     $insert_values[] = "({$pid}, 'state_rank', {$rank_value})";
-                    if ($scores[$pid]['score'] >= 0) {
+                    if ($is_featured || $scores[$pid]['score'] >= 0) {
                         $rank++;
                     }
                 }

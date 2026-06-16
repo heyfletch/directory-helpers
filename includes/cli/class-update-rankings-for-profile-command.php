@@ -101,7 +101,7 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
                     WP_CLI::line( "  • {$t->name}" );
                 }
             }
-            WP_CLI::success( 'Dry run complete — no changes made.' );
+            WP_CLI::success( 'Dry run complete - no changes made.' );
             return;
         }
 
@@ -267,7 +267,7 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
         }
 
         $excluded = count( $all_ids ) - count( $profile_ids );
-        WP_CLI::line( "  " . count( $profile_ids ) . " profiles in pool" . ( $excluded ? " ({$excluded} excluded — not primary state)" : '' ) );
+        WP_CLI::line( "  " . count( $profile_ids ) . " profiles in pool" . ( $excluded ? " ({$excluded} excluded - not primary state)" : '' ) );
 
         if ( empty( $profile_ids ) ) {
             WP_CLI::line( "  No profiles have this as primary state, skipping." );
@@ -298,13 +298,13 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
             SELECT post_id, meta_key, meta_value
             FROM {$wpdb->postmeta}
             WHERE post_id IN ({$placeholders})
-              AND meta_key IN ('rating_value', 'rating_votes_count', 'ranking_boost')
+              AND meta_key IN ('rating_value', 'rating_votes_count', 'ranking_boost', 'featured')
         ", $profile_ids ) );
 
         // Index meta by profile.
         $meta = [];
         foreach ( $profile_ids as $pid ) {
-            $meta[ $pid ] = [ 'rating' => null, 'review_count' => null, 'boost' => 0 ];
+            $meta[ $pid ] = [ 'rating' => null, 'review_count' => null, 'boost' => 0, 'featured' => 0 ];
         }
         foreach ( $rows as $row ) {
             if ( $row->meta_key === 'rating_value' ) {
@@ -313,32 +313,41 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
                 $meta[ $row->post_id ]['review_count'] = $row->meta_value;
             } elseif ( $row->meta_key === 'ranking_boost' ) {
                 $meta[ $row->post_id ]['boost'] = $row->meta_value ?: 0;
+            } elseif ( $row->meta_key === 'featured' ) {
+                $meta[ $row->post_id ]['featured'] = $row->meta_value ?: 0;
             }
         }
 
-        // Calculate scores — identical formula to DH_Profile_Rankings.
+        // Calculate scores - identical formula to DH_Profile_Rankings.
         $scores = [];
         foreach ( $profile_ids as $pid ) {
             $d = $meta[ $pid ];
-            if ( empty( $d['rating'] ) || empty( $d['review_count'] ) ) {
-                $scores[ $pid ] = [ 'score' => -1, 'review_count' => 0 ];
-            } else {
+            $is_featured = ( (float) $d['featured'] ) > 0;
+
+            if ( ! empty( $d['rating'] ) && ! empty( $d['review_count'] ) ) {
                 $rating        = (float) $d['rating'];
                 $review_count  = (int)   $d['review_count'];
                 $boost         = (float) $d['boost'];
                 $score = ( $rating * 0.9 )
                        + ( ( log10( $review_count + 1 ) / 2 ) * 5 * 0.1 )
                        + ( $boost * 2 );
-                $scores[ $pid ] = [ 'score' => $score, 'review_count' => $review_count ];
+                $scores[ $pid ] = [ 'score' => $score, 'review_count' => $review_count, 'is_featured' => $is_featured ];
+            } elseif ( $is_featured ) {
+                // Featured but unrated: real score (boost-driven) so they sort to the top.
+                $scores[ $pid ] = [ 'score' => ( (float) $d['boost'] ) * 2, 'review_count' => 0, 'is_featured' => true ];
+            } else {
+                $scores[ $pid ] = [ 'score' => -1, 'review_count' => 0, 'is_featured' => false ];
             }
         }
 
-        // Sort: score DESC, review_count DESC, profile_id ASC (tie-breaker).
-        $pids         = array_keys( $scores );
-        $score_vals   = array_column( $scores, 'score' );
-        $review_vals  = array_column( $scores, 'review_count' );
+        // Sort: featured first, then score DESC, review_count DESC, profile_id ASC.
+        $pids          = array_keys( $scores );
+        $featured_vals = array_map( function ( $d ) { return ! empty( $d['is_featured'] ) ? 1 : 0; }, array_values( $scores ) );
+        $score_vals    = array_column( $scores, 'score' );
+        $review_vals   = array_column( $scores, 'review_count' );
 
         array_multisort(
+            $featured_vals, SORT_DESC, SORT_NUMERIC,
             $score_vals,  SORT_DESC, SORT_NUMERIC,
             $review_vals, SORT_DESC, SORT_NUMERIC,
             $pids,        SORT_ASC,  SORT_NUMERIC
@@ -380,9 +389,10 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
         $rows = [];
         $rank = 1;
         foreach ( $pids as $pid ) {
-            $rank_value = ( $scores[ $pid ]['score'] < 0 ) ? 99999 : $rank;
-            $rows[]     = "({$pid}, '{$rank_field_esc}', {$rank_value})";
-            if ( $scores[ $pid ]['score'] >= 0 ) {
+            $is_featured = ! empty( $scores[ $pid ]['is_featured'] );
+            $rank_value  = ( ! $is_featured && $scores[ $pid ]['score'] < 0 ) ? 99999 : $rank;
+            $rows[]      = "({$pid}, '{$rank_field_esc}', {$rank_value})";
+            if ( $is_featured || $scores[ $pid ]['score'] >= 0 ) {
                 $rank++;
             }
         }

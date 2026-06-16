@@ -399,15 +399,25 @@ class DH_Profile_Rankings {
         
         foreach ($profiles as $profile_id) {
             $data = $profile_data[$profile_id];
-            
-            if (empty($data['rating']) || empty($data['review_count'])) {
-                $scores[$profile_id] = ['score' => -1, 'review_count' => 0];
-                continue;
+            $is_featured = ((float) $data['featured']) > 0;
+
+            if (!empty($data['rating']) && !empty($data['review_count'])) {
+                $score = $this->calculate_ranking_score($data['rating'], $data['review_count'], $data['boost']);
+                $review_count = (int) $data['review_count'];
+            } elseif ($is_featured) {
+                // Featured but unrated: keep a real (non-sentinel) score so they still
+                // sort to the top. ranking_boost lets us order featured peers manually.
+                $score = ((float) $data['boost']) * 2;
+                $review_count = 0;
+            } else {
+                $score = -1;
+                $review_count = 0;
             }
 
             $scores[$profile_id] = [
-                'score' => $this->calculate_ranking_score($data['rating'], $data['review_count'], $data['boost']),
-                'review_count' => (int)$data['review_count'],
+                'score' => $score,
+                'review_count' => $review_count,
+                'is_featured' => $is_featured,
             ];
         }
 
@@ -415,16 +425,19 @@ class DH_Profile_Rankings {
         
         // Extract scores, review counts, and profile IDs for sorting
         $profile_ids = array_keys($scores);
+        $featured_flags = [];
         $score_values = [];
         $review_counts = [];
-        
+
         foreach ($scores as $profile_id => $data) {
+            $featured_flags[] = !empty($data['is_featured']) ? 1 : 0;
             $score_values[] = (float)$data['score'];
             $review_counts[] = $data['review_count'];
         }
-        
-        // Use array_multisort with profile_id as final tie-breaker for stable sorting
+
+        // Featured profiles first, then by score, review count, and ID as tie-breaker
         array_multisort(
+            $featured_flags, SORT_DESC, SORT_NUMERIC,
             $score_values, SORT_DESC, SORT_NUMERIC,
             $review_counts, SORT_DESC, SORT_NUMERIC,
             $profile_ids, SORT_ASC, SORT_NUMERIC    // Tie-breaker: lower ID wins
@@ -471,16 +484,24 @@ class DH_Profile_Rankings {
             WHERE post_id IN ({$profile_id_placeholders})
             AND meta_key = %s
         ", array_merge($profile_ids, array('ranking_boost'))));
-        
+
+        $featured_rows = $wpdb->get_results($wpdb->prepare("
+            SELECT post_id, meta_value as featured
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$profile_id_placeholders})
+            AND meta_key = %s
+        ", array_merge($profile_ids, array('featured'))));
+
         // Organize data by profile_id
         $profile_data = [];
-        
+
         // Initialize with defaults
         foreach ($profile_ids as $profile_id) {
             $profile_data[$profile_id] = [
                 'rating' => null,
                 'review_count' => null,
-                'boost' => 0
+                'boost' => 0,
+                'featured' => 0
             ];
         }
         
@@ -496,7 +517,11 @@ class DH_Profile_Rankings {
         foreach ($boosts as $row) {
             $profile_data[$row->post_id]['boost'] = $row->boost ?: 0;
         }
-        
+
+        foreach ($featured_rows as $row) {
+            $profile_data[$row->post_id]['featured'] = $row->featured ?: 0;
+        }
+
         return $profile_data;
     }
 
@@ -522,10 +547,11 @@ class DH_Profile_Rankings {
         $rank = 1;
         
         foreach ($scores as $profile_id => $data) {
-            $rank_value = ($data['score'] < 0) ? 99999 : $rank;
+            $is_featured = !empty($data['is_featured']);
+            $rank_value = (!$is_featured && $data['score'] < 0) ? 99999 : $rank;
             $insert_data[] = "({$profile_id}, '" . esc_sql($rank_field) . "', {$rank_value})";
-            
-            if ($data['score'] >= 0) {
+
+            if ($is_featured || $data['score'] >= 0) {
                 $rank++;
             }
         }
