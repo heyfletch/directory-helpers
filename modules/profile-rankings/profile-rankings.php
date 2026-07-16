@@ -530,32 +530,42 @@ class DH_Profile_Rankings {
      */
     private function bulk_update_ranks($scores, $rank_field) {
         global $wpdb;
-        
+
         // Prepare bulk delete and insert queries
         $profile_ids = array_keys($scores);
         $profile_id_placeholders = implode(',', array_fill(0, count($profile_ids), '%d'));
-        
+
+        // Read current values first so only profiles that actually move get invalidated
+        $old_ranks = $wpdb->get_results($wpdb->prepare("
+            SELECT post_id, meta_value
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$profile_id_placeholders})
+            AND meta_key = %s
+        ", array_merge($profile_ids, array($rank_field))), OBJECT_K);
+
         // Delete all existing rank values in one query
         $wpdb->query($wpdb->prepare("
             DELETE FROM {$wpdb->postmeta}
             WHERE post_id IN ({$profile_id_placeholders})
             AND meta_key = %s
         ", array_merge($profile_ids, array($rank_field))));
-        
+
         // Prepare bulk insert data
         $insert_data = [];
+        $new_ranks = [];
         $rank = 1;
-        
+
         foreach ($scores as $profile_id => $data) {
             $is_featured = !empty($data['is_featured']);
             $rank_value = (!$is_featured && $data['score'] < 0) ? 99999 : $rank;
             $insert_data[] = "({$profile_id}, '" . esc_sql($rank_field) . "', {$rank_value})";
+            $new_ranks[$profile_id] = $rank_value;
 
             if ($is_featured || $data['score'] >= 0) {
                 $rank++;
             }
         }
-        
+
         // Insert all new rank values in one query
         if (!empty($insert_data)) {
             $insert_string = implode(',', $insert_data);
@@ -564,6 +574,48 @@ class DH_Profile_Rankings {
                 VALUES {$insert_string}
             ");
         }
+
+        $this->invalidate_rank_caches($old_ranks, $new_ranks, $rank_field);
+    }
+
+    /**
+     * Invalidate object caches for profiles whose rank changed.
+     *
+     * Ranks are written with direct SQL for speed, which never invalidates the
+     * object cache. Without this, get_post_meta()/get_field() and anything derived
+     * from a rank (notably the "#1 Ranked" badge, whose eligibility is cached for
+     * 30 days) keep serving pre-recalculation values until the cache expires.
+     *
+     * Only changed profiles are touched, so a bulk recalculation does not churn the
+     * cache for the thousands of profiles whose rank did not move.
+     *
+     * @param array  $old_ranks  post_id => row with meta_value, as it was before the write
+     * @param array  $new_ranks  post_id => rank value just written
+     * @param string $rank_field Meta key written ('city_rank' or 'state_rank')
+     */
+    private function invalidate_rank_caches($old_ranks, $new_ranks, $rank_field) {
+        $changed = array();
+
+        foreach ($new_ranks as $profile_id => $new_rank) {
+            $old_rank = isset($old_ranks[$profile_id]) ? $old_ranks[$profile_id]->meta_value : null;
+
+            if ((string) $old_rank !== (string) $new_rank) {
+                wp_cache_delete($profile_id, 'post_meta');
+                $changed[] = $profile_id;
+            }
+        }
+
+        if (empty($changed)) {
+            return;
+        }
+
+        /**
+         * Fires after profile ranks are written directly to the database.
+         *
+         * @param array  $changed    Profile IDs whose rank changed.
+         * @param string $rank_field Meta key written ('city_rank' or 'state_rank').
+         */
+        do_action('dh_profile_ranks_updated', $changed, $rank_field);
     }
 }
 

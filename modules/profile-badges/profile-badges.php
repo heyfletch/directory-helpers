@@ -91,6 +91,9 @@ class DH_Profile_Badges {
         
         // Clear badge cache when profile is updated
         add_action('acf/save_post', array($this, 'clear_badge_cache_on_save'), 25);
+
+        // Rank writes use direct SQL and never fire acf/save_post
+        add_action('dh_profile_ranks_updated', array($this, 'clear_badge_cache_on_rank_change'), 10, 1);
         
         // Add Bricks dynamic data integration
         add_action('init', array($this, 'init_bricks_integration'));
@@ -1270,7 +1273,43 @@ class DH_Profile_Badges {
         if (get_post_type($post_id) !== 'profile') {
             return;
         }
-        
+
+        $this->clear_profile_badge_caches($post_id);
+
+        // Clear city/state listing caches if they might have changed
+        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
+        if ($primary_area_term) {
+            wp_cache_delete('dh_city_listing_' . $primary_area_term->term_id, 'dh_badges');
+        }
+
+        $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
+        if ($state_term) {
+            wp_cache_delete('dh_state_listing_' . $state_term->slug, 'dh_badges');
+        }
+    }
+
+    /**
+     * Clear badge caches for profiles whose rank changed.
+     *
+     * Rank writes bypass acf/save_post, so without this an eligibility result cached
+     * while the profile was still unranked survives the recalculation and the badge
+     * silently never renders. Only the profile's own caches are cleared; the
+     * term-to-listing caches map a term to its listing post and ranks do not affect them.
+     *
+     * @param array $post_ids Profile IDs whose rank changed
+     */
+    public function clear_badge_cache_on_rank_change($post_ids) {
+        foreach ((array) $post_ids as $post_id) {
+            $this->clear_profile_badge_caches($post_id);
+        }
+    }
+
+    /**
+     * Clear the badge caches belonging to a single profile
+     *
+     * @param int $post_id Post ID
+     */
+    private function clear_profile_badge_caches($post_id) {
         // Clear wp_cache for all badge types (SVG + data cache)
         $badge_types = array('city', 'state', 'profile');
         foreach ($badge_types as $type) {
@@ -1280,20 +1319,9 @@ class DH_Profile_Badges {
             // Clear badge data cache
             wp_cache_delete('dh_badge_data_' . $post_id . '_' . $type, 'dh_badges');
         }
-        
+
         // Clear eligibility cache
         wp_cache_delete('dh_badge_eligible_' . $post_id, 'dh_badges');
-        
-        // Clear city/state listing caches if they might have changed
-        $primary_area_term = DH_Taxonomy_Helpers::get_primary_area_term($post_id);
-        if ($primary_area_term) {
-            wp_cache_delete('dh_city_listing_' . $primary_area_term->term_id, 'dh_badges');
-        }
-        
-        $state_term = DH_Taxonomy_Helpers::get_primary_state_term($post_id);
-        if ($state_term) {
-            wp_cache_delete('dh_state_listing_' . $state_term->slug, 'dh_badges');
-        }
     }
 }
 
