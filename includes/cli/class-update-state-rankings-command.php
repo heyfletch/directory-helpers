@@ -250,8 +250,19 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
 
                 // Bulk delete existing state_rank values
                 $delete_start = microtime(true);
+                $old_ranks = array();
                 if (!empty($pids)) {
                     $profile_id_string = implode(',', array_map('intval', $pids));
+
+                    // Read current values first so only profiles that actually move get invalidated
+                    $old_ranks = $wpdb->get_results("
+                        SELECT post_id, meta_value
+                        FROM {$wpdb->postmeta}
+                        WHERE post_id IN ({$profile_id_string})
+                        AND meta_key = 'state_rank'
+                    ", OBJECT_K);
+                    $old_ranks = wp_list_pluck($old_ranks, 'meta_value');
+
                     $wpdb->query("
                         DELETE FROM {$wpdb->postmeta}
                         WHERE post_id IN ({$profile_id_string})
@@ -264,11 +275,13 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 // Bulk insert new state_rank values
                 $insert_start = microtime(true);
                 $insert_values = [];
+                $new_ranks = [];
                 $rank = 1;
                 foreach ($pids as $pid) {
                     $is_featured = !empty($scores[$pid]['is_featured']);
                     $rank_value = (!$is_featured && $scores[$pid]['score'] < 0) ? 99999 : $rank;
                     $insert_values[] = "({$pid}, 'state_rank', {$rank_value})";
+                    $new_ranks[$pid] = $rank_value;
                     if ($is_featured || $scores[$pid]['score'] >= 0) {
                         $rank++;
                     }
@@ -282,6 +295,8 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 }
                 $insert_time = round(microtime(true) - $insert_start, 3);
                 WP_CLI::line("  [Insert] Inserted new ranks in {$insert_time}s");
+
+                DH_Profile_Rankings::invalidate_rank_caches($old_ranks, $new_ranks, 'state_rank');
 
                 $state_time = round(microtime(true) - $state_start, 2);
                 WP_CLI::line("  → Total: {$state_time}s");
