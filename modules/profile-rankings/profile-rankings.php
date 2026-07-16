@@ -542,6 +542,7 @@ class DH_Profile_Rankings {
             WHERE post_id IN ({$profile_id_placeholders})
             AND meta_key = %s
         ", array_merge($profile_ids, array($rank_field))), OBJECT_K);
+        $old_ranks = wp_list_pluck($old_ranks, 'meta_value');
 
         // Delete all existing rank values in one query
         $wpdb->query($wpdb->prepare("
@@ -575,7 +576,7 @@ class DH_Profile_Rankings {
             ");
         }
 
-        $this->invalidate_rank_caches($old_ranks, $new_ranks, $rank_field);
+        self::invalidate_rank_caches($old_ranks, $new_ranks, $rank_field);
     }
 
     /**
@@ -589,15 +590,18 @@ class DH_Profile_Rankings {
      * Only changed profiles are touched, so a bulk recalculation does not churn the
      * cache for the thousands of profiles whose rank did not move.
      *
-     * @param array  $old_ranks  post_id => row with meta_value, as it was before the write
+     * Public and static because rank writing is duplicated in the WP-CLI commands,
+     * which must invalidate identically.
+     *
+     * @param array  $old_ranks  post_id => rank value as it was before the write
      * @param array  $new_ranks  post_id => rank value just written
      * @param string $rank_field Meta key written ('city_rank' or 'state_rank')
      */
-    private function invalidate_rank_caches($old_ranks, $new_ranks, $rank_field) {
+    public static function invalidate_rank_caches($old_ranks, $new_ranks, $rank_field) {
         $changed = array();
 
         foreach ($new_ranks as $profile_id => $new_rank) {
-            $old_rank = isset($old_ranks[$profile_id]) ? $old_ranks[$profile_id]->meta_value : null;
+            $old_rank = isset($old_ranks[$profile_id]) ? $old_ranks[$profile_id] : null;
 
             if ((string) $old_rank !== (string) $new_rank) {
                 wp_cache_delete($profile_id, 'post_meta');

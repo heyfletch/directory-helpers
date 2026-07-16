@@ -378,6 +378,15 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
         $id_string     = implode( ',', array_map( 'intval', $pids ) );
         $rank_field_esc = esc_sql( $rank_field );
 
+        // Read current values first so only profiles that actually move get invalidated.
+        $old_ranks = $wpdb->get_results( "
+            SELECT post_id, meta_value
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$id_string})
+              AND meta_key = '{$rank_field_esc}'
+        ", OBJECT_K );
+        $old_ranks = wp_list_pluck( $old_ranks, 'meta_value' );
+
         // Delete existing values in one query.
         $wpdb->query( "
             DELETE FROM {$wpdb->postmeta}
@@ -386,12 +395,14 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
         " );
 
         // Bulk insert.
-        $rows = [];
-        $rank = 1;
+        $rows      = [];
+        $new_ranks = [];
+        $rank      = 1;
         foreach ( $pids as $pid ) {
             $is_featured = ! empty( $scores[ $pid ]['is_featured'] );
             $rank_value  = ( ! $is_featured && $scores[ $pid ]['score'] < 0 ) ? 99999 : $rank;
             $rows[]      = "({$pid}, '{$rank_field_esc}', {$rank_value})";
+            $new_ranks[ $pid ] = $rank_value;
             if ( $is_featured || $scores[ $pid ]['score'] >= 0 ) {
                 $rank++;
             }
@@ -403,5 +414,7 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
                 VALUES " . implode( ',', $rows )
             );
         }
+
+        DH_Profile_Rankings::invalidate_rank_caches( $old_ranks, $new_ranks, $rank_field );
     }
 }
