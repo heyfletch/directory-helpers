@@ -768,6 +768,18 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-structured-data/profile-structured-data.php',
                 'class' => 'DH_Profile_Structured_Data'
             ),
+            'ugc-form-validation' => array(
+                'name' => __('UGC Form Validation', 'directory-helpers'),
+                'description' => __('Server-side minimum word-count validation for the Get Listed (UGC) Fluent Form.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/ugc-form-validation/ugc-form-validation.php',
+                'class' => 'DH_UGC_Form_Validation'
+            ),
+            'ugc-update-requests' => array(
+                'name' => __('UGC Update Requests', 'directory-helpers'),
+                'description' => __('Magic-link profile update requests: token issuance (wp dh-ugc issue-token) and token validation on the Update Your Profile form.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/ugc-update-requests/ugc-update-requests.php',
+                'class' => 'DH_UGC_Update_Requests'
+            ),
             'ai-content-generator' => array(
                 'name' => __('AI Content Generator', 'directory-helpers'),
                 'description' => __('Triggers an n8n workflow to generate AI content for posts.', 'directory-helpers'),

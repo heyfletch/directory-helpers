@@ -98,17 +98,36 @@ class DH_Profile_Structured_Data {
                 $local_business['telephone'] = $phone;
             }
 
-            // Rating
-            $rating_value = get_field( 'rating_value', $post_id );
-            $rating_count = get_field( 'rating_votes_count', $post_id );
-            if ( !empty( $rating_value ) && !empty( $rating_count ) ) {
-                $local_business['aggregateRating'] = array(
-                    '@type' => 'AggregateRating',
-                    'ratingValue' => $rating_value,
-                    'reviewCount' => $rating_count,
-                    'bestRating' => '5',
-                    'worstRating' => '1'
+            // Trainer's own website
+            $trainer_url = get_field( 'url', $post_id );
+            if ( !empty( $trainer_url ) ) {
+                $local_business['url'] = $trainer_url;
+            }
+
+            // Description
+            $description = get_field( 'description', $post_id );
+            if ( !empty( $description ) ) {
+                $local_business['description'] = wp_strip_all_tags( $description );
+            }
+
+            // Geo coordinates
+            $latitude = get_field( 'latitude', $post_id );
+            $longitude = get_field( 'longitude', $post_id );
+            if ( !empty( $latitude ) && !empty( $longitude ) ) {
+                $local_business['geo'] = array(
+                    '@type' => 'GeoCoordinates',
+                    'latitude' => $latitude,
+                    'longitude' => $longitude
                 );
+            }
+
+            // Social profiles
+            $same_as = array_values( array_filter( array(
+                get_field( 'facebook_url', $post_id ),
+                get_field( 'instagram_url', $post_id )
+            ) ) );
+            if ( !empty( $same_as ) ) {
+                $local_business['sameAs'] = $same_as;
             }
 
             // --- Publisher / Organization ---
@@ -117,12 +136,6 @@ class DH_Profile_Structured_Data {
                 'name' => 'Goody Doggy',
                 'url' => get_home_url()
             );
-            if ($logo_obj) {
-                $publisher['logo'] = $logo_obj;
-            }
-            if ($address_schema) {
-                $publisher['address'] = $address_schema;
-            }
 
             // --- ProfilePage entity ---
             $profile_page = array(
