@@ -780,6 +780,12 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/ugc-update-requests/ugc-update-requests.php',
                 'class' => 'DH_UGC_Update_Requests'
             ),
+            'contact-email' => array(
+                'name' => __('Contact Email', 'directory-helpers'),
+                'description' => __('Stores a trainer business contact email on the profile, captured from the intake and update forms only when it can be tied to that profile (wp dh-contact-email backfill|review|set).', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/contact-email/contact-email.php',
+                'class' => 'DH_Contact_Email'
+            ),
             'ai-content-generator' => array(
                 'name' => __('AI Content Generator', 'directory-helpers'),
                 'description' => __('Triggers an n8n workflow to generate AI content for posts.', 'directory-helpers'),
