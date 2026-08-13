@@ -422,6 +422,10 @@ class DH_Contact_Email {
         if ( ! $this->is_free_mailbox( $email ) ) {
             $score += 2;
         }
+        // A shared business mailbox outlives whoever filled the form in.
+        if ( preg_match( '/^(info|contact|hello|admin|office|support|team)@/', $email ) ) {
+            $score += 1;
+        }
         return $score;
     }
 
