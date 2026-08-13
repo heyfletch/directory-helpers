@@ -193,16 +193,34 @@ class DH_UGC_Update_Requests {
      * <post_id>
      * : The profile post ID.
      *
+     * [--email=<address>]
+     * : The address the link is being sent to. Recorded as the profile's
+     * contact email when it has none - mailing a magic link there is the
+     * strongest proof of contact we get. Never overwrites a stored address;
+     * a different one is parked in contact_email_pending.
+     *
      * ## EXAMPLES
      *
      *     wp dh-ugc issue-token 119134
+     *     wp dh-ugc issue-token 119134 --email=info@example.com
      */
-    public function cli_issue_token( $args ) {
+    public function cli_issue_token( $args, $assoc_args = array() ) {
         $post_id = (int) $args[0];
         $post    = get_post( $post_id );
         if ( ! $post || $post->post_type !== 'profile' ) {
             WP_CLI::error( "Post {$post_id} is not a profile." );
         }
+
+        if ( ! empty( $assoc_args['email'] ) && class_exists( 'DH_Contact_Email' ) ) {
+            $contact = new DH_Contact_Email();
+            $email   = $contact->clean_email( $assoc_args['email'] );
+            if ( ! $email ) {
+                WP_CLI::error( 'Not a valid email address.' );
+            }
+            $result = $contact->record( $post_id, $email, 'manual' );
+            WP_CLI::log( sprintf( 'Contact email %s: %s', $result, $email ) );
+        }
+
         $raw  = bin2hex( random_bytes( 16 ) );
         $hash = hash( 'sha256', $raw );
         update_post_meta( $post_id, 'update_token_hash', $hash );
