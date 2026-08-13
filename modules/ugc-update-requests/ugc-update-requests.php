@@ -106,7 +106,12 @@ class DH_UGC_Update_Requests {
             }
             $value = get_field( self::PREFILL_MAP[ $name ], $post_id );
             if ( 'input_checkbox' === $field['element'] ) {
-                $field['attributes']['value'] = is_array( $value ) ? array_values( $value ) : array();
+                // ACF checkbox may return values or {value,label} pairs depending on return format.
+                $keys = array();
+                foreach ( (array) $value as $item ) {
+                    $keys[] = is_array( $item ) ? (string) $item['value'] : (string) $item;
+                }
+                $field['attributes']['value'] = $keys;
             } elseif ( is_scalar( $value ) && '' !== (string) $value ) {
                 $field['attributes']['value'] = (string) $value;
             }
