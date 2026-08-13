@@ -325,8 +325,9 @@ class DH_Contact_Email {
         $in   = implode( ',', array_map( 'intval', $forms ) );
         $rows = $wpdb->get_results( "SELECT id, form_id, response FROM {$wpdb->prefix}fluentform_submissions WHERE form_id IN ({$in}) ORDER BY id" );
 
-        $table   = array();
-        $counts  = array( 'stored' => 0, 'unchanged' => 0, 'pending' => 0, 'skipped' => 0, 'no match' => 0 );
+        $table     = array();
+        $counts    = array( 'stored' => 0, 'unchanged' => 0, 'pending' => 0, 'skipped' => 0, 'no match' => 0 );
+        $candidates = array();
         foreach ( $rows as $row ) {
             $data  = json_decode( $row->response, true );
             $email = $this->clean_email( isset( $data['email'] ) ? $data['email'] : '' );
@@ -352,19 +353,46 @@ class DH_Contact_Email {
                 continue;
             }
 
+            $candidates[ $post_id ][] = array(
+                'entry'  => (int) $row->id,
+                'form'   => $form_id,
+                'email'  => $email,
+                'source' => $source,
+                'reason' => $reason,
+                'score'  => $this->evidence_score( $post_id, $email, $reason ),
+            );
+        }
+
+        // One address per profile: strongest evidence wins, the rest become pending.
+        foreach ( $candidates as $post_id => $rows_for_profile ) {
+            usort( $rows_for_profile, function ( $a, $b ) {
+                return $a['score'] === $b['score'] ? $b['entry'] - $a['entry'] : $b['score'] - $a['score'];
+            } );
+
+            $best  = array_shift( $rows_for_profile );
+            $alts  = array_values( array_unique( array_filter( wp_list_pluck( $rows_for_profile, 'email' ), function ( $email ) use ( $best ) {
+                return $email !== $best['email'];
+            } ) ) );
+
             $result = $apply
-                ? $this->record( $post_id, $email, $source )
-                : $this->preview( $post_id, $email );
+                ? $this->record( $post_id, $best['email'], $best['source'] )
+                : $this->preview( $post_id, $best['email'] );
+            if ( $apply && $alts ) {
+                update_post_meta( $post_id, self::META_PENDING, implode( ', ', $alts ) );
+            }
             $counts[ $result ] = isset( $counts[ $result ] ) ? $counts[ $result ] + 1 : 1;
+            if ( $alts ) {
+                $counts['pending'] += count( $alts );
+            }
 
             $table[] = array(
-                'entry'   => $row->id,
-                'form'    => $form_id,
-                'email'   => $email,
+                'entry'   => $best['entry'],
+                'form'    => $best['form'],
+                'email'   => $best['email'],
                 'profile' => $post_id,
                 'title'   => get_the_title( $post_id ),
-                'reason'  => $reason . ( $this->is_free_mailbox( $email ) ? ' [free mailbox]' : '' ),
-                'result'  => $result,
+                'reason'  => $best['reason'] . ( $this->is_free_mailbox( $best['email'] ) ? ' [free mailbox]' : '' ),
+                'result'  => $result . ( $alts ? ' (+' . count( $alts ) . ' pending: ' . implode( ', ', $alts ) . ')' : '' ),
             );
         }
 
@@ -373,6 +401,28 @@ class DH_Contact_Email {
             WP_CLI::log( sprintf( '%-10s %d', $key, $count ) );
         }
         WP_CLI::success( $apply ? 'Backfill applied.' : 'Dry run - re-run with --apply to write.' );
+    }
+
+    /**
+     * How much an address looks like it really belongs to this profile.
+     *
+     * An address on the profile's own website domain is the strongest thing
+     * we have; a magic-link token is next; a mailbox at any business domain
+     * beats a free one.
+     */
+    public function evidence_score( $post_id, $email, $reason ) {
+        $score  = 0;
+        $domain = $this->domain( get_post_meta( $post_id, 'url', true ) );
+        if ( $domain && substr( strrchr( $email, '@' ), 1 ) === $domain ) {
+            $score += 8;
+        }
+        if ( 'token' === $reason ) {
+            $score += 4;
+        }
+        if ( ! $this->is_free_mailbox( $email ) ) {
+            $score += 2;
+        }
+        return $score;
     }
 
     /**
