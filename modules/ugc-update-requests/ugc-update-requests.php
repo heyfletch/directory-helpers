@@ -26,12 +26,105 @@ class DH_UGC_Update_Requests {
      */
     const TOKEN_TTL = 31536000;
 
+    /**
+     * Days a trainer must wait between submissions.
+     */
+    const RESUBMIT_DAYS = 30;
+
+    /**
+     * Form field name => ACF field name map for prefilling.
+     */
+    const PREFILL_MAP = array(
+        'phone'         => 'phone',
+        'website'       => 'url',
+        'booking_url'   => 'booking_url',
+        'hours'         => 'hours',
+        'facebook_url'  => 'facebook_url',
+        'instagram_url' => 'instagram_url',
+        'service_types' => 'service_types',
+    );
+
     public function __construct() {
         add_filter( 'fluentform/validation_errors', array( $this, 'validate_token' ), 10, 4 );
+        add_filter( 'fluentform/rendering_form', array( $this, 'prefill_form' ), 10, 1 );
+        add_action( 'fluentform/submission_inserted', array( $this, 'record_submission' ), 10, 3 );
+        add_action( 'template_redirect', array( $this, 'nocache_token_page' ) );
 
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
             WP_CLI::add_command( 'dh-ugc issue-token', array( $this, 'cli_issue_token' ) );
             WP_CLI::add_command( 'dh-ugc resolve-token', array( $this, 'cli_resolve_token' ) );
+        }
+    }
+
+    /**
+     * Never let LiteSpeed cache a tokened update page (prefilled per-trainer data).
+     */
+    public function nocache_token_page() {
+        if ( isset( $_GET['t'] ) && is_page( 'update-profile' ) ) {
+            do_action( 'litespeed_control_set_nocache', 'dh-ugc tokened update page' );
+        }
+    }
+
+    /**
+     * Prefill the update form from the token's profile ACF data.
+     */
+    public function prefill_form( $form ) {
+        if ( (int) $form->id !== self::FORM_ID || ! isset( $_GET['t'] ) ) {
+            return $form;
+        }
+        $post_id = $this->resolve_token( sanitize_text_field( wp_unslash( $_GET['t'] ) ) );
+        if ( ! $post_id || ! function_exists( 'get_field' ) ) {
+            return $form;
+        }
+        if ( isset( $form->fields['fields'] ) && is_array( $form->fields['fields'] ) ) {
+            $city = (string) get_field( 'city', $post_id );
+            $this->prefill_fields_walk( $form->fields['fields'], $post_id, $city );
+        }
+        return $form;
+    }
+
+    /**
+     * Recursively set field values (containers hold nested fields).
+     */
+    private function prefill_fields_walk( array &$fields, $post_id, $city ) {
+        foreach ( $fields as &$field ) {
+            if ( isset( $field['columns'] ) && is_array( $field['columns'] ) ) {
+                foreach ( $field['columns'] as &$column ) {
+                    if ( isset( $column['fields'] ) && is_array( $column['fields'] ) ) {
+                        $this->prefill_fields_walk( $column['fields'], $post_id, $city );
+                    }
+                }
+                unset( $column );
+                continue;
+            }
+            $name = isset( $field['attributes']['name'] ) ? $field['attributes']['name'] : '';
+            if ( $city && isset( $field['settings']['label'] ) ) {
+                $field['settings']['label'] = str_replace( '[city]', $city, $field['settings']['label'] );
+            }
+            if ( ! $name || ! isset( self::PREFILL_MAP[ $name ] ) ) {
+                continue;
+            }
+            $value = get_field( self::PREFILL_MAP[ $name ], $post_id );
+            if ( 'input_checkbox' === $field['element'] ) {
+                $field['attributes']['value'] = is_array( $value ) ? array_values( $value ) : array();
+            } elseif ( is_scalar( $value ) && '' !== (string) $value ) {
+                $field['attributes']['value'] = (string) $value;
+            }
+        }
+        unset( $field );
+    }
+
+    /**
+     * Stamp the profile when an update request is submitted (drives the resubmit window).
+     */
+    public function record_submission( $entry_id, $form_data, $form ) {
+        if ( (int) $form->id !== self::FORM_ID ) {
+            return;
+        }
+        $token   = isset( $form_data['token'] ) ? $form_data['token'] : '';
+        $post_id = $this->resolve_token( $token );
+        if ( $post_id ) {
+            update_post_meta( $post_id, 'update_request_last', current_time( 'mysql' ) );
         }
     }
 
@@ -78,6 +171,11 @@ class DH_UGC_Update_Requests {
         $post_id = $this->resolve_token( $token );
         if ( ! $post_id ) {
             $errors['token'] = array( 'This update link is invalid or has expired. Please use the link from your Goody Doggy email, or contact us for a new one.' );
+            return $errors;
+        }
+        $last = get_post_meta( $post_id, 'update_request_last', true );
+        if ( $last && ( time() - strtotime( $last ) ) < self::RESUBMIT_DAYS * DAY_IN_SECONDS ) {
+            $errors['token'] = array( 'You recently sent us an update - we can accept one submission every ' . self::RESUBMIT_DAYS . ' days. If something urgent needs fixing, just reply to your Goody Doggy email.' );
         }
         return $errors;
     }
