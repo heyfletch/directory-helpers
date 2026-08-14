@@ -68,6 +68,7 @@ Located in `/includes/cli/`:
 - `update-rankings` - Recalculate profile rankings
 - `update-state-rankings` - Recalculate state-level rankings
 - `prime-cache` - Pre-warm query caches
+- `prime-all` - Full priming sequence in one job (search rebuild, object cache pre-warm, priority/listings/profiles presets); backs the "Prime All Caches" admin button
 - `migrate-main-image` - Migrate featured images
 - `migrate-years-experience` - Migrate experience data
 - `pre-warm-object-cache` - Pre-warm Redis object cache
