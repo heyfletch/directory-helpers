@@ -590,7 +590,6 @@ class DH_Admin_CLI_Runner {
             <div class="dh-cli-actions">
                 <button type="button" class="button button-primary dh-cli-run-btn"
                         data-command="prime-all">
-                    <span class="dashicons dashicons-update" style="margin-top:3px;"></span>
                     <?php esc_html_e('Prime All Caches', 'directory-helpers'); ?>
                 </button>
                 <span class="dh-cli-status"></span>
