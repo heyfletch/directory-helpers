@@ -91,7 +91,7 @@ class DH_Admin_CLI_Runner {
                 continue;
             }
             if (!$this->pid_is_alive($job['pid'])) {
-                // Process is gone — determine success/failure from log tail.
+                // Process is gone - determine success/failure from log tail.
                 $log_file = $job['log_file'];
                 if ($log_file && file_exists($log_file)) {
                     $tail = file_get_contents($log_file);
@@ -100,7 +100,7 @@ class DH_Admin_CLI_Runner {
                     } elseif (strpos($tail, 'Error:') !== false || strpos($tail, 'Warning:') !== false) {
                         $job['status'] = 'failed';
                     } else {
-                        // Log exists but no clear signal — treat as completed.
+                        // Log exists but no clear signal - treat as completed.
                         $job['status'] = 'completed';
                     }
                 } else {
@@ -274,6 +274,7 @@ class DH_Admin_CLI_Runner {
             'update-rankings-for-profile',
             'analyze-radius',
             'prime-cache',
+            'prime-all',
         );
 
         $parts        = explode(' ', $command);
@@ -510,11 +511,11 @@ class DH_Admin_CLI_Runner {
 
         $area_names  = (!empty($area_terms) && !is_wp_error($area_terms))
             ? implode(', ', wp_list_pluck($area_terms, 'name'))
-            : '—';
+            : '-';
 
         $state_names = (!empty($state_terms) && !is_wp_error($state_terms))
             ? implode(', ', wp_list_pluck($state_terms, 'name'))
-            : '—';
+            : '-';
 
         $command = 'update-rankings-for-profile --profile=' . $post_id;
         ?>
@@ -570,5 +571,32 @@ class DH_Admin_CLI_Runner {
             </td>
         </tr>
         <?php
+    }
+
+    /**
+     * Section for the main Directory Helpers admin page: one-click cache
+     * priming. The .dh-cli-actions / .dh-cli-run-btn / .dh-cli-status markup
+     * is what assets/js/cli-runner.js binds to; the queue panel it renders
+     * attaches itself after the first .dh-cli-actions block.
+     */
+    public static function get_admin_section_html() {
+        ob_start();
+        ?>
+        <div class="directory-helpers-settings" style="margin-bottom: 30px; background: #f0f8e7; border: 1px solid #b8dba0; padding: 20px; border-radius: 4px;">
+            <h2 style="margin-top: 0;"><?php esc_html_e('One-Click Cache Priming', 'directory-helpers'); ?></h2>
+            <p class="description" style="margin-bottom: 15px;">
+                <?php esc_html_e('Runs the whole Cache Priming block above as a single background job: search cache rebuild, object cache pre-warm, then the priority, listings, and profiles presets in order. Safe to close this page; reopen it to see status. Takes roughly 2-3 hours.', 'directory-helpers'); ?>
+            </p>
+            <div class="dh-cli-actions">
+                <button type="button" class="button button-primary dh-cli-run-btn"
+                        data-command="prime-all">
+                    <span class="dashicons dashicons-update" style="margin-top:3px;"></span>
+                    <?php esc_html_e('Prime All Caches', 'directory-helpers'); ?>
+                </button>
+                <span class="dh-cli-status"></span>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 }
