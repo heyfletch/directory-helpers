@@ -3,6 +3,13 @@
 
     <?php settings_errors('directory_helpers_messages'); ?>
 
+    <?php
+    // One-click cache priming (CLI Runner section)
+    if (class_exists('DH_Admin_CLI_Runner')) {
+        echo DH_Admin_CLI_Runner::get_admin_section_html();
+    }
+    ?>
+
     <!-- Complete Maintenance Workflow -->
     <div class="directory-helpers-settings" style="margin-bottom: 30px; background: #f0f6fc; border: 1px solid #c3dafe; padding: 20px; border-radius: 4px;">
         <h2 style="margin-top: 0;"><?php esc_html_e('Complete Maintenance Workflow', 'directory-helpers'); ?></h2>
@@ -90,13 +97,6 @@ wp directory-helpers prime-cache --preset=profiles --concurrency=7</textarea>
             </tbody>
         </table>
     </div>
-
-    <?php 
-    // Include CLI Runner section if module is loaded
-    if (class_exists('DH_Admin_CLI_Runner')) {
-        echo DH_Admin_CLI_Runner::get_admin_section_html();
-    }
-    ?>
 
     <form method="post" action="">
         <?php

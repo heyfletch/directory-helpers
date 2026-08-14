@@ -585,7 +585,7 @@ class DH_Admin_CLI_Runner {
         <div class="directory-helpers-settings" style="margin-bottom: 30px; background: #f0f8e7; border: 1px solid #b8dba0; padding: 20px; border-radius: 4px;">
             <h2 style="margin-top: 0;"><?php esc_html_e('One-Click Cache Priming', 'directory-helpers'); ?></h2>
             <p class="description" style="margin-bottom: 15px;">
-                <?php esc_html_e('Runs the whole Cache Priming block above as a single background job: search cache rebuild, object cache pre-warm, then the priority, listings, and profiles presets in order. Safe to close this page; reopen it to see status. Takes roughly 2-3 hours.', 'directory-helpers'); ?>
+                <?php esc_html_e('Runs the whole Cache Priming block below as a single background job: search cache rebuild, object cache pre-warm, then the priority, listings, and profiles presets in order. Safe to close this page; reopen it to see status. Takes roughly 2-3 hours.', 'directory-helpers'); ?>
             </p>
             <div class="dh-cli-actions">
                 <button type="button" class="button button-primary dh-cli-run-btn"
