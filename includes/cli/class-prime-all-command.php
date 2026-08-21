@@ -1,8 +1,8 @@
 <?php
 /**
  * WP-CLI command that runs the full cache priming sequence as one job:
- * search cache rebuild, object cache pre-warm, then the three prime-cache
- * presets in order. Mirrors the "Cache Priming" block from the admin page
+ * search cache rebuild, object cache pre-warm, then the four prime-cache
+ * presets in order (paying profiles go early, before the long tail). Mirrors the "Cache Priming" block from the admin page
  * so the Prime All Caches button (and ~/prime-cache.sh) run one command.
  *
  * @package Directory_Helpers
@@ -34,6 +34,7 @@ if (!class_exists('DH_Prime_All_Command')) {
                 'dh search rebuild-cache',
                 'directory-helpers pre-warm-object-cache',
                 "directory-helpers prime-cache --preset=priority --concurrency={$concurrency}",
+                "directory-helpers prime-cache --preset=paid --concurrency={$concurrency}",
                 "directory-helpers prime-cache --preset=listings --concurrency={$concurrency}",
                 "directory-helpers prime-cache --preset=profiles --concurrency={$concurrency}",
             );

@@ -47,6 +47,7 @@ if (!class_exists('DH_Prime_Cache_Command')) {
          *   - priority: page, state-listing, certification sitemaps
          *   - listings: city-listing, state-listing sitemaps
          *   - profiles: profile sitemaps
+         *   - paid: profiles that pay - Featured or ad-free (queried live, no sitemap)
          *
          * [--delay=<ms>]
          * : Delay between requests in milliseconds. Default: 100
@@ -359,8 +360,13 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                 } elseif ($preset === 'profiles') {
                     // Find all profile sitemaps (profile-sitemap.xml, profile-sitemap1.xml, etc.)
                     $args = $this->find_numbered_sitemaps('profile-sitemap');
+                } elseif ($preset === 'paid') {
+                    // Paying profiles have no sitemap of their own, so query them directly.
+                    $paid_urls = $this->get_paid_profile_urls();
+                    WP_CLI::line("Found " . count($paid_urls) . " paid profiles (Featured or ad-free)");
+                    return $paid_urls;
                 } else {
-                    WP_CLI::error("Unknown preset: {$preset}. Available: priority, listings, profiles");
+                    WP_CLI::error("Unknown preset: {$preset}. Available: priority, listings, profiles, paid");
                     return array();
                 }
             }
@@ -391,6 +397,37 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                     } else {
                         WP_CLI::warning("Failed to parse sitemap: {$arg}");
                     }
+                }
+            }
+
+            return $urls;
+        }
+
+        /**
+         * Get URLs for profiles we are paid to serve: Featured placement or ad-free.
+         *
+         * @return array Array of profile URLs
+         */
+        private function get_paid_profile_urls() {
+            $ids = get_posts(array(
+                'post_type'      => 'profile',
+                'post_status'    => 'publish',
+                'posts_per_page' => -1,
+                'fields'         => 'ids',
+                'orderby'        => 'ID',
+                'order'          => 'ASC',
+                'meta_query'     => array(
+                    'relation' => 'OR',
+                    array('key' => 'featured', 'value' => 0, 'compare' => '>', 'type' => 'NUMERIC'),
+                    array('key' => 'no_ads', 'value' => 0, 'compare' => '>', 'type' => 'NUMERIC'),
+                ),
+            ));
+
+            $urls = array();
+            foreach ($ids as $id) {
+                $permalink = get_permalink($id);
+                if ($permalink) {
+                    $urls[] = $permalink;
                 }
             }
 

@@ -26,6 +26,7 @@ wp litespeed-purge all                                               # Clears pa
 wp dh search rebuild-cache
 wp directory-helpers pre-warm-object-cache                           
 wp directory-helpers prime-cache --preset=priority --concurrency=7
+wp directory-helpers prime-cache --preset=paid --concurrency=7      # Featured + ad-free profiles first
 wp directory-helpers prime-cache --preset=listings --concurrency=7
 wp directory-helpers prime-cache --preset=profiles --concurrency=7</textarea>
         <p class="description" style="margin-top: 10px;">
