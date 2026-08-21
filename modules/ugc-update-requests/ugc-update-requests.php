@@ -2,8 +2,14 @@
 /**
  * UGC Update Requests Module
  *
- * Magic-link profile update requests: token issuance (WP-CLI) and
- * token validation on the Update Your Profile Fluent Form.
+ * Profile update requests on the Update Your Profile Fluent Form.
+ *
+ * Two ways in:
+ *   ?t=<token>  magic link we emailed - verified, the trainer themselves.
+ *   ?p=<id>     the "update your profile" link in the Owner's Box on a
+ *               profile page - unverified, anyone can follow it, so those
+ *               entries carry a profile_id with an empty token and must be
+ *               checked against the trainer before anything is applied.
  *
  * @package Directory_Helpers
  * @subpackage UGC_Update_Requests
@@ -49,6 +55,7 @@ class DH_UGC_Update_Requests {
         add_filter( 'fluentform/rendering_form', array( $this, 'prefill_form' ), 10, 1 );
         add_action( 'fluentform/submission_inserted', array( $this, 'record_submission' ), 10, 3 );
         add_action( 'template_redirect', array( $this, 'nocache_token_page' ) );
+        add_shortcode( 'dh_update_target', array( $this, 'shortcode_update_target' ) );
 
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
             WP_CLI::add_command( 'dh-ugc issue-token', array( $this, 'cli_issue_token' ) );
@@ -57,22 +64,76 @@ class DH_UGC_Update_Requests {
     }
 
     /**
-     * Never let LiteSpeed cache a tokened update page (prefilled per-trainer data).
+     * Never let LiteSpeed cache an identified update page (prefilled per-trainer data).
      */
     public function nocache_token_page() {
-        if ( isset( $_GET['t'] ) && is_page( 'update-profile' ) ) {
-            do_action( 'litespeed_control_set_nocache', 'dh-ugc tokened update page' );
+        if ( ( isset( $_GET['t'] ) || isset( $_GET['p'] ) ) && is_page( 'update-profile' ) ) {
+            do_action( 'litespeed_control_set_nocache', 'dh-ugc identified update page' );
         }
+    }
+
+    /**
+     * The profile this page visit is about, from ?t= (verified) or ?p= (not).
+     */
+    public function requested_profile_id() {
+        if ( isset( $_GET['t'] ) ) {
+            $post_id = $this->resolve_token( sanitize_text_field( wp_unslash( $_GET['t'] ) ) );
+            if ( $post_id ) {
+                return $post_id;
+            }
+        }
+        if ( isset( $_GET['p'] ) ) {
+            return $this->resolve_profile_id( wp_unslash( $_GET['p'] ) );
+        }
+        return 0;
+    }
+
+    /**
+     * Validate a raw ?p= value. Only live profiles, so the link cannot be used
+     * to fish for drafts. Returns 0 if it is not one.
+     */
+    public function resolve_profile_id( $raw ) {
+        $post_id = (int) $raw;
+        if ( $post_id <= 0 ) {
+            return 0;
+        }
+        $post = get_post( $post_id );
+        if ( ! $post || 'profile' !== $post->post_type || 'publish' !== $post->post_status ) {
+            return 0;
+        }
+        return $post_id;
+    }
+
+    /**
+     * [dh_update_target] - tells the trainer which profile the form will change.
+     * Prints nothing when we cannot tell, so the page still reads correctly.
+     */
+    public function shortcode_update_target() {
+        $post_id = $this->requested_profile_id();
+        if ( ! $post_id ) {
+            return '';
+        }
+        $city  = function_exists( 'get_field' ) ? (string) get_field( 'city', $post_id ) : '';
+        $state = function_exists( 'get_field' ) ? (string) get_field( 'state', $post_id ) : '';
+        $where = trim( $city . ( $state ? ', ' . $state : '' ), ', ' );
+
+        return sprintf(
+            '<p class="dh-update-target">You are updating <strong>%1$s</strong>%2$s. <a href="%3$s">View this profile</a>. Not your business? <a href="%4$s">Get listed instead</a>.</p>',
+            esc_html( get_the_title( $post_id ) ),
+            $where ? ' in ' . esc_html( $where ) : '',
+            esc_url( get_permalink( $post_id ) ),
+            esc_url( home_url( '/get-listed/' ) )
+        );
     }
 
     /**
      * Prefill the update form from the token's profile ACF data.
      */
     public function prefill_form( $form ) {
-        if ( (int) $form->id !== self::FORM_ID || ! isset( $_GET['t'] ) ) {
+        if ( (int) $form->id !== self::FORM_ID ) {
             return $form;
         }
-        $post_id = $this->resolve_token( sanitize_text_field( wp_unslash( $_GET['t'] ) ) );
+        $post_id = $this->requested_profile_id();
         if ( ! $post_id || ! function_exists( 'get_field' ) ) {
             return $form;
         }
@@ -126,8 +187,7 @@ class DH_UGC_Update_Requests {
         if ( (int) $form->id !== self::FORM_ID ) {
             return;
         }
-        $token   = isset( $form_data['token'] ) ? $form_data['token'] : '';
-        $post_id = $this->resolve_token( $token );
+        $post_id = $this->submitted_profile_id( $form_data );
         if ( $post_id ) {
             update_post_meta( $post_id, 'update_request_last', current_time( 'mysql' ) );
         }
@@ -166,21 +226,33 @@ class DH_UGC_Update_Requests {
     }
 
     /**
-     * Validate the token field on the update form.
+     * The profile a submission is for: the token when it is valid, otherwise
+     * the profile_id the Owner's Box link carried. An entry with only a
+     * profile_id is unverified - review it before applying anything.
+     */
+    private function submitted_profile_id( $data ) {
+        $post_id = $this->resolve_token( isset( $data['token'] ) ? $data['token'] : '' );
+        if ( $post_id ) {
+            return $post_id;
+        }
+        return $this->resolve_profile_id( isset( $data['profile_id'] ) ? $data['profile_id'] : 0 );
+    }
+
+    /**
+     * Validate the update form: it must name a profile we can find.
      */
     public function validate_token( $errors, $formData, $form, $fields ) {
         if ( (int) $form->id !== self::FORM_ID ) {
             return $errors;
         }
-        $token   = isset( $formData['token'] ) ? $formData['token'] : '';
-        $post_id = $this->resolve_token( $token );
+        $post_id = $this->submitted_profile_id( $formData );
         if ( ! $post_id ) {
-            $errors['token'] = array( 'This update link is invalid or has expired. Please use the link from your Goody Doggy email, or contact us for a new one.' );
+            $errors['token'] = array( 'We could not tell which profile this is for. Please use the link from your Goody Doggy email or the "update your profile" link on your profile page.' );
             return $errors;
         }
         $last = get_post_meta( $post_id, 'update_request_last', true );
         if ( $last && ( time() - strtotime( $last ) ) < self::RESUBMIT_DAYS * DAY_IN_SECONDS ) {
-            $errors['token'] = array( 'You recently sent us an update - we can accept one submission every ' . self::RESUBMIT_DAYS . ' days. If something urgent needs fixing, just reply to your Goody Doggy email.' );
+            $errors['token'] = array( 'You recently sent us an update - we can accept one submission every ' . self::RESUBMIT_DAYS . ' days. We are still working through the changes you already sent.' );
         }
         return $errors;
     }
