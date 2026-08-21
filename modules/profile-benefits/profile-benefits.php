@@ -105,6 +105,10 @@ class DH_Profile_Benefits {
             return $tag;
         }
 
+        if (strpos($tag, 'dh_show_') !== false && isset($_GET['dhv'])) {
+            @file_put_contents('/tmp/dh-tag.log', date('H:i:s') . " render_tag tag=[$tag] the_id=" . get_the_ID() . " post=" . (is_object($post) ? $post->ID : var_export($post, true)) . " singular=" . var_export(is_singular('profile'), true) . "\n", FILE_APPEND);
+        }
+
         switch (str_replace(['{', '}'], '', $tag)) {
             case 'dh_show_ads':
                 return self::show_ads() ? '1' : '0';
@@ -122,6 +126,10 @@ class DH_Profile_Benefits {
     public function render_bricks_content($content, $post, $context = 'text') {
         if (!is_string($content) || strpos($content, '{dh_show_') === false) {
             return $content;
+        }
+
+        if (isset($_GET['dhv'])) {
+            @file_put_contents('/tmp/dh-tag.log', date('H:i:s') . " render_content content=[" . substr($content, 0, 60) . "] the_id=" . get_the_ID() . " ads=" . (self::show_ads() ? 1 : 0) . " box=" . (self::show_owner_box() ? 1 : 0) . "\n", FILE_APPEND);
         }
 
         if (strpos($content, '{dh_show_ads}') !== false) {
