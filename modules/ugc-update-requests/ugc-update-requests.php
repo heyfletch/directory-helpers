@@ -190,9 +190,15 @@ class DH_UGC_Update_Requests {
         if ( (int) $form->id !== self::FORM_ID ) {
             return;
         }
-        $post_id = $this->submitted_profile_id( $form_data );
-        if ( $post_id ) {
-            update_post_meta( $post_id, 'update_request_last', current_time( 'mysql' ) );
+        $token_id = $this->resolve_token( isset( $form_data['token'] ) ? $form_data['token'] : '' );
+        if ( $token_id ) {
+            update_post_meta( $token_id, 'update_request_last', current_time( 'mysql' ) );
+            return;
+        }
+        $pid = $this->resolve_profile_id( isset( $form_data['profile_id'] ) ? $form_data['profile_id'] : 0 );
+        if ( $pid ) {
+            // Separate stamp so unverified submissions can never lock out the owner's magic link.
+            update_post_meta( $pid, 'update_request_last_unverified', current_time( 'mysql' ) );
         }
     }
 
@@ -248,12 +254,14 @@ class DH_UGC_Update_Requests {
         if ( (int) $form->id !== self::FORM_ID ) {
             return $errors;
         }
-        $post_id = $this->submitted_profile_id( $formData );
+        $token_id = $this->resolve_token( isset( $formData['token'] ) ? $formData['token'] : '' );
+        $post_id  = $token_id ? $token_id : $this->resolve_profile_id( isset( $formData['profile_id'] ) ? $formData['profile_id'] : 0 );
         if ( ! $post_id ) {
             $errors['token'] = array( 'We could not tell which profile this is for. Please use the link from your Goody Doggy email or the "update your profile" link on your profile page.' );
             return $errors;
         }
-        $last = get_post_meta( $post_id, 'update_request_last', true );
+        $last_key = $token_id ? 'update_request_last' : 'update_request_last_unverified';
+        $last     = get_post_meta( $post_id, $last_key, true );
         if ( $last && ( time() - strtotime( $last ) ) < self::RESUBMIT_DAYS * DAY_IN_SECONDS ) {
             $errors['token'] = array( 'You recently sent us an update - we can accept one submission every ' . self::RESUBMIT_DAYS . ' days. We are still working through the changes you already sent.' );
         }
