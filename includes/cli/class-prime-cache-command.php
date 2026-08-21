@@ -481,6 +481,9 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                     CURLOPT_NOBODY => false,
                     CURLOPT_FOLLOWLOCATION => true,
                     CURLOPT_MAXREDIRS => 5,
+                    // Force IPv4: the server's IPv6 egress is not covered by the
+                    // Cloudflare rate-limit skip rule, so v6 requests get 429s.
+                    CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
                 ));
                 curl_multi_add_handle($mh, $ch);
                 $handles[(int)$ch] = array('url' => $url, 'handle' => $ch);
