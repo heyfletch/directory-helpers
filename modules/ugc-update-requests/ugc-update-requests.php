@@ -6,7 +6,7 @@
  *
  * Two ways in:
  *   ?t=<token>  magic link we emailed - verified, the trainer themselves.
- *   ?p=<id>     the "update your profile" link in the Owner's Box on a
+ *   ?pid=<id>   the "update your profile" link in the Owner's Box on a
  *               profile page - unverified, anyone can follow it, so those
  *               entries carry a profile_id with an empty token and must be
  *               checked against the trainer before anything is applied.
@@ -67,13 +67,13 @@ class DH_UGC_Update_Requests {
      * Never let LiteSpeed cache an identified update page (prefilled per-trainer data).
      */
     public function nocache_token_page() {
-        if ( ( isset( $_GET['t'] ) || isset( $_GET['p'] ) ) && is_page( 'update-profile' ) ) {
+        if ( ( isset( $_GET['t'] ) || isset( $_GET['pid'] ) ) && is_page( 'update-profile' ) ) {
             do_action( 'litespeed_control_set_nocache', 'dh-ugc identified update page' );
         }
     }
 
     /**
-     * The profile this page visit is about, from ?t= (verified) or ?p= (not).
+     * The profile this page visit is about, from ?t= (verified) or ?pid= (not).
      */
     public function requested_profile_id() {
         if ( isset( $_GET['t'] ) ) {
@@ -82,14 +82,14 @@ class DH_UGC_Update_Requests {
                 return $post_id;
             }
         }
-        if ( isset( $_GET['p'] ) ) {
-            return $this->resolve_profile_id( wp_unslash( $_GET['p'] ) );
+        if ( isset( $_GET['pid'] ) ) {
+            return $this->resolve_profile_id( wp_unslash( $_GET['pid'] ) );
         }
         return 0;
     }
 
     /**
-     * Validate a raw ?p= value. Only live profiles, so the link cannot be used
+     * Validate a raw ?pid= value. Only live profiles, so the link cannot be used
      * to fish for drafts. Returns 0 if it is not one.
      */
     public function resolve_profile_id( $raw ) {
