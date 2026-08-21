@@ -908,6 +908,12 @@ class Directory_Helpers {
                 'description' => __('Adds direct "Edit Term" links to area taxonomy terms in city-listing meta boxes for quick access to term edit pages.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/area-term-links/area-term-links.php',
                 'class' => 'DH_Area_Term_Links'
+            ),
+            'profile-benefits' => array(
+                'name' => __('Profile Benefits', 'directory-helpers'),
+                'description' => __('Per-profile benefit flags: ad visibility (featured or no_ads ACF field) and owner box. Exposes {dh_show_ads} and {dh_show_owner_box} Bricks dynamic tags, a dh-no-ads body class, and removes the Mediavine script wrapper on ad-free profiles.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-benefits/profile-benefits.php',
+                'class' => 'DH_Profile_Benefits'
             )
             // Add more modules here as needed
         );
