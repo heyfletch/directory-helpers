@@ -235,19 +235,6 @@ class DH_UGC_Update_Requests {
     }
 
     /**
-     * The profile a submission is for: the token when it is valid, otherwise
-     * the profile_id the Owner's Box link carried. An entry with only a
-     * profile_id is unverified - review it before applying anything.
-     */
-    private function submitted_profile_id( $data ) {
-        $post_id = $this->resolve_token( isset( $data['token'] ) ? $data['token'] : '' );
-        if ( $post_id ) {
-            return $post_id;
-        }
-        return $this->resolve_profile_id( isset( $data['profile_id'] ) ? $data['profile_id'] : 0 );
-    }
-
-    /**
      * Validate the update form: it must name a profile we can find.
      */
     public function validate_token( $errors, $formData, $form, $fields ) {
