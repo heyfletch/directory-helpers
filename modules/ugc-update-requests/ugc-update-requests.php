@@ -105,13 +105,16 @@ class DH_UGC_Update_Requests {
     }
 
     /**
-     * [dh_update_target] - tells the trainer which profile the form will change.
-     * Prints nothing when we cannot tell, so the page still reads correctly.
+     * [dh_update_target] - tells the trainer which profile the form will change,
+     * or how to get here properly when the link did not name one.
      */
     public function shortcode_update_target() {
         $post_id = $this->requested_profile_id();
         if ( ! $post_id ) {
-            return '';
+            return sprintf(
+                '<p class="dh-update-target dh-update-target--unknown">This link did not tell us which profile to update. Open your profile page and use the <strong>Update Your Info</strong> link in the Listing Tools box, or the link from your Goody Doggy email. Not listed yet? <a href="%s">Get listed</a>.</p>',
+                esc_url( home_url( '/get-listed/' ) )
+            );
         }
         $city  = function_exists( 'get_field' ) ? (string) get_field( 'city', $post_id ) : '';
         $state = function_exists( 'get_field' ) ? (string) get_field( 'state', $post_id ) : '';
