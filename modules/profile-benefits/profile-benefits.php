@@ -23,7 +23,7 @@ class DH_Profile_Benefits {
         // TEMP DEBUG - remove after verifying tag resolution
         add_action('wp_footer', function () {
             if (is_singular('profile') && function_exists('bricks_render_dynamic_data')) {
-                echo '<!-- dhdebug ads=[' . esc_html(bricks_render_dynamic_data('{dh_show_ads}')) . '] box=[' . esc_html(bricks_render_dynamic_data('{dh_show_owner_box}')) . '] -->';
+                echo '<span hidden id="dhdebug" data-ads="' . esc_attr(bricks_render_dynamic_data('{dh_show_ads}')) . '" data-box="' . esc_attr(bricks_render_dynamic_data('{dh_show_owner_box}')) . '"></span>';
             }
         });
     }
