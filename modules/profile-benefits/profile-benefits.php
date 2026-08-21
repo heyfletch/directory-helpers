@@ -20,6 +20,12 @@ class DH_Profile_Benefits {
         add_filter('body_class', array($this, 'add_body_class'));
         // Grow / Mediavine Control Panel enqueue the ad script wrapper at priority 11.
         add_action('wp_enqueue_scripts', array($this, 'maybe_remove_ads_script'), 20);
+        // TEMP DEBUG - remove after verifying tag resolution
+        add_action('wp_footer', function () {
+            if (is_singular('profile') && function_exists('bricks_render_dynamic_data')) {
+                echo '<!-- dhdebug ads=[' . esc_html(bricks_render_dynamic_data('{dh_show_ads}')) . '] box=[' . esc_html(bricks_render_dynamic_data('{dh_show_owner_box}')) . '] -->';
+            }
+        });
     }
 
     /**
