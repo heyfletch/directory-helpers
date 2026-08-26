@@ -1226,7 +1226,7 @@ class DH_Profile_Badges {
         $output .= '</div>';
         
         // Add help text div underneath the celebration container
-        $output .= '<div class="dh-embed-help" style="display: none; margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; line-height: 1.4; max-width: 600px;"><p style="margin:0 0 1em 0">Paste the embed code into your website / CMS wherever it accepts HTML code. For example, in WordPress, add an HTML block and paste the code there. If there\'s no HTML option, look for text boxes or code boxes that accept simple HTML.</p><p>To change the size, simply change the value for width="125". To align multiple badges in a row, paste each code next to each other with no spaces in between.</p></div>';
+        $output .= '<div class="dh-embed-help" style="display: none; margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; line-height: 1.4; max-width: 600px;"><p style="margin:0 0 1em 0">Paste the embed code into your website / CMS wherever it accepts HTML code. For example, in WordPress, add an HTML block and paste the code there. If there\'s no HTML option, look for text boxes or code boxes that accept simple HTML.</p><p>To change the size, simply change the value for width="125". To align multiple badges in a row, paste each code next to each other with no spaces in between.</p><p style="margin:1em 0 0 0">Wondering what your badge means, or how the ranking is worked out? See <a href="' . esc_url( home_url( '/how-we-rank/' ) ) . '">How We Rank Trainers</a>.</p></div>';
         
         return $output;
     }
