@@ -84,6 +84,14 @@
   height: auto;
 }
 
+/* Inline badge SVGs carry intrinsic pixel dimensions so they size correctly when
+   embedded through <img>; on this page the wrapper sets the size instead. */
+.dh-badge > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 @media (max-width: 991px) {
   .dh-accolades {
     display: grid;

@@ -817,6 +817,16 @@ class DH_Profile_Badges {
         $svgElement = $dom->getElementsByTagName('svg')->item(0);
         
         if ($svgElement) {
+            // The templates ship width/height="100%", which gives the SVG an intrinsic
+            // ratio but no intrinsic size. Loaded through <img> that leaves sizing up to
+            // each browser's fallback, so pin real pixel dimensions from the viewBox.
+            $view_box = $svgElement->getAttribute('viewBox');
+            $view_box_parts = preg_split('/[\s,]+/', trim($view_box));
+            if (count($view_box_parts) === 4 && (float) $view_box_parts[2] > 0 && (float) $view_box_parts[3] > 0) {
+                $svgElement->setAttribute('width', (string) round((float) $view_box_parts[2]));
+                $svgElement->setAttribute('height', (string) round((float) $view_box_parts[3]));
+            }
+
             // Create title element
             $titleElement = $dom->createElement('title');
             $titleElement->textContent = $data['rank_label'] . ' ' . $data['niche'] . ' Badge - ' . $location . ' - ' . $name;
@@ -1162,18 +1172,24 @@ class DH_Profile_Badges {
                     
                     $badge_url = home_url('/badge/' . $post_id . '/' . $type . '.svg');
                     
-                    // Generate alt text based on badge type
+                    // Alt text is the only machine-readable text on the badge: the SVG's
+                    // own <title> is not exposed when it loads through <img>, and the
+                    // lettering is outlined paths. So lead with the business and the
+                    // claim, not the site name.
                     $site_title = get_bloginfo('name');
-                    if ($badge_data['rank_label'] === 'Featured' || $badge_data['rank_label'] === 'Recognized') {
-                        // Featured/Recognized badge format: site_title rank_label niche in location - name
-                        $alt_text = $site_title . ' ' . $badge_data['rank_label'] . ' ' . $badge_data['niche'] . ' in ' . $badge_data['location'] . ' - ' . $badge_data['name'];
-                    } else {
-                        // City/State ranking badge format: site_title Top niches in location
-                        $alt_text = $site_title . ' Top ' . $badge_data['niche'] . 's in ' . $badge_data['location'];
-                    }
-                    
-                    // Generate embed code
-                    $embed_code = '<a style="display: inline-block; margin: 3px; vertical-align: middle;" href="' . esc_url($target_url) . '" target="_blank" rel="noopener"><img src="' . esc_url($badge_url) . '" alt="' . esc_attr($alt_text) . '" width="125" height="auto" /></a>';
+                    $alt_text = sprintf(
+                        '%s, %s %s in %s by %s, %s',
+                        $badge_data['name'],
+                        $badge_data['rank_label'],
+                        $badge_data['niche'],
+                        $badge_data['location'],
+                        $site_title,
+                        date('Y')
+                    );
+
+                    // height must be an integer for the browser to reserve space before
+                    // the image loads; 144 is 125 at the badge's 155x179 ratio.
+                    $embed_code = '<a style="display: inline-block; margin: 3px; vertical-align: middle;" href="' . esc_url($target_url) . '" target="_blank" rel="noopener"><img src="' . esc_url($badge_url) . '" alt="' . esc_attr($alt_text) . '" width="125" height="144" style="width: 125px; height: auto;" loading="lazy" decoding="async" /></a>';
                     
                     $output .= '<div class="dh-badge-wrap">';
                     $aria_label = esc_attr($badge_data['rank_label'] . ' ' . $badge_data['niche'] . ' in ' . $badge_data['location'] . ' - ' . $badge_data['name']);

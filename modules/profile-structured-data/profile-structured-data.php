@@ -56,8 +56,11 @@ class DH_Profile_Structured_Data {
             // --- Reusable Address Schema ---
             $address_schema = null;
             $street_address = get_field( 'street', $post_id );
-            $city = $this->get_first_term_name( $post_id, 'area' );
-            $state_abbr = $this->get_first_term_name( $post_id, 'state' );
+            // Profiles can carry many area/state terms (a Featured profile has one per
+            // city it buys). The first term is alphabetical, not the business's own city,
+            // so both must come from the primary-term helpers.
+            $city = DH_Taxonomy_Helpers::get_city_name( $post_id );
+            $state_abbr = $this->get_state_abbr( $post_id );
             $zip = get_field( 'zip', $post_id );
             if ( !empty( $street_address ) || !empty( $city ) || !empty( $state_abbr ) || !empty( $zip ) ) {
                 $address_schema = array(
@@ -95,7 +98,7 @@ class DH_Profile_Structured_Data {
             // Phone
             $phone = get_field( 'phone', $post_id );
             if ( !empty( $phone ) ) {
-                $local_business['telephone'] = $phone;
+                $local_business['telephone'] = $this->format_e164( $phone );
             }
 
             // Trainer's own website
@@ -128,6 +131,12 @@ class DH_Profile_Structured_Data {
             ) ) );
             if ( !empty( $same_as ) ) {
                 $local_business['sameAs'] = $same_as;
+            }
+
+            // Awards - states in markup what the badges on the page only show as images
+            $awards = $this->get_awards( $post_id );
+            if ( !empty( $awards ) ) {
+                $local_business['award'] = $awards;
             }
 
             // --- Publisher / Organization ---
@@ -191,6 +200,104 @@ class DH_Profile_Structured_Data {
 
             do_action( 'dh_profile_structured_data_output' );
         }
+    }
+
+    /**
+     * Two-letter state code for the profile's primary state.
+     *
+     * The state term slug is the postal code ("mo"); the term name is the full
+     * state name, which is not what addressRegion wants.
+     *
+     * @param int $post_id The post ID.
+     * @return string Two-letter code, or '' when no state term is set.
+     */
+    private function get_state_abbr( $post_id ) {
+        $state_term = DH_Taxonomy_Helpers::get_primary_state_term( $post_id );
+        if ( ! $state_term ) {
+            return '';
+        }
+
+        if ( ! empty( $state_term->slug ) && strlen( $state_term->slug ) === 2 ) {
+            return strtoupper( $state_term->slug );
+        }
+
+        return DH_Taxonomy_Helpers::get_state_name( $post_id, 'abbr' );
+    }
+
+    /**
+     * Normalize a phone number to E.164 (+15551234567).
+     *
+     * Returns the original string when it does not look like a NANP number, so a
+     * non-US or already-formatted international number is left alone.
+     *
+     * @param string $phone Raw phone value.
+     * @return string
+     */
+    private function format_e164( $phone ) {
+        $digits = preg_replace( '/\D+/', '', (string) $phone );
+
+        if ( strlen( $digits ) === 10 ) {
+            return '+1' . $digits;
+        }
+
+        if ( strlen( $digits ) === 11 && $digits[0] === '1' ) {
+            return '+' . $digits;
+        }
+
+        return $phone;
+    }
+
+    /**
+     * Award strings for the badges this profile currently displays.
+     *
+     * Mirrors the badge module's eligibility so the markup never claims an award
+     * the page is not showing.
+     *
+     * @param int $post_id The post ID.
+     * @return array List of award strings.
+     */
+    private function get_awards( $post_id ) {
+        $awards = array();
+
+        if ( ! class_exists( 'DH_Profile_Badges' ) ) {
+            return $awards;
+        }
+
+        $badges = new DH_Profile_Badges();
+        $eligible = $badges->get_eligible_badges( $post_id );
+        $year = date( 'Y' );
+
+        foreach ( array( 'city', 'state' ) as $type ) {
+            if ( empty( $eligible[ $type ] ) ) {
+                continue;
+            }
+
+            $data = $badges->get_badge_data( $post_id, $type );
+            if ( ! $data || empty( $data['rank_label'] ) || empty( $data['location'] ) ) {
+                continue;
+            }
+
+            $awards[] = sprintf(
+                'Goody Doggy %s %s, %s, %s',
+                $data['rank_label'],
+                $data['niche'],
+                $data['location'],
+                $year
+            );
+        }
+
+        // Third-party awards the trainer supplied (see dh_award_badges).
+        $award_ids = get_post_meta( $post_id, 'dh_award_badges', true );
+        if ( $award_ids ) {
+            foreach ( array_filter( array_map( 'intval', explode( ',', $award_ids ) ) ) as $award_id ) {
+                $title = get_the_title( $award_id );
+                if ( $title ) {
+                    $awards[] = $title;
+                }
+            }
+        }
+
+        return $awards;
     }
 
     /**
