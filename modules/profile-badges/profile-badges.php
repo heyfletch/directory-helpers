@@ -1023,11 +1023,23 @@ class DH_Profile_Badges {
             }
         }
         
+        // Third-party award badges (attachment IDs in post meta 'dh_award_badges', comma-separated)
+        $award_ids = get_post_meta($post_id, 'dh_award_badges', true);
+        if ($award_ids) {
+            foreach (array_filter(array_map('intval', explode(',', $award_ids))) as $award_id) {
+                $img = wp_get_attachment_image($award_id, 'medium', false, array('class' => 'dh-badge dh-badge-award', 'style' => 'display: inline-block;'));
+                if ($img) {
+                    $has_badges = true;
+                    $output .= $img;
+                }
+            }
+        }
+
         // Only return output if there are badges to show
         if (!$has_badges) {
             return '';
         }
-        
+
         // Get niche for container aria-label (use first available badge_data)
         $container_aria_label = '';
         foreach ($badge_types as $type) {
@@ -1221,43 +1233,41 @@ class DH_Profile_Badges {
             return;
         }
         
-        wp_add_inline_script('jquery', "
-            jQuery(document).ready(function($) {
-                $('.dh-copy-embed').on('click', function(e) {
-                    e.preventDefault();
-                    var button = $(this);
-                    var embedCode = button.attr('data-embed-code');
-                    var helpDiv = button.closest('.dh-celebration').siblings('.dh-embed-help');
-                    
-                    // Show help text
-                    helpDiv.slideDown(300);
-                    
-                    // Try modern Clipboard API first
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(embedCode).then(function() {
-                            button.text('Copied!');
-                            setTimeout(function() {
-                                button.text('Copy Embed Code');
-                            }, 2000);
-                        }).catch(function() {
-                            // Fallback if clipboard API fails
-                            fallbackCopy(embedCode, button);
-                        });
-                    } else {
-                        fallbackCopy(embedCode, button);
-                    }
-                });
-                
-                function fallbackCopy(text, button) {
-                    var temp = $('<textarea>');
-                    $('body').append(temp);
-                    temp.val(text).select();
-                    document.execCommand('copy');
-                    temp.remove();
-                    button.text('Copied!');
+        // Vanilla JS on a standalone handle: jQuery is not enqueued on the
+        // Bricks frontend, so an inline script attached to 'jquery' never prints.
+        wp_register_script('dh-badge-embed', false, array(), DIRECTORY_HELPERS_VERSION, true);
+        wp_enqueue_script('dh-badge-embed');
+        wp_add_inline_script('dh-badge-embed', "
+            document.addEventListener('click', function(e) {
+                var button = e.target.closest('.dh-copy-embed');
+                if (!button) return;
+                e.preventDefault();
+                var embedCode = button.getAttribute('data-embed-code');
+                var celebration = button.closest('.dh-celebration');
+                var helpDiv = celebration && celebration.parentElement ? celebration.parentElement.querySelector('.dh-embed-help') : null;
+                if (helpDiv) helpDiv.style.display = 'block';
+
+                function done() {
+                    button.textContent = 'Copied!';
                     setTimeout(function() {
-                        button.text('Copy Embed Code');
+                        button.textContent = 'Copy Embed Code';
                     }, 2000);
+                }
+                function fallbackCopy() {
+                    var temp = document.createElement('textarea');
+                    temp.value = embedCode;
+                    temp.style.position = 'absolute';
+                    temp.style.left = '-9999px';
+                    document.body.appendChild(temp);
+                    temp.select();
+                    try { document.execCommand('copy'); } catch (err) {}
+                    document.body.removeChild(temp);
+                    done();
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(embedCode).then(done, fallbackCopy);
+                } else {
+                    fallbackCopy();
                 }
             });
         ");
