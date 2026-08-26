@@ -1027,7 +1027,15 @@ class DH_Profile_Badges {
         $award_ids = get_post_meta($post_id, 'dh_award_badges', true);
         if ($award_ids) {
             foreach (array_filter(array_map('intval', explode(',', $award_ids))) as $award_id) {
-                $img = wp_get_attachment_image($award_id, 'medium', false, array('class' => 'dh-badge dh-badge-award', 'style' => 'display: inline-block;'));
+                // skip-lazy / data-no-lazy keep LiteSpeed's lazy load off this image so it
+                // paints with the inline SVG badges instead of after scroll
+                $img = wp_get_attachment_image($award_id, 'medium', false, array(
+                    'class'         => 'dh-badge dh-badge-award skip-lazy',
+                    'style'         => 'display: inline-block;',
+                    'loading'       => 'eager',
+                    'data-skip-lazy' => '1',
+                    'data-no-lazy'  => '1',
+                ));
                 if ($img) {
                     $has_badges = true;
                     $output .= $img;
