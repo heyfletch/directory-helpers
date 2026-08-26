@@ -7,7 +7,9 @@
   // localStorage keys for client-side index caching.
   var INDEX_KEY = 'dhIS_data';
   var VERSION_KEY = 'dhIS_v';
+  var LM_KEY = 'dhIS_lm';
   var indexCache = null; // { version: 'n', items: [...] }
+  var revalidated = false;
 
   function normalize(str){
     if(!str) return '';
@@ -25,27 +27,57 @@
     };
   }
 
+  function fetchIndex(lastModified){
+    return fetch(cfg.restUrl, {credentials:'omit'})
+      .then(function(r){
+        if(!lastModified) lastModified = r.headers.get('last-modified');
+        return r.json();
+      })
+      .then(function(data){
+        indexCache = data;
+        try{
+          localStorage.setItem(VERSION_KEY, String(data.version||cfg.version||'1'));
+          localStorage.setItem(INDEX_KEY, JSON.stringify(data));
+          if(lastModified) localStorage.setItem(LM_KEY, lastModified);
+        }catch(e){}
+        return indexCache;
+      });
+  }
+
+  // Page HTML is cached far longer than the index, so cfg.version can name an
+  // index that has since been rebuilt. Serve the localStorage copy right away,
+  // then check the file's Last-Modified once per page load and refetch if it moved.
+  function revalidateIndex(){
+    if(revalidated) return;
+    revalidated = true;
+    var lm = null;
+    try{ lm = localStorage.getItem(LM_KEY); }catch(e){}
+    fetch(cfg.restUrl, {method:'HEAD', credentials:'omit'})
+      .then(function(r){
+        var cur = r.headers.get('last-modified');
+        if(cur && lm && cur === lm) return null;
+        return fetchIndex(cur);
+      })
+      .catch(function(){});
+  }
+
   function loadIndex(){
     if(indexCache) return Promise.resolve(indexCache);
     try{
       var lv = localStorage.getItem(VERSION_KEY);
       var ld = localStorage.getItem(INDEX_KEY);
       if(lv && ld && lv === String(cfg.version)){
-        indexCache = JSON.parse(ld);
-        if(indexCache && indexCache.items) return Promise.resolve(indexCache);
+        var cached = JSON.parse(ld);
+        if(cached && cached.items){
+          indexCache = cached;
+          revalidateIndex();
+          return Promise.resolve(indexCache);
+        }
       }
     }catch(e){}
 
-    return fetch(cfg.restUrl, {credentials:'omit'})
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        indexCache = data;
-        try{
-          localStorage.setItem(VERSION_KEY, String(data.version||cfg.version||'1'));
-          localStorage.setItem(INDEX_KEY, JSON.stringify(data));
-        }catch(e){}
-        return indexCache;
-      });
+    revalidated = true;
+    return fetchIndex(null);
   }
 
   function rankItems(items, queryTokens){
