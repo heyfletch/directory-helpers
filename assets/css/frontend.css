@@ -13,7 +13,7 @@
 }
 
 .nc-list .nc-item {
-  margin: 0 0 .4rem 0;
+  margin: 0 0 0.4rem 0;
   padding: 0;
 }
 
@@ -84,13 +84,16 @@
   height: auto;
 }
 
-@media ( max-width: 780px ) {
+@media (max-width: 991px) {
   .dh-accolades {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 160px));
     margin-bottom: var(--space-s);
   }
 
   .dh-accolades .dh-badge {
-    max-width: 28%;
+    width: 100%;
+    max-width: none;
   }
 }
 
