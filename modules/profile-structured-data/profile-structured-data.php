@@ -263,7 +263,13 @@ class DH_Profile_Structured_Data {
             return $awards;
         }
 
-        $badges = new DH_Profile_Badges();
+        // Must be the loaded instance: constructing another re-registers every
+        // hook and shortcode the badges module owns.
+        $badges = DH_Profile_Badges::instance();
+        if ( ! $badges ) {
+            return $awards;
+        }
+
         $eligible = $badges->get_eligible_badges( $post_id );
         $year = date( 'Y' );
 

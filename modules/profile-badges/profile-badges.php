@@ -54,12 +54,35 @@ class DH_Profile_Badges {
      * @var int
      */
     private $rate_limit = 120;
-    
+
+    /**
+     * The instance created when this module loads.
+     *
+     * @var DH_Profile_Badges|null
+     */
+    private static $instance;
+
+    /**
+     * The loaded module instance.
+     *
+     * Other modules must use this rather than constructing their own: the
+     * constructor registers hooks and shortcodes, so a second instance
+     * registers them all a second time.
+     *
+     * @return DH_Profile_Badges|null
+     */
+    public static function instance() {
+        return self::$instance;
+    }
+
     /**
      * Constructor
      */
     public function __construct() {
-        
+        if (null === self::$instance) {
+            self::$instance = $this;
+        }
+
         // Register rewrite rules
         add_action('init', array($this, 'register_rewrite_rules'));
         add_filter('query_vars', array($this, 'register_query_vars'));
