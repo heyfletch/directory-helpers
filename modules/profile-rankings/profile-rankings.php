@@ -397,18 +397,15 @@ class DH_Profile_Rankings {
         // Calculate scores
         $scores = array();
         
+        // Featured is paid placement: it puts a profile in the "Featured Dog Trainers"
+        // section at the top of the listing page. It must NOT buy a better rank or a
+        // better ranking badge, so it takes no part in the score or the sort below.
         foreach ($profiles as $profile_id) {
             $data = $profile_data[$profile_id];
-            $is_featured = ((float) $data['featured']) > 0;
 
             if (!empty($data['rating']) && !empty($data['review_count'])) {
                 $score = $this->calculate_ranking_score($data['rating'], $data['review_count'], $data['boost']);
                 $review_count = (int) $data['review_count'];
-            } elseif ($is_featured) {
-                // Featured but unrated: keep a real (non-sentinel) score so they still
-                // sort to the top. ranking_boost lets us order featured peers manually.
-                $score = ((float) $data['boost']) * 2;
-                $review_count = 0;
             } else {
                 $score = -1;
                 $review_count = 0;
@@ -417,7 +414,6 @@ class DH_Profile_Rankings {
             $scores[$profile_id] = [
                 'score' => $score,
                 'review_count' => $review_count,
-                'is_featured' => $is_featured,
             ];
         }
 
@@ -425,19 +421,16 @@ class DH_Profile_Rankings {
         
         // Extract scores, review counts, and profile IDs for sorting
         $profile_ids = array_keys($scores);
-        $featured_flags = [];
         $score_values = [];
         $review_counts = [];
 
         foreach ($scores as $profile_id => $data) {
-            $featured_flags[] = !empty($data['is_featured']) ? 1 : 0;
             $score_values[] = (float)$data['score'];
             $review_counts[] = $data['review_count'];
         }
 
-        // Featured profiles first, then by score, review count, and ID as tie-breaker
+        // Score, then review count, then ID as tie-breaker
         array_multisort(
-            $featured_flags, SORT_DESC, SORT_NUMERIC,
             $score_values, SORT_DESC, SORT_NUMERIC,
             $review_counts, SORT_DESC, SORT_NUMERIC,
             $profile_ids, SORT_ASC, SORT_NUMERIC    // Tie-breaker: lower ID wins
@@ -557,12 +550,13 @@ class DH_Profile_Rankings {
         $rank = 1;
 
         foreach ($scores as $profile_id => $data) {
-            $is_featured = !empty($data['is_featured']);
-            $rank_value = (!$is_featured && $data['score'] < 0) ? 99999 : $rank;
+            // A profile with no rating is "not yet rated" (99999) and takes no
+            // position in the numbered list, whether or not it is Featured.
+            $rank_value = ($data['score'] < 0) ? 99999 : $rank;
             $insert_data[] = "({$profile_id}, '" . esc_sql($rank_field) . "', {$rank_value})";
             $new_ranks[$profile_id] = $rank_value;
 
-            if ($is_featured || $data['score'] >= 0) {
+            if ($data['score'] >= 0) {
                 $rank++;
             }
         }
