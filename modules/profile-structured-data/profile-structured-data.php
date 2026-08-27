@@ -133,10 +133,25 @@ class DH_Profile_Structured_Data {
                 $local_business['sameAs'] = $same_as;
             }
 
+            // A former trading name, so a rebranded business stays one entity to a
+            // crawler even while outside sources still carry the old name.
+            $alternate_name = get_post_meta( $post_id, 'alternate_name', true );
+            if ( ! empty( $alternate_name ) ) {
+                $local_business['alternateName'] = $alternate_name;
+            }
+
             // Awards - states in markup what the badges on the page only show as images
             $awards = $this->get_awards( $post_id );
             if ( !empty( $awards ) ) {
                 $local_business['award'] = $awards;
+            }
+
+            // Where those awards can be verified
+            $award_sources = $this->get_award_sources( $post_id );
+            if ( ! empty( $award_sources ) ) {
+                $local_business['subjectOf'] = ( count( $award_sources ) === 1 )
+                    ? $award_sources[0]
+                    : $award_sources;
             }
 
             // --- Publisher / Organization ---
@@ -293,17 +308,64 @@ class DH_Profile_Structured_Data {
         }
 
         // Third-party awards the trainer supplied (see dh_award_badges).
-        $award_ids = get_post_meta( $post_id, 'dh_award_badges', true );
-        if ( $award_ids ) {
-            foreach ( array_filter( array_map( 'intval', explode( ',', $award_ids ) ) ) as $award_id ) {
-                $title = get_the_title( $award_id );
-                if ( $title ) {
-                    $awards[] = $title;
-                }
+        foreach ( $this->get_award_attachment_ids( $post_id ) as $award_id ) {
+            $title = get_the_title( $award_id );
+            if ( $title ) {
+                $awards[] = $title;
             }
         }
 
         return $awards;
+    }
+
+    /**
+     * Attachment IDs of the third-party award badges on a profile.
+     *
+     * @param int $post_id The post ID.
+     * @return array List of attachment IDs.
+     */
+    private function get_award_attachment_ids( $post_id ) {
+        $award_ids = get_post_meta( $post_id, 'dh_award_badges', true );
+        if ( ! $award_ids ) {
+            return array();
+        }
+
+        return array_filter( array_map( 'intval', explode( ',', $award_ids ) ) );
+    }
+
+    /**
+     * Pages where this profile's third-party awards can be verified.
+     *
+     * Turns the award claim into a citation: `award` states the award, this
+     * states where to check it. Each award attachment carries its own
+     * `dh_award_url` and optional `dh_award_source_name`.
+     *
+     * @param int $post_id The post ID.
+     * @return array List of WebPage schema nodes.
+     */
+    private function get_award_sources( $post_id ) {
+        $sources = array();
+
+        foreach ( $this->get_award_attachment_ids( $post_id ) as $award_id ) {
+            $url = get_post_meta( $award_id, 'dh_award_url', true );
+            if ( ! $url ) {
+                continue;
+            }
+
+            $node = array(
+                '@type' => 'WebPage',
+                'url'   => $url,
+            );
+
+            $name = get_post_meta( $award_id, 'dh_award_source_name', true );
+            if ( $name ) {
+                $node['name'] = $name;
+            }
+
+            $sources[] = $node;
+        }
+
+        return $sources;
     }
 
     /**

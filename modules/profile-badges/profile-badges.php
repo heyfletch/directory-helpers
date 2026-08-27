@@ -1071,6 +1071,15 @@ class DH_Profile_Badges {
                 ));
                 if ($img) {
                     $has_badges = true;
+
+                    // Link the badge to the page the award can be verified on, the
+                    // same rule our own badges follow. Editorial citation, so it is
+                    // not marked sponsored.
+                    $award_url = get_post_meta($award_id, 'dh_award_url', true);
+                    if ($award_url) {
+                        $img = '<a class="dh-badge-award-link" href="' . esc_url($award_url) . '" target="_blank" rel="noopener">' . $img . '</a>';
+                    }
+
                     $output .= $img;
                 }
             }
