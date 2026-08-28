@@ -259,6 +259,7 @@ class Directory_Helpers {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-indexnow-backfill-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-update-rankings-for-profile-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-prime-all-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-apply-ratings-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_state_listing_titles', 'DH_Deduplicate_Area_Terms_Command' );
@@ -273,6 +274,7 @@ class Directory_Helpers {
         WP_CLI::add_command( 'directory-helpers indexnow backfill', 'DH_IndexNow_Backfill_Command' );
         WP_CLI::add_command( 'directory-helpers update-rankings-for-profile', 'DH_Update_Rankings_For_Profile_Command' );
         WP_CLI::add_command( 'directory-helpers prime-all', 'DH_Prime_All_Command' );
+        WP_CLI::add_command( 'directory-helpers apply-ratings', 'DH_Apply_Ratings_Command' );
     }
 
     /**
