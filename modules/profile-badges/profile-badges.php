@@ -454,6 +454,13 @@ class DH_Profile_Badges {
             status_header(404);
             exit('Invalid badge type');
         }
+
+        // Editorially suppressed profiles serve no badge at all - not even the
+        // "Recognized" fallback below.
+        if (self::badges_hidden($post_id)) {
+            status_header(404);
+            exit('Badge not available');
+        }
         
         // Note: We no longer 404 for ineligible badges. If a profile was once ranked
         // but dropped out of Top 25, we serve a "Recognized" fallback badge instead
@@ -577,7 +584,26 @@ class DH_Profile_Badges {
      * @param int $post_id Profile post ID
      * @return array Array of badge eligibility [city => bool, state => bool, profile => bool]
      */
+    /**
+     * Whether badges are suppressed for this profile.
+     *
+     * Editorial kill switch: set the `hide_badges` post meta to 1 to withdraw every
+     * Goody Doggy badge from a profile (on-page, the public /badge/<id>/<type>.svg
+     * endpoints, the Bricks tags, and the structured data) without touching its rank.
+     * Used when we do not want to be publicly endorsing a business, e.g. while it is
+     * the subject of an unresolved complaint. Clear the meta to restore the badges.
+     */
+    public static function badges_hidden($post_id) {
+        return (bool) get_post_meta($post_id, 'hide_badges', true);
+    }
+
     public function get_eligible_badges($post_id) {
+        // Editorial suppression wins over rank, and is checked before the cache
+        // so toggling the flag takes effect immediately.
+        if (self::badges_hidden($post_id)) {
+            return array('city' => false, 'state' => false, 'profile' => false);
+        }
+
         // Check cache first
         $cache_key = 'dh_badge_eligible_' . $post_id;
         $eligible = wp_cache_get($cache_key, 'dh_badges');
