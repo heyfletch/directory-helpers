@@ -67,6 +67,7 @@ Located in `/includes/cli/`:
 - `analyze-radius` - Calculate optimal proximity search radii
 - `update-rankings` - Recalculate profile rankings
 - `update-state-rankings` - Recalculate state-level rankings
+- `apply-ratings` - Apply a batched ratings changes.json (from goodydoggy-ratings-refresh --all): diff-only field writes, one recalc per affected pool, targeted throttled purge
 - `prime-cache` - Pre-warm query caches
 - `prime-all` - Full priming sequence in one job (search rebuild, object cache pre-warm, priority/listings/profiles presets); backs the "Prime All Caches" admin button
 - `migrate-main-image` - Migrate featured images
@@ -110,6 +111,7 @@ See `/PROXIMITY-SEARCH-README.md` for full details.
 - Based on ratings and review counts
 - Stored as post meta on profile posts
 - Must be recalculated after publishing new profiles in a city
+- SETTLED 2026-08-28: stored rank values are rating-only - `featured` never buys a numeric rank; unrated is `99999` Featured or not. Featured top placement on listing pages is render-time (the Featured Dog Trainers section) and is intended - never "fix" it. Every rank writer MUST go through `DH_Profile_Rankings::recalc_pool()` (which handles old-rank reads, cache invalidation, and `dh_profile_ranks_updated`).
 
 ## Common Commands
 
