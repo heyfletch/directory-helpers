@@ -148,6 +148,7 @@ class DH_SEO_Listing_Titles {
         $area = DH_Taxonomy_Helpers::get_primary_area_term($post->ID);
         if ($area) {
             $location = trim(preg_replace('/\s*\([^)]*\)/', '', $area->name));
+            $location = trim(preg_replace('/\s*[---,]+\s*[A-Z]{2}$/', '', $location));
             if (preg_match('/-([a-z]{2})$/', $area->slug, $m)) {
                 $location .= ', ' . strtoupper($m[1]);
             }
