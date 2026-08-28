@@ -227,8 +227,7 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
 
         WP_CLI::line( "  " . count( $profile_ids ) . " profiles in pool" );
 
-        $scores = $this->score_profiles( $profile_ids );
-        $this->bulk_write_ranks( $scores, 'city_rank' );
+        DH_Profile_Rankings::recalc_pool( $profile_ids, 'city_rank' );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -274,147 +273,7 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
             return;
         }
 
-        $scores = $this->score_profiles( $profile_ids );
-        $this->bulk_write_ranks( $scores, 'state_rank' );
+        DH_Profile_Rankings::recalc_pool( $profile_ids, 'state_rank' );
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Shared scoring / writing helpers (mirrors profile-rankings.php logic)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Bulk-fetch rating/review/boost meta and return sorted score array.
-     *
-     * @param int[] $profile_ids
-     * @return array  [ profile_id => [ 'score' => float, 'review_count' => int ], ... ]
-     *                Sorted descending by score, then review_count, then profile_id ASC.
-     */
-    private function score_profiles( array $profile_ids ) {
-        global $wpdb;
-
-        $placeholders = implode( ',', array_fill( 0, count( $profile_ids ), '%d' ) );
-
-        $rows = $wpdb->get_results( $wpdb->prepare( "
-            SELECT post_id, meta_key, meta_value
-            FROM {$wpdb->postmeta}
-            WHERE post_id IN ({$placeholders})
-              AND meta_key IN ('rating_value', 'rating_votes_count', 'ranking_boost', 'featured')
-        ", $profile_ids ) );
-
-        // Index meta by profile.
-        $meta = [];
-        foreach ( $profile_ids as $pid ) {
-            $meta[ $pid ] = [ 'rating' => null, 'review_count' => null, 'boost' => 0, 'featured' => 0 ];
-        }
-        foreach ( $rows as $row ) {
-            if ( $row->meta_key === 'rating_value' ) {
-                $meta[ $row->post_id ]['rating'] = $row->meta_value;
-            } elseif ( $row->meta_key === 'rating_votes_count' ) {
-                $meta[ $row->post_id ]['review_count'] = $row->meta_value;
-            } elseif ( $row->meta_key === 'ranking_boost' ) {
-                $meta[ $row->post_id ]['boost'] = $row->meta_value ?: 0;
-            } elseif ( $row->meta_key === 'featured' ) {
-                $meta[ $row->post_id ]['featured'] = $row->meta_value ?: 0;
-            }
-        }
-
-        // Calculate scores - identical formula to DH_Profile_Rankings.
-        $scores = [];
-        foreach ( $profile_ids as $pid ) {
-            $d = $meta[ $pid ];
-            $is_featured = ( (float) $d['featured'] ) > 0;
-
-            if ( ! empty( $d['rating'] ) && ! empty( $d['review_count'] ) ) {
-                $rating        = (float) $d['rating'];
-                $review_count  = (int)   $d['review_count'];
-                $boost         = (float) $d['boost'];
-                $score = ( $rating * 0.9 )
-                       + ( ( log10( $review_count + 1 ) / 2 ) * 5 * 0.1 )
-                       + ( $boost * 2 );
-                $scores[ $pid ] = [ 'score' => $score, 'review_count' => $review_count, 'is_featured' => $is_featured ];
-            } elseif ( $is_featured ) {
-                // Featured but unrated: real score (boost-driven) so they sort to the top.
-                $scores[ $pid ] = [ 'score' => ( (float) $d['boost'] ) * 2, 'review_count' => 0, 'is_featured' => true ];
-            } else {
-                $scores[ $pid ] = [ 'score' => -1, 'review_count' => 0, 'is_featured' => false ];
-            }
-        }
-
-        // Sort: featured first, then score DESC, review_count DESC, profile_id ASC.
-        $pids          = array_keys( $scores );
-        $featured_vals = array_map( function ( $d ) { return ! empty( $d['is_featured'] ) ? 1 : 0; }, array_values( $scores ) );
-        $score_vals    = array_column( $scores, 'score' );
-        $review_vals   = array_column( $scores, 'review_count' );
-
-        array_multisort(
-            $featured_vals, SORT_DESC, SORT_NUMERIC,
-            $score_vals,  SORT_DESC, SORT_NUMERIC,
-            $review_vals, SORT_DESC, SORT_NUMERIC,
-            $pids,        SORT_ASC,  SORT_NUMERIC
-        );
-
-        $sorted = [];
-        foreach ( $pids as $pid ) {
-            $sorted[ $pid ] = $scores[ $pid ];
-        }
-
-        return $sorted;
-    }
-
-    /**
-     * Bulk-delete and re-insert rank meta for a set of profiles.
-     *
-     * @param array  $scores     Result of score_profiles().
-     * @param string $rank_field 'city_rank' or 'state_rank'.
-     */
-    private function bulk_write_ranks( array $scores, $rank_field ) {
-        global $wpdb;
-
-        if ( empty( $scores ) ) {
-            return;
-        }
-
-        $pids          = array_keys( $scores );
-        $id_string     = implode( ',', array_map( 'intval', $pids ) );
-        $rank_field_esc = esc_sql( $rank_field );
-
-        // Read current values first so only profiles that actually move get invalidated.
-        $old_ranks = $wpdb->get_results( "
-            SELECT post_id, meta_value
-            FROM {$wpdb->postmeta}
-            WHERE post_id IN ({$id_string})
-              AND meta_key = '{$rank_field_esc}'
-        ", OBJECT_K );
-        $old_ranks = wp_list_pluck( $old_ranks, 'meta_value' );
-
-        // Delete existing values in one query.
-        $wpdb->query( "
-            DELETE FROM {$wpdb->postmeta}
-            WHERE post_id IN ({$id_string})
-              AND meta_key = '{$rank_field_esc}'
-        " );
-
-        // Bulk insert.
-        $rows      = [];
-        $new_ranks = [];
-        $rank      = 1;
-        foreach ( $pids as $pid ) {
-            $is_featured = ! empty( $scores[ $pid ]['is_featured'] );
-            $rank_value  = ( ! $is_featured && $scores[ $pid ]['score'] < 0 ) ? 99999 : $rank;
-            $rows[]      = "({$pid}, '{$rank_field_esc}', {$rank_value})";
-            $new_ranks[ $pid ] = $rank_value;
-            if ( $is_featured || $scores[ $pid ]['score'] >= 0 ) {
-                $rank++;
-            }
-        }
-
-        if ( ! empty( $rows ) ) {
-            $wpdb->query( "
-                INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value)
-                VALUES " . implode( ',', $rows )
-            );
-        }
-
-        DH_Profile_Rankings::invalidate_rank_caches( $old_ranks, $new_ranks, $rank_field );
-    }
 }

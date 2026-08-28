@@ -604,7 +604,7 @@ class DH_Profile_Rankings {
         }
 
         if (empty($changed)) {
-            return;
+            return array();
         }
 
         /**
@@ -614,6 +614,123 @@ class DH_Profile_Rankings {
          * @param string $rank_field Meta key written ('city_rank' or 'state_rank').
          */
         do_action('dh_profile_ranks_updated', $changed, $rank_field);
+
+        return $changed;
+    }
+
+    /**
+     * Recalculate and write ranks for one pool of profiles (one city or one state).
+     *
+     * THE single rank-writing engine for every CLI path (settled 2026-08-28):
+     * scoring is rating-driven only. `featured` never buys a better numeric rank,
+     * and an unrated profile is 99999 whether Featured or not - Featured placement
+     * on listing pages is a render-time concern (the "Featured Dog Trainers"
+     * section), never a stored rank value. Mirrors the acf/save_post path above.
+     *
+     * @param int[]  $profile_ids Pool of published profile IDs.
+     * @param string $rank_field  'city_rank' or 'state_rank'.
+     * @return int[] Profile IDs whose rank value changed.
+     */
+    public static function recalc_pool(array $profile_ids, $rank_field) {
+        global $wpdb;
+
+        if (empty($profile_ids)) {
+            return array();
+        }
+
+        $profile_ids  = array_map('intval', $profile_ids);
+        $placeholders = implode(',', array_fill(0, count($profile_ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare("
+            SELECT post_id, meta_key, meta_value
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$placeholders})
+            AND meta_key IN ('rating_value', 'rating_votes_count', 'ranking_boost')
+        ", $profile_ids));
+
+        $meta = array();
+        foreach ($profile_ids as $pid) {
+            $meta[$pid] = array('rating' => null, 'review_count' => null, 'boost' => 0);
+        }
+        foreach ($rows as $row) {
+            $pid = (int) $row->post_id;
+            if ($row->meta_key === 'rating_value') {
+                $meta[$pid]['rating'] = $row->meta_value;
+            } elseif ($row->meta_key === 'rating_votes_count') {
+                $meta[$pid]['review_count'] = $row->meta_value;
+            } elseif ($row->meta_key === 'ranking_boost') {
+                $meta[$pid]['boost'] = $row->meta_value ?: 0;
+            }
+        }
+
+        $scores = array();
+        foreach ($profile_ids as $pid) {
+            $d = $meta[$pid];
+            if (!empty($d['rating']) && !empty($d['review_count'])) {
+                $rating       = (float) $d['rating'];
+                $review_count = (int) $d['review_count'];
+                $boost        = (float) $d['boost'];
+                $score        = ($rating * 0.9)
+                              + ((log10($review_count + 1) / 2) * 5 * 0.1)
+                              + ($boost * 2);
+                $scores[$pid] = array('score' => $score, 'review_count' => $review_count);
+            } else {
+                $scores[$pid] = array('score' => -1, 'review_count' => 0);
+            }
+        }
+
+        // Sort: score DESC, review_count DESC, profile ID ASC as tie-breaker.
+        $pids        = array_keys($scores);
+        $score_vals  = array();
+        $review_vals = array();
+        foreach ($scores as $data) {
+            $score_vals[]  = (float) $data['score'];
+            $review_vals[] = $data['review_count'];
+        }
+        array_multisort(
+            $score_vals, SORT_DESC, SORT_NUMERIC,
+            $review_vals, SORT_DESC, SORT_NUMERIC,
+            $pids, SORT_ASC, SORT_NUMERIC
+        );
+
+        $rank_field_esc = esc_sql($rank_field);
+        $id_string      = implode(',', $pids);
+
+        // Read current values first so only profiles that actually move get invalidated.
+        $old_ranks = $wpdb->get_results("
+            SELECT post_id, meta_value
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$id_string})
+            AND meta_key = '{$rank_field_esc}'
+        ", OBJECT_K);
+        $old_ranks = wp_list_pluck($old_ranks, 'meta_value');
+
+        $wpdb->query("
+            DELETE FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$id_string})
+            AND meta_key = '{$rank_field_esc}'
+        ");
+
+        $insert_data = array();
+        $new_ranks   = array();
+        $rank        = 1;
+        foreach ($pids as $pid) {
+            $rank_value          = ($scores[$pid]['score'] < 0) ? 99999 : $rank;
+            $insert_data[]       = "({$pid}, '{$rank_field_esc}', {$rank_value})";
+            $new_ranks[$pid]     = $rank_value;
+            if ($scores[$pid]['score'] >= 0) {
+                $rank++;
+            }
+        }
+
+        if (!empty($insert_data)) {
+            $wpdb->query("
+                INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value)
+                VALUES " . implode(',', $insert_data)
+            );
+        }
+
+        return self::invalidate_rank_caches($old_ranks, $new_ranks, $rank_field);
     }
 }
 
