@@ -914,6 +914,12 @@ class Directory_Helpers {
                 'description' => __('Per-profile benefit flags: ad visibility (featured or no_ads ACF field) and owner box. Exposes {dh_show_ads} and {dh_show_owner_box} Bricks dynamic tags, a dh-no-ads body class, and removes the Mediavine script wrapper on ad-free profiles.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-benefits/profile-benefits.php',
                 'class' => 'DH_Profile_Benefits'
+            ),
+            'seo-listing-titles' => array(
+                'name' => __('SEO Listing Titles', 'directory-helpers'),
+                'description' => __('Rank Math variables %dh_city_seo_title% and %dh_city_seo_desc% for count-led city-listing titles and meta descriptions, using _profile_count from Listing Counts. Cities with fewer than 2 profiles get a no-count fallback.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/seo-listing-titles/seo-listing-titles.php',
+                'class' => 'DH_SEO_Listing_Titles'
             )
             // Add more modules here as needed
         );
