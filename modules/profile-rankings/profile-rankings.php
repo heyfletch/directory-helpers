@@ -403,7 +403,11 @@ class DH_Profile_Rankings {
         foreach ($profiles as $profile_id) {
             $data = $profile_data[$profile_id];
 
-            if (!empty($data['rating']) && !empty($data['review_count'])) {
+            if ($data['gbp_status'] === 'closed_forever') {
+                // Permanently closed: no numbered rank, no badge.
+                $score = -1;
+                $review_count = 0;
+            } elseif (!empty($data['rating']) && !empty($data['review_count'])) {
                 $score = $this->calculate_ranking_score($data['rating'], $data['review_count'], $data['boost']);
                 $review_count = (int) $data['review_count'];
             } else {
@@ -485,6 +489,13 @@ class DH_Profile_Rankings {
             AND meta_key = %s
         ", array_merge($profile_ids, array('featured'))));
 
+        $status_rows = $wpdb->get_results($wpdb->prepare("
+            SELECT post_id, meta_value as gbp_status
+            FROM {$wpdb->postmeta}
+            WHERE post_id IN ({$profile_id_placeholders})
+            AND meta_key = %s
+        ", array_merge($profile_ids, array('gbp_status'))));
+
         // Organize data by profile_id
         $profile_data = [];
 
@@ -494,7 +505,8 @@ class DH_Profile_Rankings {
                 'rating' => null,
                 'review_count' => null,
                 'boost' => 0,
-                'featured' => 0
+                'featured' => 0,
+                'gbp_status' => ''
             ];
         }
         
@@ -513,6 +525,10 @@ class DH_Profile_Rankings {
 
         foreach ($featured_rows as $row) {
             $profile_data[$row->post_id]['featured'] = $row->featured ?: 0;
+        }
+
+        foreach ($status_rows as $row) {
+            $profile_data[$row->post_id]['gbp_status'] = $row->gbp_status;
         }
 
         return $profile_data;
@@ -645,12 +661,12 @@ class DH_Profile_Rankings {
             SELECT post_id, meta_key, meta_value
             FROM {$wpdb->postmeta}
             WHERE post_id IN ({$placeholders})
-            AND meta_key IN ('rating_value', 'rating_votes_count', 'ranking_boost')
+            AND meta_key IN ('rating_value', 'rating_votes_count', 'ranking_boost', 'gbp_status')
         ", $profile_ids));
 
         $meta = array();
         foreach ($profile_ids as $pid) {
-            $meta[$pid] = array('rating' => null, 'review_count' => null, 'boost' => 0);
+            $meta[$pid] = array('rating' => null, 'review_count' => null, 'boost' => 0, 'gbp_status' => '');
         }
         foreach ($rows as $row) {
             $pid = (int) $row->post_id;
@@ -660,13 +676,19 @@ class DH_Profile_Rankings {
                 $meta[$pid]['review_count'] = $row->meta_value;
             } elseif ($row->meta_key === 'ranking_boost') {
                 $meta[$pid]['boost'] = $row->meta_value ?: 0;
+            } elseif ($row->meta_key === 'gbp_status') {
+                $meta[$pid]['gbp_status'] = $row->meta_value;
             }
         }
 
         $scores = array();
         foreach ($profile_ids as $pid) {
             $d = $meta[$pid];
-            if (!empty($d['rating']) && !empty($d['review_count'])) {
+            // A permanently-closed business takes no numbered rank (and no badge),
+            // whatever its historical rating says.
+            if ($d['gbp_status'] === 'closed_forever') {
+                $scores[$pid] = array('score' => -1, 'review_count' => 0);
+            } elseif (!empty($d['rating']) && !empty($d['review_count'])) {
                 $rating       = (float) $d['rating'];
                 $review_count = (int) $d['review_count'];
                 $boost        = (float) $d['boost'];

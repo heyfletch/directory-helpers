@@ -917,6 +917,12 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-benefits/profile-benefits.php',
                 'class' => 'DH_Profile_Benefits'
             ),
+            'profile-status-notice' => array(
+                'name' => __('Profile Status Notice', 'directory-helpers'),
+                'description' => __('Permanently-closed banner on profile pages whose gbp_status meta is closed_forever; the rank engine separately excludes closed profiles from numeric ranks.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-status-notice/profile-status-notice.php',
+                'class' => 'DH_Profile_Status_Notice'
+            ),
             'seo-listing-titles' => array(
                 'name' => __('SEO Listing Titles', 'directory-helpers'),
                 'description' => __('Rank Math variables %dh_city_seo_title% and %dh_city_seo_desc% for count-led city-listing titles and meta descriptions, using _profile_count from Listing Counts. Cities with fewer than 2 profiles get a no-count fallback.', 'directory-helpers'),
