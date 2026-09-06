@@ -166,6 +166,16 @@ class DH_Refresh_Closed_Command extends WP_CLI_Command {
         }
         WP_CLI::line( "{$count_changed} listing counts " . ( $dry_run ? 'would change.' : 'updated.' ) );
 
+        // ── Pages that render a closed trainer ────────────────────────────────
+        // A closed profile is listed on its own city and state pages AND on every
+        // city page whose proximity radius reaches it (DH_Bricks_Query_Helpers),
+        // so the purge set is wider than the rank/count set above.
+        $own_ids   = array_values( array_unique( array_map( 'intval', $listing_ids ) ) );
+        $near_ids  = array_values( array_diff( self::proximity_listing_ids( $closed ), $own_ids ) );
+        $purge_ids = array_merge( $own_ids, $near_ids );
+        WP_CLI::line( '' );
+        WP_CLI::line( count( $purge_ids ) . ' listing pages render a closed trainer: ' . count( $own_ids ) . ' own city/state pages + ' . count( $near_ids ) . ' proximity neighbours.' );
+
         if ( $dry_run ) {
             WP_CLI::success( 'Dry run complete - nothing written.' );
             return;
@@ -174,17 +184,95 @@ class DH_Refresh_Closed_Command extends WP_CLI_Command {
         // ── Purge (opt-in, targeted) ──────────────────────────────────────────
         WP_CLI::line( '' );
         if ( ! $purge ) {
-            WP_CLI::success( 'Done. No cache purged (pass --purge to purge the ' . count( $listing_ids ) . ' affected listing pages).' );
+            WP_CLI::success( 'Done. No cache purged (pass --purge to purge those ' . count( $purge_ids ) . ' listing pages).' );
             return;
         }
 
-        $listing_ids = array_values( array_unique( array_map( 'intval', $listing_ids ) ) );
-        foreach ( $listing_ids as $listing_id ) {
+        foreach ( $purge_ids as $listing_id ) {
             do_action( 'litespeed_purge_post', $listing_id );
             if ( $throttle_ms ) {
                 usleep( $throttle_ms * 1000 );
             }
         }
-        WP_CLI::success( 'Done. Purged ' . count( $listing_ids ) . ' listing pages, throttled ' . $throttle_ms . 'ms.' );
+        WP_CLI::success( 'Done. Purged ' . count( $purge_ids ) . ' listing pages, throttled ' . $throttle_ms . 'ms.' );
+    }
+
+    /**
+     * Published city-listing IDs whose proximity list reaches any of the given
+     * profiles: same niche, within the city's radius (custom_radius >
+     * recommended_radius > plugin default). Mirrors
+     * DH_Bricks_Query_Helpers::get_nearby_profiles_query_args().
+     *
+     * @param int[] $profile_ids
+     * @return int[]
+     */
+    private static function proximity_listing_ids( array $profile_ids ) {
+        global $wpdb;
+
+        $options        = get_option( 'directory_helpers_options', array() );
+        $default_radius = isset( $options['default_city_radius'] ) ? (int) $options['default_city_radius'] : 5;
+
+        $profiles = array();
+        foreach ( $profile_ids as $pid ) {
+            $lat = get_post_meta( $pid, 'latitude', true );
+            $lng = get_post_meta( $pid, 'longitude', true );
+            if ( $lat === '' || $lng === '' ) {
+                continue;
+            }
+            $profiles[] = array(
+                'lat'    => deg2rad( (float) $lat ),
+                'lng'    => deg2rad( (float) $lng ),
+                'niches' => self::term_ids( $pid, 'niche' ),
+            );
+        }
+        if ( empty( $profiles ) ) {
+            return array();
+        }
+
+        $listings = $wpdb->get_results( "
+            SELECT p.ID, tt.term_id
+            FROM {$wpdb->posts} p
+            INNER JOIN {$wpdb->term_relationships} tr ON tr.object_id = p.ID
+            INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id AND tt.taxonomy = 'area'
+            WHERE p.post_type = 'city-listing'
+              AND p.post_status = 'publish'
+        " );
+
+        $hits = array();
+        foreach ( $listings as $row ) {
+            $term_id = (int) $row->term_id;
+            $lat     = get_term_meta( $term_id, 'latitude', true );
+            $lng     = get_term_meta( $term_id, 'longitude', true );
+            if ( $lat === '' || $lng === '' ) {
+                continue;
+            }
+            $custom      = get_term_meta( $term_id, 'custom_radius', true );
+            $recommended = get_term_meta( $term_id, 'recommended_radius', true );
+            $radius      = $custom ? (int) $custom : ( $recommended ? (int) $recommended : $default_radius );
+            $niches      = self::term_ids( (int) $row->ID, 'niche' );
+            $lat_r       = deg2rad( (float) $lat );
+            $lng_r       = deg2rad( (float) $lng );
+
+            foreach ( $profiles as $p ) {
+                if ( ! array_intersect( $niches, $p['niches'] ) ) {
+                    continue;
+                }
+                $cos_d = cos( $lat_r ) * cos( $p['lat'] ) * cos( $p['lng'] - $lng_r ) + sin( $lat_r ) * sin( $p['lat'] );
+                $miles = 3959 * acos( max( -1, min( 1, $cos_d ) ) );
+                if ( $miles <= $radius ) {
+                    $hits[] = (int) $row->ID;
+                    break;
+                }
+            }
+        }
+        return $hits;
+    }
+
+    /**
+     * @return int[]
+     */
+    private static function term_ids( $post_id, $taxonomy ) {
+        $terms = wp_get_post_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) );
+        return is_wp_error( $terms ) ? array() : array_map( 'intval', (array) $terms );
     }
 }
