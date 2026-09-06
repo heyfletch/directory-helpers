@@ -22,6 +22,67 @@ if ( ! defined( 'ABSPATH' ) ) {
 class DH_Bricks_Query_Helpers {
 
     /**
+     * Bricks element id of the city template's provider-list query loop.
+     *
+     * The state template's own loop is xvnnyo and is deliberately NOT covered here.
+     */
+    const CITY_LIST_ELEMENT_ID = 'onimid';
+
+    /**
+     * Drop Featured profiles from the city page's main trainer grid.
+     *
+     * Round 17 (2026-09-06): the city page now shows its Featured trainers in a section of their own
+     * above the list ("Featured Dog Trainers" band, its own Bricks query: profile + this area +
+     * featured >= 1), so the "All Dog Trainers" grid below it must not repeat them. Nothing here
+     * touches that section, the filter elements, or the results-count element - the count follows this
+     * query automatically, so it reports the grid it sits above, filtered or not.
+     *
+     * post__in is filtered rather than post__not_in added: the nvmbls global query returns an ordered
+     * post__in list with orderby=post__in, and WP_Query ignores post__not_in when post__in is set.
+     *
+     * Not cached: one indexed postmeta lookup over the ids already in hand, on a page that is served
+     * from full-page cache almost every time. A cache here would need its own invalidation the moment a
+     * trainer's `featured` value changed, and would show them twice until it expired.
+     *
+     * @param array  $query_vars WP_Query args Bricks is about to run.
+     * @param array  $settings   The query element's settings.
+     * @param string $element_id The Bricks element id running the query.
+     * @return array
+     */
+    public static function exclude_featured_from_city_list( $query_vars, $settings, $element_id ) {
+        if ( self::CITY_LIST_ELEMENT_ID !== $element_id ) {
+            return $query_vars;
+        }
+        if ( empty( $query_vars['post__in'] ) || ! is_array( $query_vars['post__in'] ) ) {
+            return $query_vars;
+        }
+
+        $ids = array_filter( array_map( 'intval', $query_vars['post__in'] ) );
+        if ( empty( $ids ) ) {
+            return $query_vars;
+        }
+
+        global $wpdb;
+        $featured = $wpdb->get_col(
+            "SELECT post_id FROM {$wpdb->postmeta}
+             WHERE meta_key = 'featured'
+               AND post_id IN (" . implode( ',', $ids ) . ")
+               AND CAST(meta_value AS UNSIGNED) >= 1"
+        );
+        $featured = array_filter( array_map( 'intval', (array) $featured ) );
+        if ( empty( $featured ) ) {
+            return $query_vars;
+        }
+
+        $remaining = array_values( array_diff( $ids, $featured ) );
+        // post__in => [] means "no post__in filter at all" to WP_Query, which would return every
+        // profile on the site. A city whose only trainers are Featured gets an empty grid instead.
+        $query_vars['post__in'] = ! empty( $remaining ) ? $remaining : array( 0 );
+
+        return $query_vars;
+    }
+
+    /**
      * Get query arguments for profiles within a certain radius OR tagged with area term.
      * 
      * Radius Priority (absolute, no expansion):
@@ -256,3 +317,5 @@ class DH_Bricks_Query_Helpers {
         }
     }
 }
+
+add_filter( 'bricks/posts/query_vars', array( 'DH_Bricks_Query_Helpers', 'exclude_featured_from_city_list' ), 20, 3 );
