@@ -2,10 +2,16 @@
 /**
  * Profile Status Notice
  *
- * Renders a "permanently closed" banner at the top of profile pages whose
- * `gbp_status` postmeta is `closed_forever` (set by the ratings-refresh flow
- * from Google Business data). The profile stays published and indexed; the
- * rank engine excludes closed profiles from numeric ranks separately.
+ * Owns the "permanently closed" state: profiles whose `gbp_status` postmeta is
+ * `closed_forever` (set by the ratings-refresh flow from Google Business data).
+ *
+ * - Renders a closed banner at the top of the profile page. The profile stays
+ *   published and indexed, and flips back on its own if a later refresh finds
+ *   the business reopened.
+ * - Drops closed profiles from every Bricks query loop of profiles (city and
+ *   state trainer lists, Featured cards, maps) via `bricks/posts/query_vars`.
+ * - Exposes closed_profile_ids() so Listing Counts can exclude them too.
+ * The rank engine excludes closed profiles from numeric ranks separately.
  */
 
 if (!defined('ABSPATH')) {
@@ -19,6 +25,58 @@ class DH_Profile_Status_Notice {
 
     public function __construct() {
         add_action('wp_body_open', array($this, 'render_notice'));
+        add_filter('bricks/posts/query_vars', array($this, 'exclude_closed_from_loops'), 10, 1);
+    }
+
+    /**
+     * IDs of every profile marked permanently closed. One indexed postmeta read
+     * per request (a few hundred rows), memoised for the rest of the request.
+     *
+     * @return int[]
+     */
+    public static function closed_profile_ids() {
+        static $ids = null;
+        if ($ids !== null) {
+            return $ids;
+        }
+        global $wpdb;
+        $ids = array_map('intval', $wpdb->get_col($wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %s",
+            self::META_KEY,
+            self::CLOSED
+        )));
+        return $ids;
+    }
+
+    /**
+     * Keep closed profiles out of any Bricks posts loop that lists profiles.
+     * Runs for the proximity list (post__in from DH_Bricks_Query_Helpers), the
+     * state list, Featured cards and maps alike, including AJAX pagination.
+     *
+     * @param array $query_vars WP_Query vars Bricks is about to run.
+     * @return array
+     */
+    public function exclude_closed_from_loops($query_vars) {
+        $post_types = isset($query_vars['post_type']) ? (array) $query_vars['post_type'] : array();
+        if (!in_array('profile', $post_types, true)) {
+            return $query_vars;
+        }
+
+        $closed = self::closed_profile_ids();
+        if (empty($closed)) {
+            return $query_vars;
+        }
+
+        if (!empty($query_vars['post__in'])) {
+            // WP_Query ignores post__not_in when post__in is set, so trim the list itself.
+            $keep = array_values(array_diff(array_map('intval', (array) $query_vars['post__in']), $closed));
+            $query_vars['post__in'] = !empty($keep) ? $keep : array(0);
+            return $query_vars;
+        }
+
+        $not_in = isset($query_vars['post__not_in']) ? array_map('intval', (array) $query_vars['post__not_in']) : array();
+        $query_vars['post__not_in'] = array_values(array_unique(array_merge($not_in, $closed)));
+        return $query_vars;
     }
 
     public function render_notice() {

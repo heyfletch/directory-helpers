@@ -22,11 +22,25 @@ if (!defined('ABSPATH')) {
  * Class DH_Listing_Counts
  */
 class DH_Listing_Counts {
-    
+
+    /** @var DH_Listing_Counts|null */
+    private static $instance = null;
+
+    /**
+     * The loaded module instance (for CLI callers).
+     *
+     * @return DH_Listing_Counts|null
+     */
+    public static function instance() {
+        return self::$instance;
+    }
+
     /**
      * Constructor
      */
     public function __construct() {
+        self::$instance = $this;
+
         // Hook into profile saves to update city and state counts
         add_action('acf/save_post', array($this, 'update_counts_on_profile_save'), 25); // After rankings (priority 20)
         
@@ -210,7 +224,7 @@ class DH_Listing_Counts {
      * 
      * @param int $area_term_id Area term ID
      */
-    private function update_city_profile_count($area_term_id) {
+    public function update_city_profile_count($area_term_id) {
         // Find the city-listing post for this area
         $city_posts = get_posts(array(
             'post_type' => 'city-listing',
@@ -244,7 +258,7 @@ class DH_Listing_Counts {
      * 
      * @param string $state_slug State slug
      */
-    private function update_state_counts($state_slug) {
+    public function update_state_counts($state_slug) {
         // Find the state-listing post
         $state_posts = get_posts(array(
             'post_type' => 'state-listing',
@@ -278,16 +292,26 @@ class DH_Listing_Counts {
     }
     
     /**
-     * Count published profiles by area term
-     * 
+     * Permanently-closed profile IDs, which never count as listed trainers.
+     *
+     * @return int[]
+     */
+    private function closed_profile_ids() {
+        return class_exists('DH_Profile_Status_Notice') ? DH_Profile_Status_Notice::closed_profile_ids() : array();
+    }
+
+    /**
+     * Count published, open profiles by area term
+     *
      * @param int $area_term_id Area term ID
      * @return int Profile count
      */
-    private function count_profiles_by_area($area_term_id) {
+    public function count_profiles_by_area($area_term_id) {
         $args = array(
             'post_type' => 'profile',
             'post_status' => 'publish',
             'posts_per_page' => -1,
+            'post__not_in' => $this->closed_profile_ids(),
             'tax_query' => array(
                 array(
                     'taxonomy' => 'area',
@@ -297,22 +321,23 @@ class DH_Listing_Counts {
             ),
             'fields' => 'ids',
         );
-        
+
         $query = new WP_Query($args);
         return $query->found_posts;
     }
-    
+
     /**
-     * Count published profiles by state slug
-     * 
+     * Count published, open profiles by state slug
+     *
      * @param string $state_slug State slug
      * @return int Profile count
      */
-    private function count_profiles_by_state($state_slug) {
+    public function count_profiles_by_state($state_slug) {
         $args = array(
             'post_type' => 'profile',
             'post_status' => 'publish',
             'posts_per_page' => -1,
+            'post__not_in' => $this->closed_profile_ids(),
             'tax_query' => array(
                 array(
                     'taxonomy' => 'state',
@@ -322,7 +347,7 @@ class DH_Listing_Counts {
             ),
             'fields' => 'ids',
         );
-        
+
         $query = new WP_Query($args);
         return $query->found_posts;
     }

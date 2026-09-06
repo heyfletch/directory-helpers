@@ -172,7 +172,7 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
         $rank_changed = array(); // pid => true, across every pool
 
         foreach ( $area_terms as $term ) {
-            $pool = $this->city_pool( $term->term_id );
+            $pool = self::city_pool( $term->term_id );
             if ( empty( $pool ) ) {
                 continue;
             }
@@ -184,7 +184,7 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
         }
 
         foreach ( $state_terms as $term ) {
-            $pool = $this->state_pool( $term->term_id );
+            $pool = self::state_pool( $term->term_id );
             if ( empty( $pool ) ) {
                 continue;
             }
@@ -202,13 +202,13 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
         $purge_ids = array_keys( $rank_affected + $rank_changed );
 
         foreach ( $area_terms as $term ) {
-            $listing = $this->listing_for_term( 'city-listing', 'area', $term->term_id );
+            $listing = self::listing_for_term( 'city-listing', 'area', $term->term_id );
             if ( $listing ) {
                 $purge_ids[] = $listing;
             }
         }
         foreach ( $state_terms as $term ) {
-            $listing = $this->listing_for_term( 'state-listing', 'state', $term->term_id );
+            $listing = self::listing_for_term( 'state-listing', 'state', $term->term_id );
             if ( $listing ) {
                 $purge_ids[] = $listing;
             }
@@ -229,7 +229,7 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
     /**
      * Published profile IDs tagged with the given area term.
      */
-    private function city_pool( $term_id ) {
+    public static function city_pool( $term_id ) {
         global $wpdb;
         return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( "
             SELECT DISTINCT p.ID
@@ -245,7 +245,7 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
     /**
      * Published profile IDs whose PRIMARY state is the given state term.
      */
-    private function state_pool( $term_id ) {
+    public static function state_pool( $term_id ) {
         global $wpdb;
         $all_ids = $wpdb->get_col( $wpdb->prepare( "
             SELECT DISTINCT p.ID
@@ -270,7 +270,7 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
     /**
      * The single listing post for a term, or 0.
      */
-    private function listing_for_term( $post_type, $taxonomy, $term_id ) {
+    public static function listing_for_term( $post_type, $taxonomy, $term_id ) {
         $ids = get_posts( array(
             'post_type'      => $post_type,
             'post_status'    => 'publish',
