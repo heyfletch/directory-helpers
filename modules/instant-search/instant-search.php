@@ -79,6 +79,18 @@ if (!class_exists('DH_Instant_Search')) {
                 true
             );
 
+            // Placeholder fitter. Lives at the plugin root under a plain name on purpose: the site's
+            // asset optimiser delays every script whose URL matches "instant-search", and this one has
+            // to run on load to pick the placeholder wording before the input is painted.
+            $fit_path = DIRECTORY_HELPERS_PATH . 'assets/js/ph-fit.js';
+            wp_register_script(
+                'dh-ph-fit',
+                DIRECTORY_HELPERS_URL . 'assets/js/ph-fit.js',
+                array(),
+                DIRECTORY_HELPERS_VERSION . (file_exists($fit_path) ? ('.' . filemtime($fit_path)) : ''),
+                true
+            );
+
             // Front-end config injected into window.dhInstantSearch for the JS.
             // Defaults can be set in admin (directory_helpers_options) and overridden via the
             // 'dh_instant_search_labels' filter.
@@ -126,6 +138,7 @@ if (!class_exists('DH_Instant_Search')) {
             // Ensure assets are loaded
             wp_enqueue_style('dh-instant-search');
             wp_enqueue_script('dh-instant-search');
+            wp_enqueue_script('dh-ph-fit');
 
             $instance_id = 'dhis-' . wp_generate_password(6, false, false);
 
@@ -142,8 +155,20 @@ if (!class_exists('DH_Instant_Search')) {
                 $opts = get_option('directory_helpers_options', []);
                 $default_ph = isset($opts['instant_search_placeholder']) && $opts['instant_search_placeholder'] !== ''
                     ? $opts['instant_search_placeholder']
-                    : __('Search by city or name', 'directory-helpers');
+                    : __('Search by city, zip, or trainer name', 'directory-helpers');
                 $placeholder = apply_filters('dh_instant_search_default_placeholder', $default_ph);
+            }
+
+            // Progressively shorter wordings for the narrow instances. The input renders with the full
+            // string; assets/js/ph-fit.js measures the input's own content box and swaps down to the
+            // longest of these that fits. Only attached when the placeholder came from the default -
+            // an explicitly-passed placeholder is used verbatim, with no fallbacks.
+            $ph_variants = array();
+            if ($atts['placeholder'] === '' || $atts['placeholder'] === null) {
+                $ph_variants = apply_filters('dh_instant_search_placeholder_variants', array(
+                    __('Search by city, zip, or trainer', 'directory-helpers'),
+                    __('Search by city, zip, trainer', 'directory-helpers'),
+                ), $placeholder);
             }
 
             // Resolve theme class
@@ -165,6 +190,9 @@ if (!class_exists('DH_Instant_Search')) {
                     aria-controls="<?php echo esc_attr($instance_id); ?>-list"
                     aria-activedescendant=""
                     placeholder="<?php echo esc_attr($placeholder); ?>"
+                    <?php foreach (array_values((array) $ph_variants) as $i => $variant) {
+                        printf(' data-ph-%d="%s"', (int) $i + 1, esc_attr($variant));
+                    } ?>
                     data-min-chars="<?php echo (int) $atts['min_chars']; ?>"
                     data-debounce="<?php echo (int) $atts['debounce']; ?>"
                     data-limit="<?php echo (int) $atts['limit']; ?>"
