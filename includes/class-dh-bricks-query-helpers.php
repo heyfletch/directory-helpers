@@ -32,16 +32,23 @@ class DH_Bricks_Query_Helpers {
      * Drop Featured profiles from the city page's main trainer grid.
      *
      * Round 17 (2026-09-06): the city page now shows its Featured trainers in a section of their own
-     * above the list ("Featured Dog Trainers" band, its own Bricks query: profile + this area +
-     * featured >= 1), so the "All Dog Trainers" grid below it must not repeat them. Nothing here
-     * touches that section, the filter elements, or the results-count element - the count follows this
-     * query automatically, so it reports the grid it sits above, filtered or not.
+     * above the list ("Featured Dog Trainers" band, its own Bricks query: profile + this page's area
+     * terms + featured >= 1), so the "All Dog Trainers" grid below it must not repeat them.
+     *
+     * Only profiles the band actually shows are removed - a profile has to be Featured AND carry one of
+     * this page's own `area` terms. The city query also pulls in nearby trainers by proximity, and a
+     * Featured trainer from the next town is not in this page's band; dropping it would delete it from
+     * the page entirely (caught on the staged run: Miami lost a trainer it never showed as Featured).
+     *
+     * Scoped to one Bricks element: the city template's provider-list loop. Nothing here touches the
+     * band, the filter elements, or the results-count element - the count follows this query, so it
+     * reports the grid it heads, filtered or not.
      *
      * post__in is filtered rather than post__not_in added: the nvmbls global query returns an ordered
      * post__in list with orderby=post__in, and WP_Query ignores post__not_in when post__in is set.
      *
-     * Not cached: one indexed postmeta lookup over the ids already in hand, on a page that is served
-     * from full-page cache almost every time. A cache here would need its own invalidation the moment a
+     * Not cached: one indexed lookup over the ids already in hand, on a page that is served from
+     * full-page cache almost every time. A cache here would need its own invalidation the moment a
      * trainer's `featured` value changed, and would show them twice until it expired.
      *
      * @param array  $query_vars WP_Query args Bricks is about to run.
@@ -62,12 +69,32 @@ class DH_Bricks_Query_Helpers {
             return $query_vars;
         }
 
+        // The same terms the band's own tax_query uses ({post_terms_area:plain} on this post).
+        $object   = get_queried_object();
+        $term_ids = array();
+        if ( $object instanceof WP_Term && 'area' === $object->taxonomy ) {
+            $term_ids = array( (int) $object->term_id );
+        } elseif ( $object instanceof WP_Post ) {
+            $terms = wp_get_post_terms( $object->ID, 'area', array( 'fields' => 'ids' ) );
+            if ( ! is_wp_error( $terms ) ) {
+                $term_ids = array_map( 'intval', $terms );
+            }
+        }
+        if ( empty( $term_ids ) ) {
+            return $query_vars;
+        }
+
         global $wpdb;
         $featured = $wpdb->get_col(
-            "SELECT post_id FROM {$wpdb->postmeta}
-             WHERE meta_key = 'featured'
-               AND post_id IN (" . implode( ',', $ids ) . ")
-               AND CAST(meta_value AS UNSIGNED) >= 1"
+            "SELECT DISTINCT m.post_id
+             FROM {$wpdb->postmeta} m
+             INNER JOIN {$wpdb->term_relationships} tr ON tr.object_id = m.post_id
+             INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+                 AND tt.taxonomy = 'area'
+                 AND tt.term_id IN (" . implode( ',', $term_ids ) . ")
+             WHERE m.meta_key = 'featured'
+               AND m.post_id IN (" . implode( ',', $ids ) . ")
+               AND CAST(m.meta_value AS UNSIGNED) >= 1"
         );
         $featured = array_filter( array_map( 'intval', (array) $featured ) );
         if ( empty( $featured ) ) {
