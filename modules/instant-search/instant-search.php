@@ -142,7 +142,7 @@ if (!class_exists('DH_Instant_Search')) {
                 $opts = get_option('directory_helpers_options', []);
                 $default_ph = isset($opts['instant_search_placeholder']) && $opts['instant_search_placeholder'] !== ''
                     ? $opts['instant_search_placeholder']
-                    : __('Search by City, State, Zip, or Name …', 'directory-helpers');
+                    : __('Search by city or name', 'directory-helpers');
                 $placeholder = apply_filters('dh_instant_search_default_placeholder', $default_ph);
             }
 
