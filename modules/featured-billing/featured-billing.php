@@ -40,6 +40,7 @@ class DH_Featured_Billing {
 	const ADMIN_EMAIL      = 'joe@goodydoggy.com';
 	const NEAREST_MAX_MI   = 75;
 	const SUBMISSION_META  = 'dh_featured_profile_id';
+	const OPTION_PORTAL    = 'dh_featured_billing_portal_url'; // Stripe no-code customer portal login link, set once with wp option update
 
 	const TIER_CITIES = array( 'plus' => 1, 'pro' => 5, 'premium' => 10 );
 	const TIER_LABEL  = array( 'plus' => 'Plus', 'pro' => 'Pro', 'premium' => 'Premium' );
@@ -764,7 +765,8 @@ class DH_Featured_Billing {
 		} else {
 			$body .= $this->p( 'To update the profile (more photos, social links, custom descriptions, your city pages), use the Send us your changes link in the Listing Tools box on your profile page.' );
 		}
-		$body .= $this->p( 'Billing: ' . esc_html( $label ) . ' plan' . ( $tier['plan_name'] ? ' (' . esc_html( $tier['plan_name'] ) . ')' : '' ) . '. It renews ' . $renews . ' until you cancel. Your receipt from Stripe has the link to update your card or cancel; your placement then runs to the end of the period you paid for and your free profile stays. Not happy in the first 14 days? Reply to this email and we refund that charge in full.' );
+		$portal = $this->portal_url();
+		$body .= $this->p( 'Billing: ' . esc_html( $label ) . ' plan' . ( $tier['plan_name'] ? ' (' . esc_html( $tier['plan_name'] ) . ')' : '' ) . '. It renews ' . $renews . ' until you cancel. ' . ( $portal ? 'Update your card or cancel any time at <a href="' . esc_url( $portal ) . '">' . esc_html( $portal ) . '</a> (sign in with this email address); your Stripe receipt has the same link.' : 'Your receipt from Stripe has the link to update your card or cancel.' ) . ' After a cancellation your placement runs to the end of the period you paid for and your free profile stays. Not happy in the first 14 days? Reply to this email and we refund that charge in full.' );
 		$body .= $this->p( 'To move to a different plan, cancel this one and pick the new plan at <a href="' . esc_url( $checkout ) . '">' . esc_html( $checkout ) . '</a>.' );
 		$body .= $this->p( 'Goody Doggy' );
 		$this->mail( $to, 'Your Featured Placement is live on Goody Doggy', $body );
@@ -1062,6 +1064,12 @@ class DH_Featured_Billing {
 	public function entry_link( $entry_id, $html = true ) {
 		$url = admin_url( 'admin.php?page=fluent_forms&route=entries&form_id=' . self::FORM_ID . '#/entries/' . (int) $entry_id );
 		return $html ? 'Entry: <a href="' . esc_url( $url ) . '">' . esc_html( $url ) . '</a>' : $url;
+	}
+
+	/** The Stripe no-code customer portal login link, once Joe has pasted it into the option; '' until then. */
+	public function portal_url() {
+		$url = trim( (string) get_option( self::OPTION_PORTAL, '' ) );
+		return $url && 0 === strpos( $url, 'https://' ) ? $url : '';
 	}
 
 	private function p( $html ) {
