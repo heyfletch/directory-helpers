@@ -786,6 +786,12 @@ class Directory_Helpers {
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/ugc-update-requests/ugc-update-requests.php',
                 'class' => 'DH_UGC_Update_Requests'
             ),
+            'featured-billing' => array(
+                'name' => __('Featured Billing', 'directory-helpers'),
+                'description' => __('Fulfils the self-serve Featured Placement checkout (Fluent Form 9, Stripe subscription): sets featured, attaches city pages up to the tier, recalcs and purges like update-rankings-for-profile, unfeatures on cancellation, daily drift check. WP-CLI: wp directory-helpers featured-billing replay|cancel|drift-check|status.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/featured-billing/featured-billing.php',
+                'class' => 'DH_Featured_Billing'
+            ),
             'contact-email' => array(
                 'name' => __('Contact Email', 'directory-helpers'),
                 'description' => __('Stores a trainer business contact email on the profile, captured from the intake and update forms only when it can be tied to that profile (wp dh-contact-email backfill|review|set).', 'directory-helpers'),
