@@ -901,17 +901,33 @@ class DH_Featured_Billing {
 		return $summary;
 	}
 
+	/**
+	 * Fluent Forms' Stripe client. Since 6.x Stripe lives in the free core plugin (FluentForm\App\Modules\Payments) and
+	 * the Pro copy is idle: its StripeSettings cannot read the core's "v2:" encrypted key and returns '' (2026-09-06).
+	 * Core first, Pro as the fallback for older installs. Returns [ApiRequest class, StripeSettings class] or null.
+	 */
+	private function stripe_classes() {
+		foreach ( array( '\FluentForm\App\Modules\Payments\PaymentMethods\Stripe', '\FluentFormPro\Payments\PaymentMethods\Stripe' ) as $ns ) {
+			if ( class_exists( $ns . '\API\ApiRequest' ) && class_exists( $ns . '\StripeSettings' ) ) {
+				return array( $ns . '\API\ApiRequest', $ns . '\StripeSettings' );
+			}
+		}
+		return null;
+	}
+
 	/** Read a subscription from Stripe through Fluent Forms' own client (its stored connection, no second key). */
 	public function stripe_subscription( $sub_id ) {
-		if ( ! class_exists( '\FluentFormPro\Payments\PaymentMethods\Stripe\API\ApiRequest' ) || ! class_exists( '\FluentFormPro\Payments\PaymentMethods\Stripe\StripeSettings' ) ) {
-			return new WP_Error( 'no_fluentform', 'Fluent Forms Pro Stripe client not loaded' );
+		$classes = $this->stripe_classes();
+		if ( ! $classes ) {
+			return new WP_Error( 'no_fluentform', 'Fluent Forms Stripe client not loaded' );
 		}
-		$key = \FluentFormPro\Payments\PaymentMethods\Stripe\StripeSettings::getSecretKey( self::FORM_ID );
+		list( $api, $settings ) = $classes;
+		$key = $settings::getSecretKey( self::FORM_ID );
 		if ( ! $key ) {
 			return new WP_Error( 'no_key', 'Stripe is not connected in Fluent Forms' );
 		}
-		\FluentFormPro\Payments\PaymentMethods\Stripe\API\ApiRequest::set_secret_key( $key );
-		$res = \FluentFormPro\Payments\PaymentMethods\Stripe\API\ApiRequest::retrieve( 'subscriptions/' . rawurlencode( $sub_id ) );
+		$api::set_secret_key( $key );
+		$res = $api::retrieve( 'subscriptions/' . rawurlencode( $sub_id ) );
 		if ( is_wp_error( $res ) ) {
 			return $res;
 		}
