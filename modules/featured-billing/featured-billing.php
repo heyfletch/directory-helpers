@@ -526,7 +526,8 @@ class DH_Featured_Billing {
 		if ( ! $candidates ) {
 			$terms = get_terms( array( 'taxonomy' => 'area', 'hide_empty' => false, 'name__like' => $name, 'number' => 50 ) );
 			foreach ( is_array( $terms ) ? $terms : array() as $term ) {
-				$stem = strtolower( trim( preg_replace( '/\s*[-,]\s*[A-Za-z]{2}$/', '', $term->name ) ) );
+				// Term names come in three shapes: "Sherman - TX", "Leonard (TX)", "McKinney".
+				$stem = strtolower( trim( preg_replace( '/\s*(?:[-,]\s*[A-Za-z]{2}|\([A-Za-z]{2,}\))$/', '', $term->name ) ) );
 				if ( $stem !== strtolower( $name ) ) {
 					continue;
 				}
