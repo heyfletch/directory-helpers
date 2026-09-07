@@ -41,6 +41,8 @@ class DH_Featured_Billing {
 	const NEAREST_MAX_MI   = 75;
 	const SUBMISSION_META  = 'dh_featured_profile_id';
 	const OPTION_PORTAL    = 'dh_featured_billing_portal_url'; // Stripe no-code customer portal login link, set once with wp option update
+	const META_AREAS_BEFORE   = 'featured_areas_before'; // the profile's own area terms, snapshotted at activation and restored on cancel
+	const PAST_DUE_GRACE_DAYS = 7;                       // days past the paid period a past_due subscription keeps its placement
 
 	const TIER_CITIES = array( 'plus' => 1, 'pro' => 5, 'premium' => 10 );
 	// Full state names a buyer may type after a city ("Leonard, Texas") -> the two-letter code in area slugs.
@@ -203,6 +205,14 @@ class DH_Featured_Billing {
 		}
 		delete_post_meta( $pid, 'featured_ended' );
 
+		// Cancel restores exactly these cities. Re-deriving a primary area instead can leave a
+		// multi-city trainer in a city they never operated in. Written once, never over a snapshot
+		// the profile already carries, so a replayed activation cannot record the expanded list.
+		if ( $first_time && ! metadata_exists( 'post', $pid, self::META_AREAS_BEFORE ) ) {
+			update_post_meta( $pid, self::META_AREAS_BEFORE, array_map( 'intval', $areas['current'] ) );
+			$this->trace[] = 'snapshot: areas before featuring [' . implode( ', ', $this->term_names( $areas['current'] ) ) . ']';
+		}
+
 		if ( array_diff( $areas['final'], $areas['current'] ) || array_diff( $areas['current'], $areas['final'] ) ) {
 			wp_set_object_terms( $pid, array_map( 'intval', $areas['final'] ), 'area', false );
 			clean_object_term_cache( $pid, 'profile' );
@@ -252,11 +262,19 @@ class DH_Featured_Billing {
 			$result['status'] = 'already';
 			return $result;
 		}
-		$before  = $this->area_ids( $pid );
-		$primary = DH_Taxonomy_Helpers::get_primary_area_term( $pid );
-		$keep    = $primary ? array( (int) $primary->term_id ) : array();
+		$before   = $this->area_ids( $pid );
+		$snapshot = get_post_meta( $pid, self::META_AREAS_BEFORE, true );
+		if ( is_array( $snapshot ) ) {
+			$keep   = array_values( array_map( 'intval', $snapshot ) );
+			$origin = 'restored from the activation snapshot';
+		} else {
+			// Orders placed before the snapshot existed: fall back to the derived primary area.
+			$primary = DH_Taxonomy_Helpers::get_primary_area_term( $pid );
+			$keep    = $primary ? array( (int) $primary->term_id ) : array();
+			$origin  = 'no snapshot, trimmed to the primary area';
+		}
 		$result['areas'] = array( 'before' => $this->term_names( $before ), 'after' => $this->term_names( $keep ) );
-		$this->trace[]   = sprintf( 'entry %d -> profile %d: featured %s, areas %s -> %s', $entry_id, $pid, $is_featured ? 'yes' : 'no', implode( ', ', $result['areas']['before'] ), implode( ', ', $result['areas']['after'] ) );
+		$this->trace[]   = sprintf( 'entry %d -> profile %d: featured %s, areas %s -> %s (%s)', $entry_id, $pid, $is_featured ? 'yes' : 'no', implode( ', ', $result['areas']['before'] ), implode( ', ', $result['areas']['after'] ), $origin );
 		if ( $dry ) {
 			$result['status']      = 'would-unfeature';
 			$result['would_purge'] = $this->purge_targets( $pid, $before );
@@ -270,6 +288,7 @@ class DH_Featured_Billing {
 			wp_set_object_terms( $pid, $keep, 'area', false );
 			clean_object_term_cache( $pid, 'profile' );
 		}
+		delete_post_meta( $pid, self::META_AREAS_BEFORE );
 		$result['purged'] = $this->recalc_and_purge( $pid, $before );
 
 		$buyer = (string) get_post_meta( $pid, 'featured_billing_email', true );
@@ -284,7 +303,7 @@ class DH_Featured_Billing {
 			);
 		}
 		$this->mail( self::ADMIN_EMAIL, 'Featured ended: ' . get_the_title( $pid ), $this->p( sprintf( '%s is no longer Featured (%s). Cities trimmed to %s. Subscription %s.', get_the_title( $pid ), $source, implode( ', ', $result['areas']['after'] ) ?: 'none', (string) get_post_meta( $pid, 'stripe_subscription_id', true ) ) ) . $this->p( $this->entry_link( $entry_id ) ) );
-		$this->log( $entry_id, 'Profile unfeatured', sprintf( 'Profile %d (%s) back to a free listing on %s. Purged: profile + %d city + %d state pages.', $pid, get_the_title( $pid ), implode( ', ', $result['areas']['after'] ), count( $result['purged']['city'] ), count( $result['purged']['state'] ) ) );
+		$this->log( $entry_id, 'Profile unfeatured', sprintf( 'Profile %d (%s) back to a free listing on %s (%s). Purged: profile + %d city + %d state pages.', $pid, get_the_title( $pid ), implode( ', ', $result['areas']['after'] ), $origin, count( $result['purged']['city'] ), count( $result['purged']['state'] ) ) );
 		$result['status'] = 'unfeatured';
 		return $result;
 	}
@@ -703,6 +722,15 @@ class DH_Featured_Billing {
 			update_post_meta( $pid, '_featured', self::ACF_FEATURED_KEY );
 		}
 		wp_cache_delete( $pid, 'post_meta' );
+		// The badge module caches its eligibility verdict for 30 days and neither of its own
+		// triggers (acf/save_post, dh_profile_ranks_updated) fires on the checkout path.
+		if ( class_exists( 'DH_Profile_Badges' ) ) {
+			// Must be the loaded instance: constructing another re-registers every hook and shortcode.
+			$badges = DH_Profile_Badges::instance();
+			if ( $badges ) {
+				$badges->clear_profile_badge_caches( $pid );
+			}
+		}
 	}
 
 	/* ------------------------------------------------------------------
@@ -852,8 +880,21 @@ class DH_Featured_Billing {
 				$notes[] = "profile {$pid}: Stripe read failed ({$live->get_error_message()})";
 				continue;
 			}
-			$status = isset( $live->status ) ? (string) $live->status : '';
-			if ( in_array( $status, array( 'canceled', 'unpaid', 'incomplete_expired' ), true ) ) {
+			$status    = isset( $live->status ) ? (string) $live->status : '';
+			$unfeature = in_array( $status, array( 'canceled', 'unpaid', 'incomplete_expired' ), true );
+			if ( 'past_due' === $status ) {
+				// Belt and braces behind Stripe's own failed-payment rule: only once the paid period
+				// plus the grace window is spent, and never when the period end cannot be read.
+				$deadline = $this->past_due_deadline( $live );
+				if ( ! $deadline ) {
+					$notes[] = "profile {$pid}: subscription {$sub_id} is past_due with no readable period end; left Featured";
+				} elseif ( time() < $deadline ) {
+					$notes[] = "profile {$pid}: subscription {$sub_id} is past_due, in grace until " . gmdate( 'Y-m-d H:i', $deadline ) . ' UTC; left Featured';
+				} else {
+					$unfeature = true;
+				}
+			}
+			if ( $unfeature ) {
 				$entry_id   = (int) get_post_meta( $pid, 'ff_submission_id', true );
 				$submission = $entry_id ? $this->submission( $entry_id ) : null;
 				if ( $submission && ! $dry ) {
@@ -948,6 +989,19 @@ class DH_Featured_Billing {
 			return new WP_Error( 'stripe', isset( $res->error->message ) ? $res->error->message : 'Stripe error' );
 		}
 		return $res;
+	}
+
+	/**
+	 * When a past_due subscription has outstayed the paid period plus the grace window.
+	 * Newer Stripe API versions carry current_period_end on the subscription item rather than the
+	 * subscription, so both are read; 0 means the period end is unknown and nothing should happen.
+	 */
+	private function past_due_deadline( $live ) {
+		$end = isset( $live->current_period_end ) ? (int) $live->current_period_end : 0;
+		if ( ! $end && isset( $live->items->data[0]->current_period_end ) ) {
+			$end = (int) $live->items->data[0]->current_period_end;
+		}
+		return $end ? $end + self::PAST_DUE_GRACE_DAYS * DAY_IN_SECONDS : 0;
 	}
 
 	/* ------------------------------------------------------------------

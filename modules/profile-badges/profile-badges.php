@@ -1399,9 +1399,13 @@ class DH_Profile_Badges {
     /**
      * Clear the badge caches belonging to a single profile
      *
+     * Public because featuring or unfeaturing a profile changes its badge without
+     * firing acf/save_post or a rank change, so the checkout path has to clear these
+     * itself or the 30-day verdict stands.
+     *
      * @param int $post_id Post ID
      */
-    private function clear_profile_badge_caches($post_id) {
+    public function clear_profile_badge_caches($post_id) {
         // Clear wp_cache for all badge types (SVG + data cache)
         $badge_types = array('city', 'state', 'profile');
         foreach ($badge_types as $type) {
