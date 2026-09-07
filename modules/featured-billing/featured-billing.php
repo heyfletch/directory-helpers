@@ -43,6 +43,14 @@ class DH_Featured_Billing {
 	const OPTION_PORTAL    = 'dh_featured_billing_portal_url'; // Stripe no-code customer portal login link, set once with wp option update
 
 	const TIER_CITIES = array( 'plus' => 1, 'pro' => 5, 'premium' => 10 );
+	// Full state names a buyer may type after a city ("Leonard, Texas") -> the two-letter code in area slugs.
+	const STATE_ABBR = array(
+		'alabama' => 'al', 'alaska' => 'ak', 'arizona' => 'az', 'arkansas' => 'ar', 'california' => 'ca', 'colorado' => 'co', 'connecticut' => 'ct', 'delaware' => 'de', 'district of columbia' => 'dc', 'florida' => 'fl',
+		'georgia' => 'ga', 'hawaii' => 'hi', 'idaho' => 'id', 'illinois' => 'il', 'indiana' => 'in', 'iowa' => 'ia', 'kansas' => 'ks', 'kentucky' => 'ky', 'louisiana' => 'la', 'maine' => 'me',
+		'maryland' => 'md', 'massachusetts' => 'ma', 'michigan' => 'mi', 'minnesota' => 'mn', 'mississippi' => 'ms', 'missouri' => 'mo', 'montana' => 'mt', 'nebraska' => 'ne', 'nevada' => 'nv', 'new hampshire' => 'nh',
+		'new jersey' => 'nj', 'new mexico' => 'nm', 'new york' => 'ny', 'north carolina' => 'nc', 'north dakota' => 'nd', 'ohio' => 'oh', 'oklahoma' => 'ok', 'oregon' => 'or', 'pennsylvania' => 'pa', 'rhode island' => 'ri',
+		'south carolina' => 'sc', 'south dakota' => 'sd', 'tennessee' => 'tn', 'texas' => 'tx', 'utah' => 'ut', 'vermont' => 'vt', 'virginia' => 'va', 'washington' => 'wa', 'west virginia' => 'wv', 'wisconsin' => 'wi', 'wyoming' => 'wy',
+	);
 	const TIER_LABEL  = array( 'plus' => 'Plus', 'pro' => 'Pro', 'premium' => 'Premium' );
 	// recurring_amount (cents) on the Fluent Forms subscription row -> tier.
 	const AMOUNT_TIER = array( 1900 => 'plus', 17100 => 'plus', 3900 => 'pro', 35100 => 'pro', 5900 => 'premium', 53100 => 'premium' );
@@ -501,16 +509,11 @@ class DH_Featured_Billing {
 	}
 
 	/**
-	 * "Austin, TX" / "Austin TX" / "Austin" (state taken from the primary term) -> area term
-	 * that has a published city-listing page, or null.
+	 * "Austin, TX" / "Austin TX" / "Austin, Texas" / "Austin" (state taken from the primary term)
+	 * -> area term that has a published city-listing page, or null.
 	 */
 	public function find_area_term( $name, $primary = null ) {
-		$name  = trim( preg_replace( '/\s+/', ' ', (string) $name ) );
-		$state = '';
-		if ( preg_match( '/^(.*?)[\s,]+([A-Za-z]{2})\.?$/', $name, $m ) ) {
-			$name  = trim( $m[1], " ,." );
-			$state = strtolower( $m[2] );
-		}
+		list( $name, $state ) = $this->split_city_state( $name );
 		if ( ! $state && $primary && preg_match( '/-([a-z]{2})$/', $primary->slug, $m ) ) {
 			$state = $m[1];
 		}
@@ -547,11 +550,21 @@ class DH_Featured_Billing {
 	}
 
 	private function city_part( $name ) {
+		list( $city ) = $this->split_city_state( $name );
+		return strtolower( $city );
+	}
+
+	/** "Austin, TX" / "Austin TX" / "Austin, Texas" / "Austin" -> array( city, two-letter state or '' ). */
+	public function split_city_state( $name ) {
 		$name = trim( preg_replace( '/\s+/', ' ', (string) $name ) );
 		if ( preg_match( '/^(.*?)[\s,]+([A-Za-z]{2})\.?$/', $name, $m ) ) {
-			$name = trim( $m[1], " ,." );
+			return array( trim( $m[1], " ,." ), strtolower( $m[2] ) );
 		}
-		return strtolower( $name );
+		$states = implode( '|', array_map( 'preg_quote', array_keys( self::STATE_ABBR ) ) );
+		if ( preg_match( '/^(.*?)[\s,]+(' . $states . ')\.?$/i', $name, $m ) ) {
+			return array( trim( $m[1], " ,." ), self::STATE_ABBR[ strtolower( $m[2] ) ] );
+		}
+		return array( $name, '' );
 	}
 
 	/**
