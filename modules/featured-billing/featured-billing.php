@@ -856,6 +856,14 @@ class DH_Featured_Billing {
 			if ( $pid && (float) get_post_meta( $pid, 'featured', true ) > 0 ) {
 				continue;
 			}
+			if ( $pid && 'cancelled' === get_post_meta( $pid, 'featured_billing_status', true ) ) {
+				// The profile was unfeatured while Fluent Forms still calls the row active: only Stripe can settle it.
+				$live = $this->stripe_subscription( (string) $sub->vendor_subscription_id );
+				if ( is_wp_error( $live ) || ! isset( $live->status ) || ! in_array( $live->status, array( 'active', 'trialing', 'past_due' ), true ) ) {
+					$notes[] = "entry {$sub->submission_id}: Fluent Forms row active, profile {$pid} cancelled, Stripe says " . ( is_wp_error( $live ) ? $live->get_error_message() : $live->status ) . '; left alone';
+					continue;
+				}
+			}
 			$submission = $this->submission( (int) $sub->submission_id );
 			if ( ! $submission ) {
 				continue;
