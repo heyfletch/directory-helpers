@@ -291,8 +291,22 @@ class DH_Featured_Billing {
 		delete_post_meta( $pid, self::META_AREAS_BEFORE );
 		$result['purged'] = $this->recalc_and_purge( $pid, $before );
 
-		$buyer = (string) get_post_meta( $pid, 'featured_billing_email', true );
-		if ( $buyer ) {
+		// past_due is the one non-terminal trigger: this module never cancels anything in Stripe, so
+		// the subscription is still live and can charge again the moment the card works. Telling that
+		// buyer "no further charges will be made" would be a false statement about their money.
+		$paused = false !== strpos( (string) $source, 'past_due' );
+		$buyer  = (string) get_post_meta( $pid, 'featured_billing_email', true );
+		if ( $buyer && $paused ) {
+			$portal = $this->portal_url();
+			$this->mail(
+				$buyer,
+				'Your Featured Placement on Goody Doggy is paused',
+				$this->p( 'Hi,' )
+				. $this->p( 'We could not collect the payment for the Featured Placement for ' . esc_html( get_the_title( $pid ) ) . ', so the placement is paused. Your free profile stays live at <a href="' . esc_url( get_permalink( $pid ) ) . '">' . esc_html( get_permalink( $pid ) ) . '</a>.' )
+				. $this->p( 'Your subscription is still open in Stripe. ' . ( $portal ? 'Update your card at <a href="' . esc_url( $portal ) . '">' . esc_html( $portal ) . '</a> (sign in with this email address) and your placement comes back on the next payment that goes through. To stop the subscription for good, cancel it on that same page.' : 'Use the link in your Stripe receipt to update your card, and your placement comes back on the next payment that goes through. To stop the subscription for good, cancel it there.' ) )
+				. $this->p( 'Goody Doggy' )
+			);
+		} elseif ( $buyer ) {
 			$this->mail(
 				$buyer,
 				'Your Featured Placement on Goody Doggy has ended',
@@ -302,7 +316,11 @@ class DH_Featured_Billing {
 				. $this->p( 'Goody Doggy' )
 			);
 		}
-		$this->mail( self::ADMIN_EMAIL, 'Featured ended: ' . get_the_title( $pid ), $this->p( sprintf( '%s is no longer Featured (%s). Cities trimmed to %s. Subscription %s.', get_the_title( $pid ), $source, implode( ', ', $result['areas']['after'] ) ?: 'none', (string) get_post_meta( $pid, 'stripe_subscription_id', true ) ) ) . $this->p( $this->entry_link( $entry_id ) ) );
+		if ( $paused ) {
+			$this->mail( self::ADMIN_EMAIL, 'Featured paused: ' . get_the_title( $pid ), $this->p( sprintf( '%s lost its Featured placement (%s): Stripe could not collect the payment. Subscription %s is still live in Stripe - nothing here cancelled it, and it charges again if the card recovers. Cancel it in Stripe if the trainer is gone for good. Cities trimmed to %s.', get_the_title( $pid ), $source, (string) get_post_meta( $pid, 'stripe_subscription_id', true ) ?: '(none)', implode( ', ', $result['areas']['after'] ) ?: 'none' ) ) . $this->p( $this->entry_link( $entry_id ) ) );
+		} else {
+			$this->mail( self::ADMIN_EMAIL, 'Featured ended: ' . get_the_title( $pid ), $this->p( sprintf( '%s is no longer Featured (%s). Cities trimmed to %s. Subscription %s.', get_the_title( $pid ), $source, implode( ', ', $result['areas']['after'] ) ?: 'none', (string) get_post_meta( $pid, 'stripe_subscription_id', true ) ) ) . $this->p( $this->entry_link( $entry_id ) ) );
+		}
 		$this->log( $entry_id, 'Profile unfeatured', sprintf( 'Profile %d (%s) back to a free listing on %s (%s). Purged: profile + %d city + %d state pages.', $pid, get_the_title( $pid ), implode( ', ', $result['areas']['after'] ), $origin, count( $result['purged']['city'] ), count( $result['purged']['state'] ) ) );
 		$result['status'] = 'unfeatured';
 		return $result;
@@ -886,12 +904,12 @@ class DH_Featured_Billing {
 				// Belt and braces behind Stripe's own failed-payment rule: only once the paid period
 				// plus the grace window is spent, and never when the period end cannot be read.
 				$deadline = $this->past_due_deadline( $live );
-				if ( ! $deadline ) {
-					$notes[] = "profile {$pid}: subscription {$sub_id} is past_due with no readable period end; left Featured";
-				} elseif ( time() < $deadline ) {
-					$notes[] = "profile {$pid}: subscription {$sub_id} is past_due, in grace until " . gmdate( 'Y-m-d H:i', $deadline ) . ' UTC; left Featured';
-				} else {
+				if ( ! $this->past_due_in_grace( $live ) ) {
 					$unfeature = true;
+				} elseif ( ! $deadline ) {
+					$notes[] = "profile {$pid}: subscription {$sub_id} is past_due with no readable period end; left Featured";
+				} else {
+					$notes[] = "profile {$pid}: subscription {$sub_id} is past_due, in grace until " . gmdate( 'Y-m-d H:i', $deadline ) . ' UTC; left Featured';
 				}
 			}
 			if ( $unfeature ) {
@@ -914,9 +932,15 @@ class DH_Featured_Billing {
 			}
 			if ( $pid && 'cancelled' === get_post_meta( $pid, 'featured_billing_status', true ) ) {
 				// The profile was unfeatured while Fluent Forms still calls the row active: only Stripe can settle it.
-				$live = $this->stripe_subscription( (string) $sub->vendor_subscription_id );
-				if ( is_wp_error( $live ) || ! isset( $live->status ) || ! in_array( $live->status, array( 'active', 'trialing', 'past_due' ), true ) ) {
-					$notes[] = "entry {$sub->submission_id}: Fluent Forms row active, profile {$pid} cancelled, Stripe says " . ( is_wp_error( $live ) ? $live->get_error_message() : $live->status ) . '; left alone';
+				$live    = $this->stripe_subscription( (string) $sub->vendor_subscription_id );
+				// past_due counts as healthy only while pass 1 would still leave it Featured. Fluent
+				// Forms never writes 'past_due' to its own row, so without this the row stays 'active'
+				// and pass 2 re-features on the same run whatever pass 1 just unfeatured, every day.
+				$healthy = ! is_wp_error( $live ) && isset( $live->status )
+					&& ( in_array( $live->status, array( 'active', 'trialing' ), true )
+						|| ( 'past_due' === $live->status && $this->past_due_in_grace( $live ) ) );
+				if ( ! $healthy ) {
+					$notes[] = "entry {$sub->submission_id}: Fluent Forms row active, profile {$pid} cancelled, Stripe says " . ( is_wp_error( $live ) ? $live->get_error_message() : $live->status . ( 'past_due' === $live->status ? ' past the grace window' : '' ) ) . '; left alone';
 					continue;
 				}
 			}
@@ -1002,6 +1026,18 @@ class DH_Featured_Billing {
 			$end = (int) $live->items->data[0]->current_period_end;
 		}
 		return $end ? $end + self::PAST_DUE_GRACE_DAYS * DAY_IN_SECONDS : 0;
+	}
+
+	/**
+	 * The one answer both drift passes read: a past_due subscription still inside the paid period
+	 * plus the grace window (a card that fails and is retried successfully keeps its placement), or
+	 * one whose period end Stripe will not give us, which is never grounds to act. Pass 1 must not
+	 * unfeature while this is true; pass 2 must not call the subscription healthy once it is false,
+	 * or it re-features on the same run what pass 1 just unfeatured.
+	 */
+	private function past_due_in_grace( $live ) {
+		$deadline = $this->past_due_deadline( $live );
+		return ! $deadline || time() < $deadline;
 	}
 
 	/* ------------------------------------------------------------------
