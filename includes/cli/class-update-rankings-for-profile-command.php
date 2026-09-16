@@ -195,6 +195,23 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
         do_action( 'litespeed_purge_post', $profile_id );
         WP_CLI::line( "  ✓ Purged profile page: [{$profile_id}] " . ( get_permalink( $profile_id ) ?: '' ) );
 
+        // ── Freshness: the listing pages' rosters changed, so say so ──────────
+        // Their post_modified is what drives sitemap lastmod. Nothing here writes to a
+        // listing post, so without this they keep advertising a months-old lastmod and
+        // Rank Math never announces them. The profile itself is freshened by whichever
+        // path changed it (publish, or update-profile-fields.php).
+        if ( ! empty( $all_listing_ids ) ) {
+            WP_CLI::line( '' );
+            WP_CLI::line( "=== Freshness (post_modified + IndexNow) ===" );
+            if ( class_exists( 'DH_IndexNow_Helper' ) ) {
+                $freshness = DH_IndexNow_Helper::refresh_and_submit( $all_listing_ids );
+                $ok = ! empty( $freshness['result']['success'] );
+                WP_CLI::line( '  Bumped ' . count( $freshness['touched'] ) . ' listing pages; submitted ' . count( $freshness['submitted'] ) . ' URLs to IndexNow (' . ( $ok ? 'OK' : 'FAILED' ) . ').' );
+            } else {
+                WP_CLI::warning( '  DH_IndexNow_Helper missing - listing lastmod not bumped, nothing sent to IndexNow.' );
+            }
+        }
+
         $total_elapsed = round( microtime( true ) - $start_total, 2 );
         WP_CLI::line( '' );
         WP_CLI::success( "Done in {$total_elapsed}s. City pages purged: " . count( $affected_city_listing_ids ) . ", state pages purged: " . count( $affected_state_listing_ids ) . "." );

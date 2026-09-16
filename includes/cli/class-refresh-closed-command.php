@@ -181,6 +181,21 @@ class DH_Refresh_Closed_Command extends WP_CLI_Command {
             return;
         }
 
+        // ── Freshness: announce the pages whose content actually changed ──────
+        // Runs regardless of --purge: freshness is not a cache concern. The closed
+        // profiles now render a closed banner, and their own city/state pages dropped
+        // them from the roster. Proximity neighbours are deliberately excluded - a
+        // quarterly run would otherwise bump ~1,000 pages at once.
+        WP_CLI::line( '' );
+        WP_CLI::line( '=== Freshness (post_modified + IndexNow) ===' );
+        if ( class_exists( 'DH_IndexNow_Helper' ) ) {
+            $freshness = DH_IndexNow_Helper::refresh_and_submit( array_merge( $closed, $own_ids ) );
+            $ok = ! empty( $freshness['result']['success'] );
+            WP_CLI::line( 'Bumped ' . count( $freshness['touched'] ) . ' pages (closed profiles + their own city/state pages); submitted ' . count( $freshness['submitted'] ) . ' URLs to IndexNow (' . ( $ok ? 'OK' : 'FAILED' ) . ').' );
+        } else {
+            WP_CLI::warning( 'DH_IndexNow_Helper missing - lastmod not bumped, nothing sent to IndexNow.' );
+        }
+
         // ── Purge (opt-in, targeted) ──────────────────────────────────────────
         WP_CLI::line( '' );
         if ( ! $purge ) {
