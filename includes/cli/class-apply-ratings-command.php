@@ -92,6 +92,7 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
         $applied       = 0;
         $skipped       = 0;
         $rank_affected = array(); // published profiles whose rating/votes changed
+        $written       = array(); // published profiles that got ANY field write (for IndexNow)
 
         foreach ( $changes as $row ) {
             $pid  = isset( $row['id'] ) ? (int) $row['id'] : 0;
@@ -134,6 +135,9 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
                     update_field( 'last_updated_ai', current_time( 'mysql' ), $pid );
                 }
                 $applied++;
+                if ( $post->post_status === 'publish' ) {
+                    $written[ $pid ] = true;
+                }
             }
             if ( $rank_touch && $post->post_status === 'publish' ) {
                 $rank_affected[ $pid ] = true;
@@ -142,6 +146,22 @@ class DH_Apply_Ratings_Command extends WP_CLI_Command {
 
         WP_CLI::line( '' );
         WP_CLI::line( "Fields applied on {$applied} profiles ({$skipped} skipped, " . count( $rank_affected ) . ' rank-affected).' );
+
+        // ── Freshness: bump post_modified + one batched IndexNow submit ───────
+        // update_field() writes meta only, so without this the sitemap keeps serving a
+        // stale lastmod and nothing is ever announced. One batch, not one ping per profile.
+        if ( ! $dry_run && ! empty( $written ) ) {
+            WP_CLI::line( '' );
+            WP_CLI::line( '=== Freshness (post_modified + IndexNow) ===' );
+            if ( class_exists( 'DH_IndexNow_Helper' ) ) {
+                $freshness = DH_IndexNow_Helper::refresh_and_submit( array_keys( $written ) );
+                $sent      = count( $freshness['submitted'] );
+                $ok        = ! empty( $freshness['result']['success'] );
+                WP_CLI::line( 'Bumped post_modified on ' . count( $freshness['touched'] ) . ' profiles; submitted ' . $sent . ' URLs to IndexNow (' . ( $ok ? 'OK' : 'FAILED' ) . ').' );
+            } else {
+                WP_CLI::warning( 'DH_IndexNow_Helper missing - post_modified not bumped, nothing sent to IndexNow.' );
+            }
+        }
 
         if ( $dry_run || empty( $rank_affected ) ) {
             WP_CLI::success( $dry_run ? 'Dry run complete - nothing written.' : 'Done - no rank-affecting changes.' );

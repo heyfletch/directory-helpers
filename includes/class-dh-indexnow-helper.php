@@ -188,4 +188,76 @@ class DH_IndexNow_Helper {
 
         return $results;
     }
+
+    /**
+     * Mark posts as freshly changed, then tell IndexNow about them.
+     *
+     * Meta-only writers (update_field(), direct $wpdb->update) leave post_modified alone,
+     * so the sitemap keeps advertising a months-old lastmod and Rank Math's save_post
+     * auto-submit never runs. This bumps post_modified, drops the sitemap cache for the
+     * post type, and submits the permalinks in one batch.
+     *
+     * Deliberately does NOT call wp_update_post(): on a bulk run that would fire save_post
+     * once per profile, and Rank Math would then POST to IndexNow one URL at a time.
+     *
+     * @param int|array $post_ids Single post ID or array of IDs.
+     * @return array {
+     *     @type array $touched   Post IDs whose post_modified was bumped.
+     *     @type array $skipped   Post IDs skipped (not published).
+     *     @type array $submitted URLs sent to IndexNow.
+     *     @type array $result    Return value of submit_urls(), or false if nothing to send.
+     * }
+     */
+    public static function refresh_and_submit($post_ids) {
+        global $wpdb;
+
+        if (!is_array($post_ids)) {
+            $post_ids = array($post_ids);
+        }
+
+        $out = array('touched' => array(), 'skipped' => array(), 'submitted' => array(), 'result' => false);
+
+        $now     = current_time('mysql');
+        $now_gmt = current_time('mysql', true);
+
+        foreach (array_unique(array_map('intval', $post_ids)) as $post_id) {
+            if (!$post_id) {
+                continue;
+            }
+
+            $post = get_post($post_id);
+
+            // Only published posts: private/draft profiles must never reach a search engine.
+            if (!$post || $post->post_status !== 'publish') {
+                $out['skipped'][] = $post_id;
+                continue;
+            }
+
+            $wpdb->update(
+                $wpdb->posts,
+                array('post_modified' => $now, 'post_modified_gmt' => $now_gmt),
+                array('ID' => $post_id),
+                array('%s', '%s'),
+                array('%d')
+            );
+            clean_post_cache($post_id);
+
+            // Drop Rank Math's cached sitemap for this post type so the new lastmod is served.
+            if (class_exists('\\RankMath\\Sitemap\\Cache_Watcher')) {
+                \RankMath\Sitemap\Cache_Watcher::invalidate_post($post_id);
+            }
+
+            $url = get_permalink($post_id);
+            if ($url) {
+                $out['submitted'][] = $url;
+            }
+            $out['touched'][] = $post_id;
+        }
+
+        if (!empty($out['submitted'])) {
+            $out['result'] = self::submit_urls($out['submitted']);
+        }
+
+        return $out;
+    }
 }
