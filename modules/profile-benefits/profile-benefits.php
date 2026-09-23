@@ -48,6 +48,9 @@ class DH_Profile_Benefits {
         if (!$post_id || get_post_type($post_id) !== 'profile') {
             return true;
         }
+        if (class_exists('DH_Profile_Status_Notice') && DH_Profile_Status_Notice::is_closed($post_id)) {
+            return false;
+        }
         return !get_post_meta($post_id, 'hide_owner_box', true);
     }
 

@@ -11,6 +11,9 @@
  * - Drops closed profiles from every Bricks query loop of profiles (city and
  *   state trainer lists, Featured cards, maps) via `bricks/posts/query_vars`.
  * - Exposes closed_profile_ids() so Listing Counts can exclude them too.
+ * - Hides the contact, availability, hours, certifications and Book or Contact
+ *   elements of the Profiles template (35078) on closed profiles; the owner box
+ *   is hidden through DH_Profile_Benefits::show_owner_box().
  * The rank engine excludes closed profiles from numeric ranks separately.
  */
 
@@ -23,8 +26,16 @@ class DH_Profile_Status_Notice {
     const META_KEY = 'gbp_status';
     const CLOSED   = 'closed_forever';
 
+    /**
+     * Profiles template (35078) element IDs hidden on a closed profile:
+     * Contact Info, Availability, Hours, Certifications, both Book or Contact
+     * blocks and the Final CTA that wraps one of them.
+     */
+    const HIDDEN_ELEMENTS = array('xrkkwe', 'fbakkz', 'tohrtv', 'osgthq', 'swsnmn', 'hctbcc', 'xmkqqt');
+
     public function __construct() {
         add_action('wp_body_open', array($this, 'render_notice'));
+        add_filter('bricks/element/render', array($this, 'hide_elements_when_closed'), 10, 2);
         add_filter('bricks/posts/query_vars', array($this, 'exclude_closed_from_loops'), 10, 1);
     }
 
@@ -77,6 +88,17 @@ class DH_Profile_Status_Notice {
         $not_in = isset($query_vars['post__not_in']) ? array_map('intval', (array) $query_vars['post__not_in']) : array();
         $query_vars['post__not_in'] = array_values(array_unique(array_merge($not_in, $closed)));
         return $query_vars;
+    }
+
+    public static function is_closed($post_id) {
+        return get_post_meta($post_id, self::META_KEY, true) === self::CLOSED;
+    }
+
+    public function hide_elements_when_closed($render, $element) {
+        if (!$render || !in_array($element->id, self::HIDDEN_ELEMENTS, true) || !is_singular('profile')) {
+            return $render;
+        }
+        return !self::is_closed(get_queried_object_id());
     }
 
     public function render_notice() {
