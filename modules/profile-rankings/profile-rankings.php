@@ -400,10 +400,11 @@ class DH_Profile_Rankings {
         // Featured is paid placement: it puts a profile in the "Featured Dog Trainers"
         // section at the top of the listing page. It must NOT buy a better rank or a
         // better ranking badge, so it takes no part in the score or the sort below.
+        $restricted = class_exists('DH_Profile_Status_Notice') ? DH_Profile_Status_Notice::restricted_profile_ids() : array();
         foreach ($profiles as $profile_id) {
             $data = $profile_data[$profile_id];
 
-            if ($data['gbp_status'] === 'closed_forever') {
+            if ($data['gbp_status'] === 'closed_forever' || in_array((int) $profile_id, $restricted, true)) {
                 // Permanently closed: no numbered rank, no badge.
                 $score = -1;
                 $review_count = 0;
@@ -682,11 +683,12 @@ class DH_Profile_Rankings {
         }
 
         $scores = array();
+        $restricted = class_exists('DH_Profile_Status_Notice') ? DH_Profile_Status_Notice::restricted_profile_ids() : array();
         foreach ($profile_ids as $pid) {
             $d = $meta[$pid];
-            // A permanently-closed business takes no numbered rank (and no badge),
-            // whatever its historical rating says.
-            if ($d['gbp_status'] === 'closed_forever') {
+            // A permanently-closed or restricted business takes no numbered rank
+            // (and no badge), whatever its historical rating says.
+            if ($d['gbp_status'] === 'closed_forever' || in_array($pid, $restricted, true)) {
                 $scores[$pid] = array('score' => -1, 'review_count' => 0);
             } elseif (!empty($d['rating']) && !empty($d['review_count'])) {
                 $rating       = (float) $d['rating'];

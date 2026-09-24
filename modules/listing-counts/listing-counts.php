@@ -297,7 +297,7 @@ class DH_Listing_Counts {
      * @return int[]
      */
     private function closed_profile_ids() {
-        return class_exists('DH_Profile_Status_Notice') ? DH_Profile_Status_Notice::closed_profile_ids() : array();
+        return class_exists('DH_Profile_Status_Notice') ? DH_Profile_Status_Notice::excluded_profile_ids() : array();
     }
 
     /**

@@ -15,6 +15,15 @@
  *   elements of the Profiles template (35078) on closed profiles; the owner box
  *   is hidden through DH_Profile_Benefits::show_owner_box().
  * The rank engine excludes closed profiles from numeric ranks separately.
+ *
+ * Also owns the "restricted" state (Report a Concern, 2026-09-24): profiles whose
+ * `dh_record_restricted` postmeta is `1` after an approved official-record review.
+ * The profile stays published; it gets an editorial note (`dh_record_note`) at
+ * the top, drops out of every profile loop, listing count and the rank pool
+ * like a closed profile, and hides its website, social and Book or Contact
+ * links. Badges, the Owner's Box, instant search and structured data links are
+ * withdrawn by their own modules through is_restricted(). Set and cleared only
+ * by `wp directory-helpers restrict-listing` / `unrestrict-listing`.
  */
 
 if (!defined('ABSPATH')) {
@@ -32,6 +41,18 @@ class DH_Profile_Status_Notice {
      * blocks and the Final CTA that wraps one of them.
      */
     const HIDDEN_ELEMENTS = array('xrkkwe', 'fbakkz', 'tohrtv', 'osgthq', 'swsnmn', 'hctbcc', 'xmkqqt');
+
+    const RESTRICTED_META = 'dh_record_restricted';
+
+    /**
+     * Profiles template element IDs hidden on a restricted profile (same IDs in
+     * 35078 and Profiles - Field Kit 143319): the Website, Facebook and Instagram
+     * lines of the contact list, both Book or Contact blocks and the Final CTA.
+     */
+    const RESTRICTED_HIDDEN_ELEMENTS = array('mgqfpc', 'fpjrkh', 'atmwzd', 'swsnmn', 'hctbcc', 'xmkqqt');
+
+    /** @var int[]|null Memoised restricted IDs; reset_restricted_cache() clears it. */
+    private static $restricted_ids = null;
 
     public function __construct() {
         add_action('wp_body_open', array($this, 'render_notice'));
@@ -60,6 +81,42 @@ class DH_Profile_Status_Notice {
     }
 
     /**
+     * IDs of every restricted profile. Memoised per request; the restrict and
+     * unrestrict commands reset it after writing.
+     *
+     * @return int[]
+     */
+    public static function restricted_profile_ids() {
+        if (self::$restricted_ids !== null) {
+            return self::$restricted_ids;
+        }
+        global $wpdb;
+        self::$restricted_ids = array_map('intval', $wpdb->get_col($wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = '1'",
+            self::RESTRICTED_META
+        )));
+        return self::$restricted_ids;
+    }
+
+    public static function reset_restricted_cache() {
+        self::$restricted_ids = null;
+    }
+
+    public static function is_restricted($post_id) {
+        return get_post_meta($post_id, self::RESTRICTED_META, true) === '1';
+    }
+
+    /**
+     * Closed and restricted profiles together: everything kept out of profile
+     * loops and listing counts.
+     *
+     * @return int[]
+     */
+    public static function excluded_profile_ids() {
+        return array_values(array_unique(array_merge(self::closed_profile_ids(), self::restricted_profile_ids())));
+    }
+
+    /**
      * Keep closed profiles out of any Bricks posts loop that lists profiles.
      * Runs for the proximity list (post__in from DH_Bricks_Query_Helpers), the
      * state list, Featured cards and maps alike, including AJAX pagination.
@@ -73,7 +130,7 @@ class DH_Profile_Status_Notice {
             return $query_vars;
         }
 
-        $closed = self::closed_profile_ids();
+        $closed = self::excluded_profile_ids();
         if (empty($closed)) {
             return $query_vars;
         }
@@ -95,10 +152,17 @@ class DH_Profile_Status_Notice {
     }
 
     public function hide_elements_when_closed($render, $element) {
-        if (!$render || !in_array($element->id, self::HIDDEN_ELEMENTS, true) || !is_singular('profile')) {
+        if (!$render || !is_singular('profile')) {
             return $render;
         }
-        return !self::is_closed(get_queried_object_id());
+        $post_id = get_queried_object_id();
+        if (in_array($element->id, self::HIDDEN_ELEMENTS, true) && self::is_closed($post_id)) {
+            return false;
+        }
+        if (in_array($element->id, self::RESTRICTED_HIDDEN_ELEMENTS, true) && self::is_restricted($post_id)) {
+            return false;
+        }
+        return $render;
     }
 
     public function render_notice() {
@@ -107,6 +171,9 @@ class DH_Profile_Status_Notice {
         }
         $post_id = get_the_ID();
         if (get_post_meta($post_id, self::META_KEY, true) !== self::CLOSED) {
+            if (self::is_restricted($post_id)) {
+                $this->render_record_note($post_id);
+            }
             return;
         }
 
@@ -139,6 +206,23 @@ class DH_Profile_Status_Notice {
            . 'padding:12px 20px;text-align:center;font-size:15px;line-height:1.5;">'
            . '<strong>' . esc_html__('This business has been marked as permanently closed on Google.', 'directory-helpers') . '</strong>'
            . $city_link
+           . '</div>';
+    }
+
+    /**
+     * The editorial note on a restricted profile. `dh_record_note` holds the
+     * approved sentence(s) after the "Editorial note:" label, with the record link.
+     */
+    private function render_record_note($post_id) {
+        $note = get_post_meta($post_id, 'dh_record_note', true);
+        if ($note === '') {
+            return;
+        }
+        $allowed = array('a' => array('href' => array(), 'rel' => array(), 'target' => array()));
+        echo '<div class="dh-record-note" style="background:#f4f1ea;border-bottom:2px solid #8a7a5c;color:#3d3528;'
+           . 'padding:12px 20px;text-align:center;font-size:15px;line-height:1.5;">'
+           . '<strong>' . esc_html__('Editorial note:', 'directory-helpers') . '</strong> '
+           . wp_kses($note, $allowed)
            . '</div>';
     }
 }

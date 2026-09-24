@@ -221,7 +221,7 @@ class DH_Refresh_Closed_Command extends WP_CLI_Command {
      * @param int[] $profile_ids
      * @return int[]
      */
-    private static function proximity_listing_ids( array $profile_ids ) {
+    public static function proximity_listing_ids( array $profile_ids ) {
         global $wpdb;
 
         $options        = get_option( 'directory_helpers_options', array() );

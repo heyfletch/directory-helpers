@@ -261,6 +261,7 @@ class Directory_Helpers {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-prime-all-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-apply-ratings-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-refresh-closed-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-record-restriction-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-backfill-listing-lastmod-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
@@ -278,6 +279,8 @@ class Directory_Helpers {
         WP_CLI::add_command( 'directory-helpers prime-all', 'DH_Prime_All_Command' );
         WP_CLI::add_command( 'directory-helpers apply-ratings', 'DH_Apply_Ratings_Command' );
         WP_CLI::add_command( 'directory-helpers refresh-closed', 'DH_Refresh_Closed_Command' );
+        WP_CLI::add_command( 'directory-helpers restrict-listing', array( new DH_Record_Restriction_Command(), 'restrict' ) );
+        WP_CLI::add_command( 'directory-helpers unrestrict-listing', array( new DH_Record_Restriction_Command(), 'unrestrict' ) );
         WP_CLI::add_command( 'directory-helpers backfill-listing-lastmod', 'DH_Backfill_Listing_Lastmod_Command' );
     }
 
@@ -929,7 +932,7 @@ class Directory_Helpers {
             ),
             'profile-status-notice' => array(
                 'name' => __('Profile Status Notice', 'directory-helpers'),
-                'description' => __('Closed businesses (gbp_status = closed_forever): banner on the profile page, hidden from every Bricks profile loop (city/state lists, Featured cards, maps) and from listing counts. The rank engine separately gives them no numeric rank. CLI: wp directory-helpers refresh-closed.', 'directory-helpers'),
+                'description' => __('Closed businesses (gbp_status = closed_forever): banner on the profile page, hidden from every Bricks profile loop (city/state lists, Featured cards, maps) and from listing counts. The rank engine separately gives them no numeric rank. CLI: wp directory-helpers refresh-closed. Also restricted profiles (Report a Concern, dh_record_restricted = 1): editorial note, off every profile loop, count, rank pool and search, no badges, Owner\'s Box, website or social links. CLI: wp directory-helpers restrict-listing / unrestrict-listing.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-status-notice/profile-status-notice.php',
                 'class' => 'DH_Profile_Status_Notice'
             ),

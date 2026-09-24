@@ -592,8 +592,12 @@ class DH_Profile_Badges {
      * endpoints, the Bricks tags, and the structured data) without touching its rank.
      * Used when we do not want to be publicly endorsing a business, e.g. while it is
      * the subject of an unresolved complaint. Clear the meta to restore the badges.
+     * A restricted profile (DH_Profile_Status_Notice::is_restricted) is hidden the same way.
      */
     public static function badges_hidden($post_id) {
+        if (class_exists('DH_Profile_Status_Notice') && DH_Profile_Status_Notice::is_restricted($post_id)) {
+            return true;
+        }
         return (bool) get_post_meta($post_id, 'hide_badges', true);
     }
 

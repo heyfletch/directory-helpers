@@ -101,9 +101,12 @@ class DH_Profile_Structured_Data {
                 $local_business['telephone'] = $this->format_e164( $phone );
             }
 
+            // Restricted profiles (Report a Concern) carry no links to the trainer's site or socials.
+            $restricted = class_exists( 'DH_Profile_Status_Notice' ) && DH_Profile_Status_Notice::is_restricted( $post_id );
+
             // Trainer's own website
             $trainer_url = get_field( 'url', $post_id );
-            if ( !empty( $trainer_url ) ) {
+            if ( !empty( $trainer_url ) && !$restricted ) {
                 $local_business['url'] = $trainer_url;
             }
 
@@ -129,7 +132,7 @@ class DH_Profile_Structured_Data {
                 get_field( 'facebook_url', $post_id ),
                 get_field( 'instagram_url', $post_id )
             ) ) );
-            if ( !empty( $same_as ) ) {
+            if ( !empty( $same_as ) && !$restricted ) {
                 $local_business['sameAs'] = $same_as;
             }
 

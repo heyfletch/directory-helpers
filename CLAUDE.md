@@ -69,6 +69,7 @@ Located in `/includes/cli/`:
 - `update-state-rankings` - Recalculate state-level rankings
 - `apply-ratings` - Apply a batched ratings changes.json (from goodydoggy-ratings-refresh --all): diff-only field writes, one recalc per affected pool, targeted throttled purge
 - `refresh-closed` - Recalc rank pools and `_profile_count` for every city/state holding a closed_forever profile; purges nothing unless `--purge`
+- `restrict-listing` / `unrestrict-listing` - Report a Concern: restrict one profile after an approved official-record review (editorial note, off loops/counts/ranks/search, no badges, Owner's Box or site links) or lift it; recalcs its pools, counts, search index, IndexNow and purges only its own and proximity pages
 - `prime-cache` - Pre-warm query caches
 - `prime-all` - Full priming sequence in one job (search rebuild, object cache pre-warm, priority/listings/profiles presets); backs the "Prime All Caches" admin button
 - `migrate-main-image` - Migrate featured images

@@ -360,9 +360,13 @@ if (!class_exists('DH_Instant_Search')) {
                         'update_post_term_cache' => false,
                     );
                     
-                    // Exclude specified post IDs if any
-                    if (!empty($excluded_ids)) {
-                        $query_args['post__not_in'] = $excluded_ids;
+                    // Exclude specified post IDs if any; restricted profiles (Report a Concern) never appear in search.
+                    $not_in = $excluded_ids;
+                    if ($is_profile && class_exists('DH_Profile_Status_Notice')) {
+                        $not_in = array_merge((array) $not_in, DH_Profile_Status_Notice::restricted_profile_ids());
+                    }
+                    if (!empty($not_in)) {
+                        $query_args['post__not_in'] = $not_in;
                     }
                     
                     $q = new WP_Query($query_args);
