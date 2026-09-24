@@ -8,7 +8,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class DH_LSCache_Integration {
+    // A browser Accept header. LiteSpeed's webp rule in .htaccess keys every
+    // AVIF-capable browser to a separate cache copy, so a warm without
+    // image/avif fills a copy only bots and tools ever request.
+    const BROWSER_ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
+
     public function __construct() {
+        // LiteSpeed's crawler only warms the AVIF copy by default; also warm
+        // the plain copy that search bots are served.
+        add_filter( 'litespeed_crawler_webp', '__return_true' );
         // Only trigger on first transition to publish
         add_action( 'transition_post_status', [ $this, 'maybe_purge_on_first_publish' ], 10, 3 );
         // Also handle first publish for state-listing to purge all its cities
@@ -100,7 +108,7 @@ class DH_LSCache_Integration {
             'blocking'    => false, // do not block the publish flow
             'headers'     => [
                 'User-Agent' => 'DHCacheWarmer/1.0 (+ ' . home_url( '/' ) . ')',
-                'Accept'     => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept'     => self::BROWSER_ACCEPT,
             ],
         ];
         // Suppress errors; we don't need the body here
@@ -128,7 +136,7 @@ class DH_LSCache_Integration {
             'redirection' => 3,
             'headers'     => [
                 'User-Agent' => 'DHCacheWarmer/1.0 (+ ' . home_url( '/' ) . ')',
-                'Accept'     => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept'     => self::BROWSER_ACCEPT,
             ],
         ];
         try {

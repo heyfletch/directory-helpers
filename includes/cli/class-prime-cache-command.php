@@ -12,6 +12,13 @@ if (!class_exists('DH_Prime_Cache_Command')) {
     class DH_Prime_Cache_Command extends WP_CLI_Command {
 
         /**
+         * Browser Accept header. LiteSpeed's webp rule keys every AVIF-capable
+         * browser to its own cache copy, so priming without image/avif fills a
+         * copy only bots request. Same value as DH_LSCache_Integration.
+         */
+        const BROWSER_ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
+
+        /**
          * Bot User-Agent string - recognized by analytics tools and excluded from tracking
          */
         private $user_agent;
@@ -513,6 +520,7 @@ if (!class_exists('DH_Prime_Cache_Command')) {
                     CURLOPT_RETURNTRANSFER => true,
                     CURLOPT_TIMEOUT => $timeout,
                     CURLOPT_USERAGENT => $this->user_agent,
+                    CURLOPT_HTTPHEADER => array('Accept: ' . self::BROWSER_ACCEPT),
                     CURLOPT_SSL_VERIFYPEER => false,
                     CURLOPT_HEADER => true,
                     CURLOPT_NOBODY => false,
@@ -604,6 +612,7 @@ if (!class_exists('DH_Prime_Cache_Command')) {
             $response = wp_remote_get($url, array(
                 'timeout' => $timeout,
                 'user-agent' => $this->user_agent,
+                'headers' => array('Accept' => self::BROWSER_ACCEPT),
                 'sslverify' => false,
                 'redirection' => 5,
             ));
