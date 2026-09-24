@@ -28,6 +28,8 @@ require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-taxonomy-helpers.php';
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-bricks-query-helpers.php';
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-acf-fields.php';
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-indexnow-helper.php';
+require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-sitemap-freshness.php';
+DH_Sitemap_Freshness::init();
 
 /**
  * Main plugin class
