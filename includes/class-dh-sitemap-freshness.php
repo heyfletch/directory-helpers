@@ -57,6 +57,7 @@ class DH_Sitemap_Freshness {
     private static $roster_profiles = array(); // profile_id => true: bump the listings they appear on.
     private static $roster_tt_ids   = array(); // taxonomy => term_taxonomy_ids whose listings changed.
     private static $fields          = array(); // post_type => array( 'exact' => [], 'prefixes' => [] ).
+    private static $gone            = array(); // Public URLs of profiles that just left 'publish'.
 
     public static function init() {
         add_action( 'added_post_meta', array( __CLASS__, 'on_meta' ), 10, 3 );
@@ -117,16 +118,33 @@ class DH_Sitemap_Freshness {
         }
         // Terms are read at shutdown: on insert they may be set after the status transition.
         self::$roster_profiles[ $post->ID ] = true;
+
+        // An unpublished profile now 404s; tell IndexNow so the dead URL drops out of the index.
+        if ( 'publish' === $old_status ) {
+            $public              = clone $post;
+            $public->post_status = 'publish'; // Drafts would otherwise get the ?p= link.
+            $public->post_name   = str_replace( '__trashed', '', $public->post_name );
+            $url                 = get_permalink( $public );
+            if ( $url ) {
+                self::$gone[ $url ] = true;
+            }
+        }
     }
 
     public static function flush() {
         $posts    = self::$posts;
         $profiles = self::$roster_profiles;
         $tt_ids   = self::$roster_tt_ids;
+        $gone     = self::$gone;
 
         self::$posts           = array();
         self::$roster_profiles = array();
         self::$roster_tt_ids   = array();
+        self::$gone            = array();
+
+        if ( ! empty( $gone ) ) {
+            DH_IndexNow_Helper::submit_urls( array_keys( $gone ) );
+        }
 
         if ( empty( $posts ) && empty( $profiles ) && empty( $tt_ids ) ) {
             return;
