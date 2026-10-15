@@ -113,7 +113,7 @@ See `/PROXIMITY-SEARCH-README.md` for full details.
 - Based on ratings and review counts
 - Stored as post meta on profile posts
 - Must be recalculated after publishing new profiles in a city
-- SETTLED 2026-08-28: stored rank values are rating-only - `featured` never buys a numeric rank; unrated is `99999` Featured or not. Featured top placement on listing pages is render-time (the Featured Dog Trainers section) and is intended - never "fix" it. Every rank writer MUST go through `DH_Profile_Rankings::recalc_pool()` (which handles old-rank reads, cache invalidation, and `dh_profile_ranks_updated`).
+- SETTLED: stored rank values are rating-only - `featured` never buys a numeric rank; unrated is `99999` Featured or not. Featured top placement on listing pages is render-time (the Featured Dog Trainers section) and is intended - never "fix" it. Every rank writer MUST go through `DH_Profile_Rankings::recalc_pool()` (which handles old-rank reads, cache invalidation, and `dh_profile_ranks_updated`).
 
 ## Common Commands
 
