@@ -1,6 +1,6 @@
 <?php
 /**
- * WP-CLI: wp directory-helpers featured-billing <replay|cancel|drift-check|status>
+ * WP-CLI: wp directory-helpers featured-billing <replay|cancel|cancel-link|drift-check|status>
  *
  * Replays the fulfilment for a Fluent Forms entry (the same code path the Stripe hooks run),
  * reverses it, runs the daily drift check on demand, or lists what is Featured under billing.
@@ -83,6 +83,27 @@ class DH_Featured_Billing_CLI extends WP_CLI_Command {
 		WP_CLI::line( '=== Featured billing cancel ' . ( $dry ? '(dry run) ' : '' ) . "entry {$entry_id} ===" );
 		$result = $module->cancel( $submission, $module->subscription_for_entry( $entry_id ), 'cli:cancel', $dry );
 		$this->print_result( $module, $result );
+	}
+
+	/**
+	 * Print the buyer's cancel link for an entry (for a buyer who lost their welcome email).
+	 *
+	 * ## OPTIONS
+	 *
+	 * --entry=<id>
+	 * : Fluent Forms submission id (form 9).
+	 *
+	 * @subcommand cancel-link
+	 */
+	public function cancel_link( $args, $assoc_args ) {
+		$module   = new DH_Featured_Billing();
+		$entry_id = (int) ( $assoc_args['entry'] ?? 0 );
+		$sub      = $module->subscription_for_entry( $entry_id );
+		$link     = $sub ? $module->cancel_link( $entry_id, (string) $sub->vendor_subscription_id ) : '';
+		if ( ! $link ) {
+			WP_CLI::error( "Entry {$entry_id} has no Stripe subscription to cancel." );
+		}
+		WP_CLI::line( $link );
 	}
 
 	/**

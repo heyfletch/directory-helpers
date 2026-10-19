@@ -10,6 +10,9 @@
  *   renewal     fluentform/subscription_received_payment_stripe -> re-assert, log
  *   cancel      fluentform/subscription_payment_canceled_stripe and the admin-cancel hook
  *               fluentform/payment_subscription_status_to_cancelled -> unfeature
+ *   refund      fluentform/payment_refunded_stripe (a FULL refund)  -> cancel the Stripe subscription now, unfeature
+ *   buyer exit  /featured-cancel/ (signed link in the welcome email) -> Stripe cancel_at_period_end; the
+ *               customer.subscription.deleted webhook at period end then runs the cancel path above
  *
  * Featuring = ACF `featured` 500, the requested `area` terms up to the tier's allowance
  * (Plus 1, Pro 5, Premium 10; nearest cities fill the blanks), Stripe ids on the profile,
@@ -42,6 +45,7 @@ class DH_Featured_Billing {
 	const SUBMISSION_META  = 'dh_featured_profile_id';
 	const OPTION_PORTAL    = 'dh_featured_billing_portal_url'; // Stripe no-code customer portal login link, set once with wp option update
 	const META_AREAS_BEFORE   = 'featured_areas_before'; // the profile's own area terms, snapshotted at activation and restored on cancel
+	const CANCEL_PAGE_SLUG    = 'featured-cancel';       // Bricks page holding [dh_featured_cancel]
 	const PAST_DUE_GRACE_DAYS = 7;                       // days past the failed renewal a past_due subscription keeps its placement
 
 	const TIER_CITIES = array( 'plus' => 1, 'pro' => 5, 'premium' => 10 );
@@ -72,6 +76,9 @@ class DH_Featured_Billing {
 		add_action( 'fluentform/subscription_payment_canceled_stripe', array( $this, 'on_cancelled' ), 10, 3 );
 		add_action( 'fluentform/subscription_payment_cancelled_stripe', array( $this, 'on_cancelled' ), 10, 3 );
 		add_action( 'fluentform/payment_subscription_status_to_cancelled', array( $this, 'on_cancelled' ), 10, 3 );
+		// Fluent Forms fires this only when the refunds on the charge add up to the whole charge; a partial refund fires payment_partially-refunded_stripe, which is deliberately not hooked.
+		add_action( 'fluentform/payment_refunded_stripe', array( $this, 'on_refunded' ), 10, 3 );
+		add_shortcode( 'dh_featured_cancel', array( $this, 'shortcode_cancel' ) );
 
 		add_filter( 'fluentform/rendering_form', array( $this, 'prefill_form' ), 10, 1 );
 		add_filter( 'fluentform/rendering_field_data_subscription_payment_component', array( $this, 'preselect_plan' ), 10, 2 );
@@ -115,6 +122,46 @@ class DH_Featured_Billing {
 			return;
 		}
 		$this->cancel( $submission, $subscription, 'hook:cancelled' );
+	}
+
+	/**
+	 * A full refund ends the placement. Fluent Forms only marks its own transaction refunded; left alone the
+	 * subscription stays live, bills again next period and the profile stays Featured. Stop the billing first,
+	 * then unfeature. If Stripe will not cancel, the profile is still unfeatured (the money has gone back) and
+	 * Joe is told to cancel it by hand, because the drift check re-features a profile whose subscription is live.
+	 */
+	public function on_refunded( $refund, $transaction, $submission ) {
+		if ( ! $this->is_ours( $submission ) ) {
+			return;
+		}
+		$this->end_after_refund( $submission, 'hook:refunded' );
+	}
+
+	public function end_after_refund( $submission, $source = 'refund' ) {
+		$entry_id     = (int) $submission->id;
+		$subscription = $this->subscription_for_entry( $entry_id );
+		$sub_id       = $subscription ? (string) $subscription->vendor_subscription_id : '';
+		$stopped      = 'no subscription on this entry';
+		if ( $sub_id ) {
+			$live = $this->stripe_subscription( $sub_id );
+			if ( ! is_wp_error( $live ) && isset( $live->status ) && 'canceled' === $live->status ) {
+				$stopped = 'already canceled in Stripe';
+			} else {
+				$res = $this->stripe_call( 'DELETE', 'subscriptions/' . rawurlencode( $sub_id ) );
+				if ( is_wp_error( $res ) ) {
+					$stopped = 'FAILED: ' . $res->get_error_message();
+					$this->log( $entry_id, 'Refund: Stripe subscription NOT cancelled', "Subscription {$sub_id} is still live in Stripe ({$res->get_error_message()}). Cancel it in the Stripe Dashboard.", 'error' );
+					$this->mail( self::ADMIN_EMAIL, 'Featured refund: cancel the Stripe subscription by hand', $this->p( 'Entry ' . $entry_id . ' was refunded but Stripe would not cancel subscription ' . esc_html( $sub_id ) . ' (' . esc_html( $res->get_error_message() ) . '). It will bill again. Cancel it in the Stripe Dashboard now.' ) . $this->p( $this->entry_link( $entry_id ) ) );
+				} else {
+					$stopped = 'canceled in Stripe';
+					$this->log( $entry_id, 'Refund: Stripe subscription cancelled', "Subscription {$sub_id} cancelled in Stripe because the charge was refunded in full." );
+				}
+			}
+		}
+		// cancel() skips the buyer's "no further charges" email when the subscription is still live.
+		$result                = $this->cancel( $submission, $subscription, 0 === strpos( $stopped, 'FAILED' ) ? $source . ' stripe-cancel-failed' : $source );
+		$result['stripe_stop'] = $stopped;
+		return $result;
 	}
 
 	private function is_ours( $submission ) {
@@ -224,7 +271,7 @@ class DH_Featured_Billing {
 
 		$token = $first_time ? $this->maybe_issue_token( $pid, $data, $match ) : array( 'mode' => 'none' );
 		if ( $first_time ) {
-			$this->send_welcome( $pid, $data, $tier, $areas, $token );
+			$this->send_welcome( $pid, $data, $tier, $areas, $token, $this->cancel_link( $entry_id, $vendor_sub ) );
 			$this->mail(
 				self::ADMIN_EMAIL,
 				sprintf( 'Featured: %s (%s, %d %s)', get_the_title( $pid ), self::TIER_LABEL[ $tier['tier'] ], count( $areas['final'] ), count( $areas['final'] ) === 1 ? 'city' : 'cities' ),
@@ -297,16 +344,17 @@ class DH_Featured_Billing {
 		$paused = false !== strpos( (string) $source, 'past_due' );
 		$buyer  = (string) get_post_meta( $pid, 'featured_billing_email', true );
 		if ( $buyer && $paused ) {
-			$portal = $this->portal_url();
+			$portal      = $this->portal_url();
+			$cancel_link = $this->cancel_link( $entry_id, (string) get_post_meta( $pid, 'stripe_subscription_id', true ) );
 			$this->mail(
 				$buyer,
 				'Your Featured Placement on Goody Doggy is paused',
 				$this->p( 'Hi,' )
 				. $this->p( 'We could not collect the payment for the Featured Placement for ' . esc_html( get_the_title( $pid ) ) . ', so the placement is paused. Your free profile stays live at <a href="' . esc_url( get_permalink( $pid ) ) . '">' . esc_html( get_permalink( $pid ) ) . '</a>.' )
-				. $this->p( 'Your subscription is still open in Stripe. ' . ( $portal ? 'Update your card at <a href="' . esc_url( $portal ) . '">' . esc_html( $portal ) . '</a> (sign in with this email address) and your placement comes back on the next payment that goes through. To stop the subscription for good, cancel it on that same page.' : 'To update your card or cancel, use the link in your Stripe receipt, or reply to this email. Your placement comes back on the next payment that goes through.' ) )
+				. $this->p( 'Your subscription is still open in Stripe. ' . ( $portal ? 'Update your card at <a href="' . esc_url( $portal ) . '">' . esc_html( $portal ) . '</a> (sign in with this email address) and your placement comes back on the next payment that goes through. To stop the subscription for good, cancel it on that same page.' : 'To update your card or cancel, use the link in your Stripe receipt, or reply to this email. Your placement comes back on the next payment that goes through.' ) . ( $cancel_link ? ' To stop the subscription for good, you can also cancel it at <a href="' . esc_url( $cancel_link ) . '">' . esc_html( $cancel_link ) . '</a>.' : '' ) )
 				. $this->p( 'Goody Doggy' )
 			);
-		} elseif ( $buyer ) {
+		} elseif ( $buyer && false === strpos( (string) $source, 'stripe-cancel-failed' ) ) {
 			$this->mail(
 				$buyer,
 				'Your Featured Placement on Goody Doggy has ended',
@@ -787,7 +835,7 @@ class DH_Featured_Billing {
 		return home_url( '/update-profile/?t=' . $raw );
 	}
 
-	private function send_welcome( $pid, array $data, array $tier, array $areas, array $token ) {
+	private function send_welcome( $pid, array $data, array $tier, array $areas, array $token, $cancel_link = '' ) {
 		$to = $this->email_of( $data );
 		if ( ! $to ) {
 			return;
@@ -825,7 +873,10 @@ class DH_Featured_Billing {
 			$body .= $this->p( 'To update the profile (more photos, social links, custom descriptions, your city pages), use the Send us your changes link in the Listing Tools box on your profile page.' );
 		}
 		$portal = $this->portal_url();
-		$body .= $this->p( 'Billing: ' . esc_html( $label ) . ' plan' . ( $tier['plan_name'] ? ' (' . esc_html( $tier['plan_name'] ) . ')' : '' ) . '. It renews ' . $renews . ' until you cancel. ' . ( $portal ? 'Update your card or cancel any time at <a href="' . esc_url( $portal ) . '">' . esc_html( $portal ) . '</a> (sign in with this email address); your Stripe receipt has the same link.' : 'To update your card or cancel, use the link in your Stripe receipt, or reply to this email.' ) . ' After a cancellation your placement runs to the end of the period you paid for and your free profile stays. Not happy in the first 14 days? Reply to this email and we refund that charge in full.' );
+		$billing_exit = $cancel_link
+			? 'Cancel any time at <a href="' . esc_url( $cancel_link ) . '">' . esc_html( $cancel_link ) . '</a>. ' . ( $portal ? 'Update your card at <a href="' . esc_url( $portal ) . '">' . esc_html( $portal ) . '</a> (sign in with this email address).' : 'To update your card, use the link in your Stripe receipt, or reply to this email.' )
+			: ( $portal ? 'Update your card or cancel any time at <a href="' . esc_url( $portal ) . '">' . esc_html( $portal ) . '</a> (sign in with this email address); your Stripe receipt has the same link.' : 'To update your card or cancel, use the link in your Stripe receipt, or reply to this email.' );
+		$body .= $this->p( 'Billing: ' . esc_html( $label ) . ' plan' . ( $tier['plan_name'] ? ' (' . esc_html( $tier['plan_name'] ) . ')' : '' ) . '. It renews ' . $renews . ' until you cancel. ' . $billing_exit . ' After a cancellation your placement runs to the end of the period you paid for and your free profile stays. Not happy in the first 14 days? Reply to this email and we refund that charge in full.' );
 		$body .= $this->p( 'To move to a different plan, cancel this one and pick the new plan at <a href="' . esc_url( $checkout ) . '">' . esc_html( $checkout ) . '</a>.' );
 		$body .= $this->p( 'Goody Doggy' );
 		$this->mail( $to, 'Your Featured Placement is live on Goody Doggy', $body );
@@ -1044,6 +1095,116 @@ class DH_Featured_Billing {
 		return ! $deadline || time() < $deadline;
 	}
 
+	/** Any Stripe write (or read) through Fluent Forms' stored connection. Returns the decoded object or a WP_Error. */
+	public function stripe_call( $method, $path, array $body = array() ) {
+		$classes = $this->stripe_classes();
+		if ( ! $classes ) {
+			return new WP_Error( 'no_fluentform', 'Fluent Forms Stripe client not loaded' );
+		}
+		list( $api, $settings ) = $classes;
+		$key = $settings::getSecretKey( self::FORM_ID );
+		if ( ! $key ) {
+			return new WP_Error( 'no_key', 'Stripe is not connected in Fluent Forms' );
+		}
+		$api::set_secret_key( $key );
+		$res = 'GET' === $method ? $api::retrieve( $path ) : $api::request( $body, $path, $method );
+		if ( is_wp_error( $res ) ) {
+			return $res;
+		}
+		if ( isset( $res->error ) ) {
+			return new WP_Error( 'stripe', isset( $res->error->message ) ? $res->error->message : 'Stripe error' );
+		}
+		return $res;
+	}
+
+	/* ------------------------------------------------------------------
+	 * Buyer cancel page: /featured-cancel/?e=<entry>&k=<signature>
+	 * ---------------------------------------------------------------- */
+
+	private function cancel_sig( $entry_id, $sub_id ) {
+		return substr( hash_hmac( 'sha256', 'featured-cancel|' . (int) $entry_id . '|' . $sub_id, wp_salt( 'auth' ) ), 0, 40 );
+	}
+
+	/** The buyer's cancel link: the entry plus a signature over entry and Stripe subscription id. '' when there is no subscription to cancel. */
+	public function cancel_link( $entry_id, $sub_id ) {
+		if ( ! $entry_id || ! $sub_id ) {
+			return '';
+		}
+		return add_query_arg( array( 'e' => (int) $entry_id, 'k' => $this->cancel_sig( $entry_id, $sub_id ) ), home_url( '/' . self::CANCEL_PAGE_SLUG . '/' ) );
+	}
+
+	private function period_end( $live ) {
+		$end = isset( $live->current_period_end ) ? (int) $live->current_period_end : 0;
+		if ( ! $end && isset( $live->items->data[0]->current_period_end ) ) {
+			$end = (int) $live->items->data[0]->current_period_end;
+		}
+		return $end;
+	}
+
+	private function cancel_box( $heading, $message, $extra = '' ) {
+		return '<div class="dh-fb-cancel"><h2>' . esc_html( $heading ) . '</h2><p>' . $message . '</p>' . $extra . '</div>';
+	}
+
+	/**
+	 * Shows the plan and a confirm button; the button (a POST carrying the same signed link) tells Stripe
+	 * cancel_at_period_end. Placement is not touched here: it ends when Stripe deletes the subscription at the
+	 * end of the paid period (customer.subscription.deleted -> cancel()), which is what the copy promises.
+	 */
+	public function shortcode_cancel() {
+		$entry_id   = isset( $_REQUEST['e'] ) ? (int) $_REQUEST['e'] : 0;
+		$sig        = isset( $_REQUEST['k'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['k'] ) ) : '';
+		$submission = $entry_id ? $this->submission( $entry_id ) : null;
+		$sub_row    = $entry_id ? $this->subscription_for_entry( $entry_id ) : null;
+		$sub_id     = $sub_row ? (string) $sub_row->vendor_subscription_id : '';
+		if ( ! $sub_id || ! $submission || self::FORM_ID !== (int) $submission->form_id || ! hash_equals( $this->cancel_sig( $entry_id, $sub_id ), $sig ) ) {
+			return $this->cancel_box( 'This cancel link is not valid', 'Open the link from your welcome email again. If it still does not work, reply to that email and we will cancel it for you.' );
+		}
+		$pid   = $this->profile_for_entry( $entry_id );
+		$title = $pid ? get_the_title( $pid ) : '';
+		$live  = $this->stripe_subscription( $sub_id );
+		if ( is_wp_error( $live ) || empty( $live->status ) || ! empty( $live->error ) ) {
+			return $this->cancel_box( 'We could not reach Stripe', 'Try again in a few minutes. If it keeps failing, reply to your welcome email and we will cancel it for you.' );
+		}
+		$end      = $this->period_end( $live );
+		$end_text = $end ? wp_date( 'F j, Y', $end ) : '';
+		if ( 'canceled' === $live->status ) {
+			return $this->cancel_box( 'Already cancelled', 'This subscription has ended and no further charges will be made.' );
+		}
+		$scheduled = ! empty( $live->cancel_at_period_end );
+		$just_now  = false;
+		if ( ! $scheduled && 'POST' === ( isset( $_SERVER['REQUEST_METHOD'] ) ? $_SERVER['REQUEST_METHOD'] : '' ) && isset( $_POST['dh_featured_cancel'] ) ) {
+			$res = $this->stripe_call( 'POST', 'subscriptions/' . rawurlencode( $sub_id ), array( 'cancel_at_period_end' => 'true' ) );
+			if ( is_wp_error( $res ) || empty( $res->cancel_at_period_end ) ) {
+				$this->log( $entry_id, 'Buyer cancel failed', 'Stripe would not schedule the cancellation: ' . ( is_wp_error( $res ) ? $res->get_error_message() : 'cancel_at_period_end not set' ), 'error' );
+				return $this->cancel_box( 'We could not cancel this just now', 'Nothing has changed and you have not been cancelled. Try again in a few minutes, or reply to your welcome email and we will cancel it for you.' );
+			}
+			$scheduled = true;
+			$just_now  = true;
+			$end       = $this->period_end( $res ) ?: $end;
+			$end_text  = $end ? wp_date( 'F j, Y', $end ) : '';
+			if ( $pid ) {
+				update_post_meta( $pid, 'featured_cancel_requested', current_time( 'mysql' ) );
+			}
+			$this->log( $entry_id, 'Buyer cancelled', 'Cancellation scheduled in Stripe from the buyer cancel page' . ( $end_text ? "; placement runs to {$end_text}." : '.' ) );
+			$this->mail( self::ADMIN_EMAIL, 'Featured cancellation scheduled: ' . $title, $this->p( esc_html( $title ) . ' cancelled from the buyer cancel page. Placement runs to ' . esc_html( $end_text ?: 'the end of the paid period' ) . ', then Stripe ends the subscription and the profile is unfeatured on its own. Subscription ' . esc_html( $sub_id ) . '.' ) . $this->p( $this->entry_link( $entry_id ) ) );
+			$buyer = $pid ? (string) get_post_meta( $pid, 'featured_billing_email', true ) : '';
+			if ( $buyer ) {
+				$this->mail( $buyer, 'Your Featured Placement on Goody Doggy is cancelled', $this->p( 'Hi,' ) . $this->p( 'Your Featured Placement for ' . esc_html( $title ) . ' is cancelled and no further charges will be made.' . ( $end_text ? ' It stays live until ' . esc_html( $end_text ) . ', the end of the period you paid for.' : '' ) . ' Your free profile stays live.' ) . $this->p( 'Goody Doggy' ) );
+			}
+		}
+		if ( $scheduled ) {
+			return $this->cancel_box( $just_now ? 'Your cancellation is done' : 'Already cancelled', 'No further charges will be made.' . ( $end_text ? ' Your Featured Placement' . ( $title ? ' for <strong>' . esc_html( $title ) . '</strong>' : '' ) . ' stays live until <strong>' . esc_html( $end_text ) . '</strong>, the end of the period you paid for. Your free profile stays.' : '' ) );
+		}
+		$form = '<form method="post" style="margin-top:1.5rem" action="' . esc_url( home_url( '/' . self::CANCEL_PAGE_SLUG . '/' ) ) . '">'
+			. '<input type="hidden" name="e" value="' . (int) $entry_id . '"><input type="hidden" name="k" value="' . esc_attr( $sig ) . '">'
+			. '<button type="submit" name="dh_featured_cancel" value="1" class="gd2-clicker gd2-clicker--brass">Cancel my Featured Placement</button></form>';
+		return $this->cancel_box(
+			'Cancel your Featured Placement' . ( $title ? ' for ' . $title : '' ),
+			'Your placement stays live until ' . ( $end_text ? '<strong>' . esc_html( $end_text ) . '</strong>' : 'the end of the period you paid for' ) . ', then it ends and your free profile stays. You will not be charged again.',
+			$form
+		);
+	}
+
 	/* ------------------------------------------------------------------
 	 * Checkout page: prefill, preselect, no-cache
 	 * ---------------------------------------------------------------- */
@@ -1098,8 +1259,12 @@ class DH_Featured_Billing {
 	}
 
 	public function nocache_checkout_pages() {
-		if ( is_page( array( self::CHECKOUT_PAGE_ID, self::WELCOME_PAGE_ID ) ) ) {
+		if ( is_page( array( self::CHECKOUT_PAGE_ID, self::WELCOME_PAGE_ID ) ) || is_page( self::CANCEL_PAGE_SLUG ) ) {
 			do_action( 'litespeed_control_set_nocache', 'dh featured checkout' );
+		}
+		if ( is_page( self::CANCEL_PAGE_SLUG ) ) {
+			// The link is the buyer's key: keep it out of search.
+			header( 'X-Robots-Tag: noindex, nofollow' );
 		}
 	}
 
