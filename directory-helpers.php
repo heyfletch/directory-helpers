@@ -939,7 +939,7 @@ class Directory_Helpers {
             ),
             'profile-status-notice' => array(
                 'name' => __('Profile Status Notice', 'directory-helpers'),
-                'description' => __('Closed businesses (gbp_status = closed_forever): banner on the profile page, hidden from every Bricks profile loop (city/state lists, Featured cards, maps) and from listing counts. The rank engine separately gives them no numeric rank. CLI: wp directory-helpers refresh-closed. Also restricted profiles (Report a Concern, dh_record_restricted = 1): editorial note, off every profile loop, count, rank pool and search, no badges, Owner\'s Box, website or social links. CLI: wp directory-helpers restrict-listing / unrestrict-listing.', 'directory-helpers'),
+                'description' => __('Closed businesses (gbp_status = closed_forever, or appears_closed with softer wording): banner on the profile page, hidden from every Bricks profile loop (city/state lists, Featured cards, maps) and from listing counts. The rank engine separately gives them no numeric rank. CLI: wp directory-helpers refresh-closed. Also restricted profiles (Report a Concern, dh_record_restricted = 1): editorial note, off every profile loop, count, rank pool and search, no badges, Owner\'s Box, website or social links. CLI: wp directory-helpers restrict-listing / unrestrict-listing.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/profile-status-notice/profile-status-notice.php',
                 'class' => 'DH_Profile_Status_Notice'
             ),

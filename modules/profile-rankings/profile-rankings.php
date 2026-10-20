@@ -404,7 +404,7 @@ class DH_Profile_Rankings {
         foreach ($profiles as $profile_id) {
             $data = $profile_data[$profile_id];
 
-            if ($data['gbp_status'] === 'closed_forever' || in_array((int) $profile_id, $restricted, true)) {
+            if (in_array($data['gbp_status'], array('closed_forever', 'appears_closed'), true) || in_array((int) $profile_id, $restricted, true)) {
                 // Permanently closed: no numbered rank, no badge.
                 $score = -1;
                 $review_count = 0;
@@ -688,7 +688,7 @@ class DH_Profile_Rankings {
             $d = $meta[$pid];
             // A permanently-closed or restricted business takes no numbered rank
             // (and no badge), whatever its historical rating says.
-            if ($d['gbp_status'] === 'closed_forever' || in_array($pid, $restricted, true)) {
+            if (in_array($d['gbp_status'], array('closed_forever', 'appears_closed'), true) || in_array($pid, $restricted, true)) {
                 $scores[$pid] = array('score' => -1, 'review_count' => 0);
             } elseif (!empty($d['rating']) && !empty($d['review_count'])) {
                 $rating       = (float) $d['rating'];

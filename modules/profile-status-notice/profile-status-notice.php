@@ -16,6 +16,10 @@
  *   is hidden through DH_Profile_Benefits::show_owner_box().
  * The rank engine excludes closed profiles from numeric ranks separately.
  *
+ * `appears_closed` is the softer closed state: website dead and the Google
+ * listing gone or temporarily closed. It is treated exactly like
+ * `closed_forever` everywhere; only the banner wording differs.
+ *
  * Also owns the "restricted" state (Report a Concern, 2026-09-24): profiles whose
  * `dh_record_restricted` postmeta is `1` after an approved official-record review.
  * The profile stays published; it gets an editorial note (`dh_record_note`) at
@@ -34,6 +38,7 @@ class DH_Profile_Status_Notice {
 
     const META_KEY = 'gbp_status';
     const CLOSED   = 'closed_forever';
+    const APPEARS_CLOSED = 'appears_closed';
 
     /**
      * Profiles template (35078) element IDs hidden on a closed profile:
@@ -73,9 +78,10 @@ class DH_Profile_Status_Notice {
         }
         global $wpdb;
         $ids = array_map('intval', $wpdb->get_col($wpdb->prepare(
-            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %s",
+            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value IN (%s, %s)",
             self::META_KEY,
-            self::CLOSED
+            self::CLOSED,
+            self::APPEARS_CLOSED
         )));
         return $ids;
     }
@@ -148,7 +154,11 @@ class DH_Profile_Status_Notice {
     }
 
     public static function is_closed($post_id) {
-        return get_post_meta($post_id, self::META_KEY, true) === self::CLOSED;
+        return self::is_closed_status(get_post_meta($post_id, self::META_KEY, true));
+    }
+
+    public static function is_closed_status($status) {
+        return $status === self::CLOSED || $status === self::APPEARS_CLOSED;
     }
 
     public function hide_elements_when_closed($render, $element) {
@@ -170,7 +180,8 @@ class DH_Profile_Status_Notice {
             return;
         }
         $post_id = get_the_ID();
-        if (get_post_meta($post_id, self::META_KEY, true) !== self::CLOSED) {
+        $status = get_post_meta($post_id, self::META_KEY, true);
+        if (!self::is_closed_status($status)) {
             if (self::is_restricted($post_id)) {
                 $this->render_record_note($post_id);
             }
@@ -204,7 +215,9 @@ class DH_Profile_Status_Notice {
 
         echo '<div class="dh-closed-notice" style="background:#fdecec;border-bottom:2px solid #d9534f;color:#7a1f1f;'
            . 'padding:12px 20px;text-align:center;font-size:15px;line-height:1.5;">'
-           . '<strong>' . esc_html__('This business has been marked as permanently closed on Google.', 'directory-helpers') . '</strong>'
+           . '<strong>' . ($status === self::CLOSED
+                ? esc_html__('This business has been marked as permanently closed on Google.', 'directory-helpers')
+                : esc_html__('This dog trainer appears to be closed. Their website and Google listing are no longer active.', 'directory-helpers')) . '</strong>'
            . $city_link
            . '</div>';
     }
