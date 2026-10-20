@@ -76,6 +76,9 @@ Located in `/includes/cli/`:
 - `migrate-years-experience` - Migrate experience data
 - `pre-warm-object-cache` - Pre-warm Redis object cache
 - `pre-warm-rankings` - Pre-warm ranking queries
+- `links-recheck` - Recheck stale external-link rows through the existing checker (skips unexpired overrides and duplicates; `--format=json` prints only the summary)
+- `profile-urls-check` - Check trainer profile website URLs (ACF `url`) and store `_dh_url_status_code` / `_dh_url_status` / `_dh_url_checked` post meta
+- `links-report` - Print broken and bot-blocked external links or profile URLs (`--type=links|profiles`, `--bucket=broken|blocked|unknown`)
 
 ## Key Concepts & Policies
 
