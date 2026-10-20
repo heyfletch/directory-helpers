@@ -117,6 +117,8 @@ class DH_Profile_Badges {
 
         // Rank writes use direct SQL and never fire acf/save_post
         add_action('dh_profile_ranks_updated', array($this, 'clear_badge_cache_on_rank_change'), 10, 1);
+        // The rank and badge render on the cached profile page, so purge each changed profile.
+        add_action('dh_profile_ranks_updated', array($this, 'purge_profiles_on_rank_change'), 20, 1);
         
         // Add Bricks dynamic data integration
         add_action('init', array($this, 'init_bricks_integration'));
@@ -1394,6 +1396,12 @@ class DH_Profile_Badges {
      *
      * @param array $post_ids Profile IDs whose rank changed
      */
+    public function purge_profiles_on_rank_change($changed) {
+        foreach ((array) $changed as $profile_id) {
+            do_action('litespeed_purge_post', (int) $profile_id);
+        }
+    }
+
     public function clear_badge_cache_on_rank_change($post_ids) {
         foreach ((array) $post_ids as $post_id) {
             $this->clear_profile_badge_caches($post_id);

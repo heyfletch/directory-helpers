@@ -338,8 +338,8 @@ class DH_Profile_Rankings {
             }
         }
 
-        // Clear the WordPress object cache to ensure changes are reflected immediately.
-        wp_cache_flush();
+        // Ranks are invalidated per profile by recalc_pool(); only this post needs a refresh.
+        clean_post_cache($post_id);
 
         // Re-add the action
         add_action('acf/save_post', array($this, 'update_ranks_on_save'), 20);

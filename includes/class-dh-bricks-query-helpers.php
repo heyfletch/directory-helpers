@@ -339,8 +339,20 @@ class DH_Bricks_Query_Helpers {
                 wp_cache_delete( $cache_key, 'directory_helpers' );
             }
         } else {
-            // Clear all cache for this area (flush entire group would be better but not all object caches support it)
-            wp_cache_flush(); // Nuclear option - only use when necessary
+            // Every niche, every common radius plus this area's own radii; never a Redis-wide flush.
+            $niches = get_terms( array( 'taxonomy' => 'niche', 'hide_empty' => false, 'fields' => 'ids' ) );
+            $radii  = array( 2, 5, 8, 10, 15, 20, 25, 30 );
+            foreach ( array( 'custom_radius', 'recommended_radius' ) as $key ) {
+                $r = (int) get_term_meta( $area_term_id, $key, true );
+                if ( $r > 0 ) {
+                    $radii[] = $r;
+                }
+            }
+            foreach ( is_array( $niches ) ? $niches : array() as $niche_id ) {
+                foreach ( array_unique( $radii ) as $radius ) {
+                    wp_cache_delete( "dh_nearby_profiles_{$area_term_id}_" . (int) $niche_id . "_{$radius}", 'directory_helpers' );
+                }
+            }
         }
     }
 }

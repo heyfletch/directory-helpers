@@ -172,7 +172,7 @@ class DH_Refresh_Closed_Command extends WP_CLI_Command {
         // so the purge set is wider than the rank/count set above.
         $own_ids   = array_values( array_unique( array_map( 'intval', $listing_ids ) ) );
         $near_ids  = array_values( array_diff( self::proximity_listing_ids( $closed ), $own_ids ) );
-        $purge_ids = array_merge( $own_ids, $near_ids );
+        $purge_ids = array_merge( $own_ids, $near_ids, $closed );
         WP_CLI::line( '' );
         WP_CLI::line( count( $purge_ids ) . ' listing pages render a closed trainer: ' . count( $own_ids ) . ' own city/state pages + ' . count( $near_ids ) . ' proximity neighbours.' );
 

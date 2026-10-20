@@ -112,6 +112,7 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
             $total_states = count($states);
             $start_time = microtime(true);
 
+            $state_listing_ids = array();
             foreach ($states as $index => $state) {
                 $state_start = microtime(true);
                 
@@ -167,6 +168,13 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
                 // Recalculate + write via the shared honest engine (rating-only ranks).
                 $recalc_start = microtime(true);
                 DH_Profile_Rankings::recalc_pool($profile_ids, 'state_rank');
+                $state_listing_ids = array_merge($state_listing_ids, get_posts(array(
+                    'post_type'      => 'state-listing',
+                    'post_status'    => 'publish',
+                    'posts_per_page' => 1,
+                    'fields'         => 'ids',
+                    'tax_query'      => array(array('taxonomy' => 'state', 'field' => 'term_id', 'terms' => $state->term_id)),
+                )));
                 $recalc_time = round(microtime(true) - $recalc_start, 3);
                 WP_CLI::line("  [Recalc] Ranks recalculated and written in {$recalc_time}s");
 
@@ -181,25 +189,15 @@ if (!class_exists('DH_Update_State_Rankings_Command')) {
             WP_CLI::line("");
             WP_CLI::line("=== Clearing Caches ===");
             
-            // Clear LiteSpeed page cache and object cache specifically
-            $cache_start = microtime(true);
-            if (class_exists('LiteSpeed\Purge')) {
-                // Clear object cache only (Redis)
-                \LiteSpeed\Purge::purge_all_object();
-                WP_CLI::line("✓ LiteSpeed object cache (Redis) cleared sitewide");
-                
-                // Clear page cache only
-                \LiteSpeed\Purge::purge_all_lscache();
-                WP_CLI::line("✓ LiteSpeed page cache cleared sitewide");
-                
-                $cache_time = round(microtime(true) - $cache_start, 3);
-                WP_CLI::line("✓ Caches cleared in {$cache_time}s");
-            } else {
-                WP_CLI::line("⚠ LiteSpeed Cache not available");
+            // Profiles whose rank moved are purged by the dh_profile_ranks_updated listener;
+            // only the state listing pages are left. Never a site-wide purge.
+            foreach (array_unique(array_map('intval', $state_listing_ids)) as $listing_id) {
+                do_action('litespeed_purge_post', $listing_id);
             }
+            WP_CLI::line('✓ Purged ' . count(array_unique($state_listing_ids)) . ' state listing pages');
             
             WP_CLI::line("");
-            WP_CLI::success("All done! Rankings updated and caches cleared sitewide.");
+            WP_CLI::success("All done! Rankings updated and state pages purged.");
         }
     }
 }
