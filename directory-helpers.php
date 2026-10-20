@@ -29,6 +29,7 @@ require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-bricks-query-helpers.ph
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-acf-fields.php';
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-indexnow-helper.php';
 require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-sitemap-freshness.php';
+require_once DIRECTORY_HELPERS_PATH . 'includes/class-dh-link-status.php';
 DH_Sitemap_Freshness::init();
 
 /**
@@ -265,6 +266,7 @@ class Directory_Helpers {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-refresh-closed-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-record-restriction-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-backfill-listing-lastmod-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-dh-links-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_state_listing_titles', 'DH_Deduplicate_Area_Terms_Command' );
@@ -284,6 +286,9 @@ class Directory_Helpers {
         WP_CLI::add_command( 'directory-helpers restrict-listing', array( new DH_Record_Restriction_Command(), 'restrict' ) );
         WP_CLI::add_command( 'directory-helpers unrestrict-listing', array( new DH_Record_Restriction_Command(), 'unrestrict' ) );
         WP_CLI::add_command( 'directory-helpers backfill-listing-lastmod', 'DH_Backfill_Listing_Lastmod_Command' );
+        WP_CLI::add_command( 'directory-helpers links-recheck', array( new DH_Links_Command(), 'links_recheck' ) );
+        WP_CLI::add_command( 'directory-helpers profile-urls-check', array( new DH_Links_Command(), 'profile_urls_check' ) );
+        WP_CLI::add_command( 'directory-helpers links-report', array( new DH_Links_Command(), 'links_report' ) );
     }
 
     /**

@@ -1496,6 +1496,15 @@ class DH_External_Link_Management {
     }
     
     /**
+     * Public wrapper so WP-CLI commands can run the same HTTP checker
+     * without changing http_check_url() visibility or behavior.
+     * Pass $link_id = null when there is no link row (e.g. profile URLs).
+     */
+    public function cli_check_url($url, $timeout = 15, $link_id = null) {
+        return $this->http_check_url($url, $timeout, $link_id);
+    }
+    
+    /**
      * Set override status for a link
      * Marks a link as verified (auto or manual) - uses same logic as "Mark OK" button
      * 
