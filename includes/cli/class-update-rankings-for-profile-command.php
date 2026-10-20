@@ -179,8 +179,12 @@ class DH_Update_Rankings_For_Profile_Command extends WP_CLI_Command {
 
         $purged = 0;
         $all_listing_ids = array_merge( $affected_city_listing_ids, $affected_state_listing_ids );
+        // Neighbour city pages whose proximity radius reaches this trainer show it too.
+        $near_ids = class_exists( 'DH_Refresh_Closed_Command' )
+            ? array_values( array_diff( DH_Refresh_Closed_Command::proximity_listing_ids( array( $profile_id ) ), $all_listing_ids ) )
+            : array();
 
-        foreach ( $all_listing_ids as $listing_id ) {
+        foreach ( array_merge( $all_listing_ids, $near_ids ) as $listing_id ) {
             do_action( 'litespeed_purge_post', $listing_id );
             $url = get_permalink( $listing_id );
             WP_CLI::line( "  ✓ Purged: [{$listing_id}] " . ( $url ?: '(no URL)' ) );

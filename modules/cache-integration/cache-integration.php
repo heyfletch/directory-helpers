@@ -102,19 +102,7 @@ class DH_LSCache_Integration {
         $warmed[ $key ] = true;
 
         // Attempt immediate non-blocking warm
-        $args = [
-            'timeout'     => 5,
-            'redirection' => 3,
-            'blocking'    => false, // do not block the publish flow
-            'headers'     => [
-                'User-Agent' => 'DHCacheWarmer/1.0 (+ ' . home_url( '/' ) . ')',
-                'Accept'     => self::BROWSER_ACCEPT,
-            ],
-        ];
-        // Suppress errors; we don't need the body here
-        try {
-            wp_remote_get( $url, $args );
-        } catch ( \Exception $e ) { /* no-op */ }
+        $this->warm( $url, 5, false );
 
         // Schedule a fallback warm shortly after (in case non-blocking transport is unavailable)
         if ( ! wp_next_scheduled( 'dh_warm_url', [ $url ] ) ) {
@@ -131,17 +119,33 @@ class DH_LSCache_Integration {
     public function warm_url_handler( $url ) {
         $url = esc_url_raw( (string) $url );
         if ( ! $url ) { return; }
-        $args = [
-            'timeout'     => 10,
-            'redirection' => 3,
-            'headers'     => [
-                'User-Agent' => 'DHCacheWarmer/1.0 (+ ' . home_url( '/' ) . ')',
-                'Accept'     => self::BROWSER_ACCEPT,
-            ],
-        ];
-        try {
-            wp_remote_get( $url, $args );
-        } catch ( \Exception $e ) { /* no-op */ }
+        $this->warm( $url, 10, true );
+    }
+
+    /**
+     * Warm both cache copies of a URL: the AVIF copy browsers get and the plain
+     * copy search bots get. Forced over IPv4, because the server's IPv6 egress is
+     * not covered by the Cloudflare rate-limit skip rule.
+     */
+    private function warm( $url, $timeout, $blocking ) {
+        $force_v4 = function ( $handle ) {
+            curl_setopt( $handle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4 );
+        };
+        add_action( 'http_api_curl', $force_v4 );
+        foreach ( [ self::BROWSER_ACCEPT, 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' ] as $accept ) {
+            try {
+                wp_remote_get( $url, [
+                    'timeout'     => $timeout,
+                    'redirection' => 3,
+                    'blocking'    => $blocking,
+                    'headers'     => [
+                        'User-Agent' => 'DHCacheWarmer/1.0 (+ ' . home_url( '/' ) . ')',
+                        'Accept'     => $accept,
+                    ],
+                ] );
+            } catch ( \Exception $e ) { /* no-op */ }
+        }
+        remove_action( 'http_api_curl', $force_v4 );
     }
 
     /**
