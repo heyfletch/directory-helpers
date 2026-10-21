@@ -948,6 +948,12 @@ class Directory_Helpers {
                 'description' => __('Rank Math variables %dh_city_seo_title% and %dh_city_seo_desc% for count-led city-listing titles and meta descriptions, using _profile_count from Listing Counts. Cities with fewer than 2 profiles get a no-count fallback.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/seo-listing-titles/seo-listing-titles.php',
                 'class' => 'DH_SEO_Listing_Titles'
+            ),
+            'reports' => array(
+                'name' => __('Reports', 'directory-helpers'),
+                'description' => __('Serves the data reports pipeline bundle: report pages and frozen editions at /reports/, the statistics hub at /dog-training-statistics/, downloads, the framable chart route /reports/embed/, press page, JSON-LD and sitemap. Admin-only until a page is published and the dh_reports_public option is 1. WP-CLI: wp directory-helpers report-publish.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/reports/reports.php',
+                'class' => 'DH_Reports'
             )
             // Add more modules here as needed
         );
