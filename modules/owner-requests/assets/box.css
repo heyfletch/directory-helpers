@@ -1,0 +1,371 @@
+/* Owner request box. Everything is scoped under .dh-rb. Colors and fonts come from the site's --gd-* tokens. */
+.dh-rb {
+  --rb-blue: var(--gd-blue, #0572bd);
+  --rb-blue-deep: var(--gd-blue-deep, #034c7c);
+  --rb-ink: var(--gd-ink, #011e32);
+  --rb-mist: var(--gd-mist, #ebf7fe);
+  --rb-sky: var(--gd-sky, #dcf1fe);
+  --rb-yellow: var(--gd-yellow, #ffd64f);
+  --rb-brass: var(--gd-brass, #b38900);
+  --rb-slate: var(--gd-slate, #5a6a7b);
+  --rb-line: var(--gd-line, #dce0e5);
+  --rb-red: #b3261e;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 48px 0;
+  font-family: var(--gd-font-body, Lexend, system-ui, sans-serif);
+  color: var(--rb-ink);
+}
+.dh-rb *,
+.dh-rb *::before,
+.dh-rb *::after {
+  box-sizing: border-box;
+}
+
+/* Same side gutters as the page's own containers (32px on desktop, 20px on a phone). */
+.dh-rb__inner {
+  margin: 0;
+  padding: 0 32px;
+}
+
+.dh-rb__card {
+  background: #fff;
+  border: 2px solid var(--rb-brass);
+  border-radius: 22px;
+  padding: 36px;
+  box-shadow: 0 8px 24px rgba(1, 30, 50, 0.08);
+}
+
+.dh-rb__intro {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 8px 40px;
+  align-items: start;
+  margin: 0 0 28px;
+}
+.dh-rb__intro .dh-rb__title {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.dh-rb__intro .dh-rb__lead,
+.dh-rb__intro .dh-rb__note {
+  grid-column: 2;
+}
+
+.dh-rb__title {
+  margin: 0;
+  font-family: var(
+    --gd-font-display,
+    "Bricolage Grotesque",
+    Lexend,
+    system-ui,
+    sans-serif
+  );
+  font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem);
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--rb-blue-deep);
+}
+.dh-rb__lead {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.55;
+  color: var(--rb-ink);
+}
+.dh-rb__note {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--rb-slate);
+}
+
+/* ---- form ---- */
+.dh-rb .fluentform {
+  margin: 0;
+}
+.dh-rb fieldset {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 18px 20px;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  min-inline-size: 0 !important;
+}
+.dh-rb .ff-el-group {
+  margin: 0 !important;
+  min-width: 0;
+  grid-column: span 2;
+}
+.dh-rb .dh-rb-f--wide,
+.dh-rb .ff-el-group.ff_submit_btn_wrapper,
+.dh-rb .ff-el-group:has(.cf-turnstile),
+.dh-rb .ff-el-group:has(.ff-el-tc) {
+  grid-column: 1 / -1;
+}
+.dh-rb .ff-el-group.ff_hidden,
+.dh-rb .ff-el-group:has(input[type="hidden"]) {
+  display: none !important;
+}
+
+/* Labels (the site's global form CSS hides them visually, so restore them here) */
+.dh-rb .ff-el-input--label {
+  display: block !important;
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 0 6px !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  clip-path: none !important;
+  white-space: normal !important;
+}
+.dh-rb .ff-el-input--label label {
+  display: inline !important;
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: normal !important;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  color: var(--rb-blue-deep) !important;
+}
+.dh-rb .dh-rb-f--chips .ff-el-input--label,
+.dh-rb .dh-rb-f--chips .ff-el-input--label label {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  text-indent: 0 !important;
+}
+.dh-rb .ff-el-help-message,
+.dh-rb .ff-el-input--content + .ff-el-help-message {
+  margin-top: 6px;
+  font-size: 0.8125rem;
+  color: var(--rb-slate);
+}
+
+/* Inputs */
+.dh-rb .ff-el-form-control {
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--rb-ink);
+  background: #fff;
+  border: 1.5px solid var(--rb-line);
+  border-radius: 10px;
+  box-shadow: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.dh-rb textarea.ff-el-form-control {
+  min-height: 112px;
+  resize: vertical;
+}
+.dh-rb .ff-el-form-control:focus {
+  outline: none;
+  border-color: var(--rb-blue);
+  box-shadow: 0 0 0 3px var(--rb-sky);
+}
+.dh-rb select.ff-el-form-control {
+  appearance: auto;
+}
+
+/* Problem chips: the span is the pill */
+.dh-rb .ff_list_buttons .ff-el-input--content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dh-rb .ff_list_buttons .ff-el-form-check {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.dh-rb .ff_list_buttons .ff-el-form-check label {
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 0 !important;
+  cursor: pointer;
+}
+.dh-rb .fluentform .ff-el-group.ff_list_buttons .ff-el-form-check label > span {
+  display: inline-block !important;
+  width: auto !important;
+  box-shadow: none !important;
+  padding: 8px 14px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  color: var(--rb-blue-deep) !important;
+  background: #eaedf0 !important;
+  border: 1.5px solid transparent !important;
+  border-radius: 999px !important;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+.dh-rb .fluentform .ff-el-group.ff_list_buttons .ff-el-form-check label:hover > span {
+  background: var(--rb-sky) !important;
+}
+.dh-rb .ff_list_buttons .ff-el-form-check input[type="checkbox"] {
+  position: absolute !important;
+  opacity: 0 !important;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+.dh-rb .fluentform .ff-el-group.ff_list_buttons .ff-el-form-check label:has(input:checked) > span {
+  color: #fff !important;
+  background: var(--rb-blue) !important;
+  border-color: var(--rb-blue) !important;
+}
+.dh-rb .fluentform .ff-el-group.ff_list_buttons .ff-el-form-check label:has(input:focus-visible) > span {
+  outline: 3px solid var(--rb-yellow);
+  outline-offset: 2px;
+}
+
+/* Consent */
+.dh-rb .ff-el-tc label,
+.dh-rb .ff-el-tc .ff_tc_label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  line-height: 1.5;
+  color: var(--rb-ink) !important;
+}
+.dh-rb .ff-el-tc input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--rb-blue);
+}
+.dh-rb .ff-el-tc a {
+  color: var(--rb-blue);
+}
+
+/* Submit */
+.dh-rb .ff_submit_btn_wrapper {
+  margin: 0 !important;
+}
+.dh-rb .ff-btn-submit {
+  min-height: 52px;
+  padding: 12px 30px;
+  font: inherit;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: #fff !important;
+  background: var(--rb-blue) !important;
+  border: 2px solid var(--rb-blue) !important;
+  border-radius: 999px !important;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--rb-blue-deep);
+  transition:
+    background 0.15s,
+    transform 0.1s;
+}
+.dh-rb .ff-btn-submit:hover {
+  background: var(--gd-blue-hover, #0686db) !important;
+  border-color: var(--gd-blue-hover, #0686db) !important;
+}
+.dh-rb .ff-btn-submit:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--rb-blue-deep);
+}
+.dh-rb .ff-btn-submit:focus-visible {
+  outline: 3px solid var(--rb-yellow);
+  outline-offset: 3px;
+}
+
+/* Errors and the result message */
+.dh-rb .ff-el-is-error .ff-el-form-control {
+  border-color: var(--rb-red);
+}
+.dh-rb .error.text-danger,
+.dh-rb .ff-el-is-error .error {
+  margin-top: 6px;
+  font-size: 0.875rem;
+  color: var(--rb-red);
+}
+.dh-rb .ff-message-success {
+  margin: 0;
+  padding: 20px 22px;
+  color: var(--rb-ink);
+  background: var(--rb-mist);
+  border: 2px solid var(--rb-blue);
+  border-radius: 14px;
+  box-shadow: none;
+}
+.dh-rb .ff-message-success p {
+  margin: 0 0 10px;
+}
+.dh-rb .ff-message-success p:last-child {
+  margin-bottom: 0;
+}
+.dh-rb .ff-message-success ul {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+.dh-rb .ff-message-success a {
+  color: var(--rb-blue);
+  font-weight: 600;
+}
+
+/* ---- tablet and phone ---- */
+@media (max-width: 900px) {
+  .dh-rb {
+    padding: 32px 0;
+  }
+  .dh-rb__inner {
+    padding: 0 20px;
+  }
+  .dh-rb__card {
+    padding: 24px 20px;
+    border-radius: 18px;
+  }
+  .dh-rb__intro {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .dh-rb__intro .dh-rb__title,
+  .dh-rb__intro .dh-rb__lead,
+  .dh-rb__intro .dh-rb__note {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .dh-rb fieldset {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dh-rb .ff-el-group {
+    grid-column: span 1;
+  }
+  .dh-rb .dh-rb-f--wide,
+  .dh-rb .ff-el-group.ff_submit_btn_wrapper,
+  .dh-rb .ff-el-group:has(.cf-turnstile),
+  .dh-rb .ff-el-group:has(.ff-el-tc) {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 560px) {
+  .dh-rb fieldset {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .dh-rb .ff-btn-submit {
+    width: 100%;
+  }
+}

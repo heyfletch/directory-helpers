@@ -954,6 +954,12 @@ class Directory_Helpers {
                 'description' => __('Serves the data reports pipeline bundle: report pages and frozen editions at /reports/, the statistics hub at /dog-training-statistics/, downloads, the framable chart route /reports/embed/, press page, JSON-LD and sitemap. Admin-only until a page is published and the dh_reports_public option is 1. WP-CLI: wp directory-helpers report-publish.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/reports/reports.php',
                 'class' => 'DH_Reports'
+            ),
+            'owner-requests' => array(
+                'name' => __('Owner Requests', 'directory-helpers'),
+                'description' => __('Dog owner request box on city and profile pages: gates, matching to up to five trainers, notices to trainers who gave their own email, owner receipt. Preview only (admins) and dry run (emails are logged, not sent) until switched. Shortcode [dh_request_box]. WP-CLI: wp dh-requests stats|pause|resume|retract|suppress|purge-old|match|install-form.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/owner-requests/owner-requests.php',
+                'class' => 'DH_Owner_Requests'
             )
             // Add more modules here as needed
         );

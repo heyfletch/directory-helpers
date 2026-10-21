@@ -1,0 +1,2 @@
+zip-centroids.csv: US Census Bureau 2023 Gazetteer ZCTA national file (2023_Gaz_zcta_national.zip, INTPTLAT and INTPTLONG), https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/ ; public domain.
+disposable-domains.txt: disposable-email-domains/disposable-email-domains disposable_email_blocklist.conf, https://github.com/disposable-email-domains/disposable-email-domains ; CC0 1.0.
