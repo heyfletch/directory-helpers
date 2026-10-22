@@ -960,6 +960,12 @@ class Directory_Helpers {
                 'description' => __('Dog owner request box on city and profile pages: gates, matching to up to five trainers, notices to trainers who gave their own email, owner receipt. Preview only (admins) and dry run (emails are logged, not sent) until switched. Shortcode [dh_request_box]. WP-CLI: wp dh-requests stats|pause|resume|retract|suppress|purge-old|match|install-form.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/owner-requests/owner-requests.php',
                 'class' => 'DH_Owner_Requests'
+            ),
+            'course-picks' => array(
+                'name' => __('Course Picks', 'directory-helpers'),
+                'description' => __('Up to three nearby trainers per ZIP code and topic for the free training course emails, Featured first. REST: POST /wp-json/dh/v1/course-picks with the X-Course-Key header (option dh_course_picks_key). Uses the Owner Requests matcher.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/course-picks/course-picks.php',
+                'class' => 'DH_Course_Picks'
             )
             // Add more modules here as needed
         );
