@@ -87,7 +87,7 @@ class DH_OR_Box {
         $this->enqueue();
 
         $title = 'Ask trainers near you for help';
-        $lead  = 'Tell us what is going on with your dog. We send your note to up to five trainers near you, and they reply to you.';
+        $lead  = 'Tell us what is going on with your dog. We send your note to up to five trainers near you, and it\'s up to them to reply to you.';
         $note  = 'We pick trainers who work on your dog\'s problem. Trainers see your email only after they open your request.';
 
         $out  = '<section class="dh-rb" id="ask-trainers" data-dh-rb data-source-type="' . esc_attr( $ctx['type'] ) . '" data-source-post="' . (int) $ctx['post_id'] . '"'

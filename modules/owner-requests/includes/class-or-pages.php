@@ -102,7 +102,7 @@ class DH_OR_Pages {
             $body .= '<p>The owner mentioned a bite or aggression. You are seeing this because you hold a behavior credential.</p>';
         }
         if ( in_array( 'medical', $flags, true ) ) {
-            $body .= '<p>The owner mentioned a health problem. We told them to see a vet first.</p>';
+            $body .= '<p>The owner mentioned a health problem. We suggested seeing a vet.</p>';
         }
 
         $body .= '<h2>Reach the owner</h2><div class="contact"><p><strong>' . esc_html( $request->owner_first_name ) . '</strong></p>'

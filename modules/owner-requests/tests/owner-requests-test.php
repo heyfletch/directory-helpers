@@ -359,7 +359,7 @@ check_true( 'medical receipt has the see-your-vet line', false !== strpos( $thin
 $ok_msg = DH_OR_Messages::owner_receipt( array( 'first_name' => 'Jo', 'zip' => '53202', 'text' => 'x', 'trainers' => array( array( 'name' => 'A', 'city' => 'B', 'url' => 'https://example.test/p/a/' ) ), 'flags' => array(), 'delete_url' => 'https://example.test/d/', 'fallback_url' => '', 'postal' => 'P' ) );
 check( 'owner receipt subject', $ok_msg['subject'], 'We sent your dog training request' );
 check_true( 'owner receipt lists the trainer link', false !== strpos( $ok_msg['text'], 'https://example.test/p/a/' ) );
-check_true( 'owner receipt has the delete link', false !== strpos( $ok_msg['text'], 'https://example.test/d/' ) );
+check_true( 'owner receipt has no delete line', false === strpos( $ok_msg['text'] . $ok_msg['html'], 'https://example.test/d/' ) );
 
 $video_msg = DH_OR_Messages::trainer_notice( array(
     'trainer_name' => 'Far Away Training', 'city' => 'Milwaukee', 'zip' => '53202', 'distance' => 577.4, 'by_video' => true,

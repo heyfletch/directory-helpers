@@ -131,9 +131,9 @@ class DH_OR_Messages {
             $extra_lines[] = 'The owner mentioned a bite or aggression. You are getting this because you hold a behavior credential.';
         }
         if ( in_array( 'medical', $d['flags'], true ) ) {
-            $extra_lines[] = 'The owner mentioned a health problem. We told them to see a vet first.';
+            $extra_lines[] = 'The owner mentioned a health problem. We suggested seeing a vet.';
         }
-        $sent_to = (int) $d['notified_count'] <= 1 ? 'You are the only trainer who got this request.' : (int) $d['notified_count'] . ' trainers got this request.';
+        $sent_to = (int) $d['notified_count'] <= 1 ? 'You are the only trainer from our directory who got this request.' : (int) $d['notified_count'] . ' trainers got this request.';
 
         $text  = 'Hi ' . $d['trainer_name'] . ",\n\n";
         $text .= 'A dog owner ' . $where . " asked for dog training help.\n\n";
@@ -195,7 +195,6 @@ class DH_OR_Messages {
                 $text .= "\n" . $vet . "\n";
             }
             $text .= "\nWhat you wrote:\n\"" . $d['text'] . "\"\n\n";
-            $text .= "Delete your request any time:\n" . $d['delete_url'] . "\n";
 
             $body  = '<p style="margin:0 0 12px 0;">Hi ' . self::h( $d['first_name'] ) . ',</p>';
             $body .= '<p style="margin:0 0 8px 0;">We sent your request to ' . self::h( self::list_intro( $d['trainers'], $d['zip'] ) ) . '</p><ul style="margin:0 0 12px 0;padding-left:20px;">';
@@ -215,7 +214,6 @@ class DH_OR_Messages {
             if ( $vet ) {
                 $text .= "\n" . $vet . "\n";
             }
-            $text .= "\nDelete your request any time:\n" . $d['delete_url'] . "\n";
 
             $body  = '<p style="margin:0 0 12px 0;">Hi ' . self::h( $d['first_name'] ) . ',</p>';
             $body .= '<p style="margin:0 0 12px 0;">No trainer near ' . self::h( $d['zip'] ) . ' takes requests through Goody Doggy yet, so we did not send yours.</p>';
@@ -225,8 +223,8 @@ class DH_OR_Messages {
             }
         }
 
-        $footer = '<a href="' . self::h( $d['delete_url'] ) . '" style="color:#5a6a7b;">Delete your request</a>. ' . self::h( $d['postal'] );
-        $text  .= '--' . "\n" . $d['postal'] . "\n";
+        $footer = self::h( $d['postal'] );
+        $text   = rtrim( $text ) . "\n\n--\n" . $d['postal'] . "\n";
         return array( 'subject' => $subject, 'text' => $text, 'html' => self::wrap( $subject, $body, $footer ) );
     }
 
@@ -262,8 +260,8 @@ class DH_OR_Messages {
     /** Short note to the owner when a request is withdrawn. */
     public static function withdrawn_owner( array $d ) {
         $subject = 'Your dog training request was withdrawn';
-        $text    = 'Hi ' . $d['first_name'] . ",\n\nWe withdrew your dog training request. Trainers who got it were told. Nothing else will be sent.\n\n--\n" . $d['postal'] . "\n";
-        $body    = '<p style="margin:0 0 12px 0;">Hi ' . self::h( $d['first_name'] ) . ',</p><p style="margin:0;">We withdrew your dog training request. Trainers who got it were told. Nothing else will be sent.</p>';
+        $text    = 'Hi ' . $d['first_name'] . ",\n\nWe withdrew your dog training request and informed those trainers. Nothing else will be sent.\n\n--\n" . $d['postal'] . "\n";
+        $body    = '<p style="margin:0 0 12px 0;">Hi ' . self::h( $d['first_name'] ) . ',</p><p style="margin:0;">We withdrew your dog training request and informed those trainers. Nothing else will be sent.</p>';
         return array( 'subject' => $subject, 'text' => $text, 'html' => self::wrap( $subject, $body, self::h( $d['postal'] ) ) );
     }
 }
