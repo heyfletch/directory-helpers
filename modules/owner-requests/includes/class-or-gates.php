@@ -51,6 +51,9 @@ class DH_OR_Gates {
         $format = sanitize_key( $g( 'format', 'any' ) );
         $format = in_array( $format, self::FORMATS, true ) ? $format : 'any';
 
+        $video_ok = $g( 'video_ok', array() );
+        $video_ok = 'video' === $format || in_array( 'yes', (array) $video_ok, true );
+
         $zip = DH_OR_Text::normalize_zip( $g( 'zip' ) );
 
         // Where the form was submitted from. The embed post id is Fluent Forms' own field;
@@ -91,6 +94,7 @@ class DH_OR_Gates {
             'chips'             => $chips,
             'dog_age'           => $age,
             'format'            => $format,
+            'video_ok'          => $video_ok,
             'source_post_id'    => $post_id,
             'source_type'       => $type,
             'viewed_profile_id' => $viewed,

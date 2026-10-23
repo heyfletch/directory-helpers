@@ -93,6 +93,7 @@ class DH_OR_Matcher {
         $want_specs  = isset( $req['specialties'] ) ? (array) $req['specialties'] : array();
         $dog_age     = isset( $req['dog_age'] ) ? (string) $req['dog_age'] : '';
         $viewed_id   = isset( $req['viewed_id'] ) ? (int) $req['viewed_id'] : 0;
+        $video_ok    = 'video' === $format || ! empty( $req['video_ok'] );
 
         $skipped = array();
         $note    = function ( $id, $why ) use ( &$skipped ) {
@@ -129,9 +130,9 @@ class DH_OR_Matcher {
         }
 
         // Fit filter for the ranked pool.
-        $fits = function ( array $c ) use ( $format, $want_specs, $dog_age ) {
+        $fits = function ( array $c, $check_format = true ) use ( $format, $want_specs, $dog_age ) {
             $notes = array();
-            if ( isset( self::FORMAT_SERVICE[ $format ] ) ) {
+            if ( $check_format && isset( self::FORMAT_SERVICE[ $format ] ) ) {
                 if ( ! array_intersect( self::FORMAT_SERVICE[ $format ], (array) $c['services'] ) ) {
                     return null;
                 }
@@ -181,13 +182,13 @@ class DH_OR_Matcher {
             }
         }
 
-        // Format "any": a short local pool is topped up with video-capable trainers at any distance.
-        if ( 'any' === $format && count( $pool ) < $min ) {
+        // An owner who ticked "Open to training by video call": a short local pool is topped up with video trainers at any distance.
+        if ( $video_ok && count( $pool ) < $min ) {
             foreach ( $base as $id => $c ) {
                 if ( $id === $viewed_id || isset( $pool[ $id ] ) || ! in_array( 'video', (array) $c['services'], true ) ) {
                     continue;
                 }
-                $notes = $fits( $c );
+                $notes = $fits( $c, false );
                 if ( null === $notes ) {
                     continue;
                 }
@@ -219,15 +220,15 @@ class DH_OR_Matcher {
             }
             $routes[] = self::route_row( $c, $c['fit_notes'], false );
         }
-        // Reserved spot: an owner open to video always gets the best-fitting Featured video trainer, in the last spot if the list is full.
-        if ( in_array( $format, array( 'video', 'any' ), true ) ) {
+        // Reserved spot: an owner who ticked video always gets the best-fitting Featured video trainer, in the last spot if the list is full.
+        if ( $video_ok ) {
             $routed = array_column( $routes, 'profile_id' );
             $best   = null;
             foreach ( $base as $id => $c ) {
                 if ( $id === $viewed_id || in_array( $id, $routed, true ) || empty( $c['featured'] ) || ! in_array( 'video', (array) $c['services'], true ) ) {
                     continue;
                 }
-                $notes = $fits( $c );
+                $notes = $fits( $c, false );
                 if ( null === $notes ) {
                     continue;
                 }

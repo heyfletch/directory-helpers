@@ -58,6 +58,7 @@ class DH_OR_Flow {
                 'chips'             => implode( ',', $p['chips'] ),
                 'dog_age'           => $screen['dog_age'],
                 'format'            => $p['format'],
+                'video_ok'          => $p['video_ok'] ? 1 : 0,
                 'specialty_primary' => $screen['primary'],
                 'specialties'       => implode( ',', $screen['specialties'] ),
                 'flags'             => implode( ',', $screen['flags'] ),
@@ -133,7 +134,7 @@ class DH_OR_Flow {
         $lat        = (float) $request->lat;
         $lng        = (float) $request->lng;
         $radii      = array_map( 'intval', (array) DH_OR_Settings::get( 'radii' ) );
-        $want_video = in_array( $request->format, array( 'video', 'any' ), true );
+        $want_video = ! empty( $request->video_ok ) || 'video' === $request->format;
 
         $cands = DH_OR_Candidates::load( $lat, $lng, max( $radii ), (int) $request->viewed_profile_id, $want_video );
         $ids   = wp_list_pluck( $cands, 'id' );
@@ -144,6 +145,7 @@ class DH_OR_Flow {
             'specialties' => $specs,
             'dog_age'     => $request->dog_age,
             'format'      => $request->format ? $request->format : 'any',
+            'video_ok'    => $want_video,
             'flags'       => $flags,
             'viewed_id'   => (int) $request->viewed_profile_id,
         );

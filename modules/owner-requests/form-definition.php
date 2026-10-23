@@ -168,8 +168,26 @@ function dh_or_form_definition() {
         'home'  => 'In-home training',
         'group' => 'A group class',
         'board' => 'Board and train',
-        'video' => 'Video calls',
     ), 'Choose one' );
+
+    $fields[] = array(
+        'index'          => 21,
+        'element'        => 'input_checkbox',
+        'attributes'     => array( 'type' => 'checkbox', 'name' => 'video_ok', 'value' => array() ),
+        'settings'       => array(
+            'container_class'    => 'dh-rb-f dh-rb-f--wide dh-rb-f--video',
+            'label'              => '',
+            'help_message'       => '',
+            'admin_field_label'  => 'Open to video',
+            'advanced_options'   => $options( array( 'yes' => 'Open to training by video call' ) ),
+            'randomize_options'  => 'no',
+            'layout_class'       => '',
+            'validation_rules'   => $optional,
+            'conditional_logics' => array(),
+        ),
+        'editor_options' => array( 'title' => 'Check Box', 'icon_class' => 'ff-edit-checkbox-1', 'template' => 'inputCheckable' ),
+        'uniqElKey'      => 'el_dhor_video_ok',
+    );
 
     $fields[] = $text_field( 5, 'zip', 'Your ZIP code', 'zip', 'text', $required( 'Please enter your ZIP code.' ), array(), array( 'inputmode' => 'numeric', 'autocomplete' => 'postal-code', 'maxlength' => 10 ) );
     $fields[] = $text_field( 6, 'first_name', 'Your first name', 'first_name', 'text', $required( 'Please enter your first name.' ), array(), array( 'autocomplete' => 'given-name', 'maxlength' => 40 ) );

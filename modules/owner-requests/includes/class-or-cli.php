@@ -9,7 +9,7 @@
  *   wp dh-requests suppress <profile id> <reason> | unsuppress <profile id>
  *   wp dh-requests purge-old [--dry-run]
  *   wp dh-requests delete-test [--yes]
- *   wp dh-requests match --zip=<zip> [--profile=<id>] [--text=<text>] [--chips=<a,b>] [--age=<age>] [--format=<fmt>] [--lanes=<A,B,C>]
+ *   wp dh-requests match --zip=<zip> [--profile=<id>] [--text=<text>] [--chips=<a,b>] [--age=<age>] [--format=<fmt>] [--video] [--lanes=<A,B,C>]
  *   wp dh-requests setting <key> [<value>]
  *   wp dh-requests ledger-pending | ledger-ack <route id> <state> [<note>] | suppress-sync
  *
@@ -259,7 +259,7 @@ class DH_OR_CLI {
      * Run the matcher for a ZIP without saving anything. Prints who a request would go to.
      *
      * --zip=<zip>
-     * [--profile=<id>] [--text=<text>] [--chips=<a,b>] [--age=<age>] [--format=<fmt>] [--lanes=<A,B,C>]
+     * [--profile=<id>] [--text=<text>] [--chips=<a,b>] [--age=<age>] [--format=<fmt>] [--video] [--lanes=<A,B,C>]
      */
     public function match( $args, $assoc ) {
         $zip = DH_OR_Text::normalize_zip( isset( $assoc['zip'] ) ? $assoc['zip'] : '' );
@@ -272,14 +272,15 @@ class DH_OR_CLI {
         $screen = DH_OR_Screen::screen( $text, $chips, isset( $assoc['age'] ) ? $assoc['age'] : '' );
         $lanes  = isset( $assoc['lanes'] ) ? array_map( 'trim', explode( ',', strtoupper( $assoc['lanes'] ) ) ) : DH_OR_Settings::active_lanes();
         $format = isset( $assoc['format'] ) ? $assoc['format'] : 'any';
+        $video  = isset( $assoc['video'] ) || 'video' === $format;
         $radii  = array_map( 'intval', (array) DH_OR_Settings::get( 'radii' ) );
         $viewed = isset( $assoc['profile'] ) ? (int) $assoc['profile'] : 0;
 
-        $cands = DH_OR_Candidates::load( $pt['lat'], $pt['lng'], max( $radii ), $viewed, in_array( $format, array( 'video', 'any' ), true ) );
+        $cands = DH_OR_Candidates::load( $pt['lat'], $pt['lng'], max( $radii ), $viewed, $video );
         $ids   = wp_list_pluck( $cands, 'id' );
         $res   = DH_OR_Matcher::match( $cands, array(
             'lat' => $pt['lat'], 'lng' => $pt['lng'], 'specialties' => $screen['specialties'], 'dog_age' => $screen['dog_age'],
-            'format' => $format, 'flags' => $screen['flags'], 'viewed_id' => $viewed,
+            'format' => $format, 'video_ok' => $video, 'flags' => $screen['flags'], 'viewed_id' => $viewed,
         ), array(
             'lanes' => $lanes, 'min' => (int) DH_OR_Settings::get( 'min_trainers' ), 'max' => (int) DH_OR_Settings::get( 'max_trainers' ),
             'radii' => $radii, 'weekly_cap' => (int) DH_OR_Settings::get( 'trainer_weekly_cap' ),

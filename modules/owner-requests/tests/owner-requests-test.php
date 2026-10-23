@@ -242,16 +242,20 @@ for ( $i = 1; $i <= 6; $i++ ) {
     $full[] = trainer( $i, 0.01 * $i, 0.0, array( 'rating' => 5.0, 'reviews' => 100 ) );
 }
 $fv = trainer( 50, 10.0, 0.0, array( 'rating' => 3.5, 'reviews' => 3, 'services' => array( 'video' ), 'featured' => true ) );
-$r  = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req(), opts() );
+$r  = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req( array( 'video_ok' => true ) ), opts() );
 check( 'reserved spot: Featured video trainer is in a full list', in_array( 50, ids( $r ), true ), true );
 check( 'reserved spot: list stays at five', count( $r['routes'] ), 5 );
 check( 'reserved spot: Featured video trainer takes the last spot', end( $r['routes'] )['profile_id'], 50 );
+$r = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req(), opts() );
+check( 'reserved spot: not when the video box is unticked', in_array( 50, ids( $r ), true ), false );
+$r = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req( array( 'format' => 'home', 'video_ok' => true ) ), opts() );
+check( 'reserved spot: an in-home owner who ticked video still gets it', in_array( 50, ids( $r ), true ), true );
 $r = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req( array( 'format' => 'home' ) ), opts() );
 check( 'reserved spot: not for owners who want in-home training', in_array( 50, ids( $r ), true ), false );
-$r = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req( array( 'specialties' => array( 'agility' ) ) ), opts() );
+$r = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req( array( 'specialties' => array( 'agility' ), 'video_ok' => true ) ), opts() );
 check( 'reserved spot: only when the trainer fits the dog problem', in_array( 50, ids( $r ), true ), false );
 $nf = trainer( 51, 10.0, 0.0, array( 'services' => array( 'video' ) ) );
-$r  = DH_OR_Matcher::match( array_merge( $full, array( $nf ) ), req(), opts() );
+$r  = DH_OR_Matcher::match( array_merge( $full, array( $nf ) ), req( array( 'video_ok' => true ) ), opts() );
 check( 'reserved spot: never for a trainer who is not Featured', in_array( 51, ids( $r ), true ), false );
 
 // 10. Order is rank score, then distance.
@@ -279,13 +283,15 @@ check( 'video-only owner reaches video trainers at any distance', $got, array( 2
 $r = DH_OR_Matcher::match( $pool, req( array( 'format' => 'home' ) ), opts() );
 check( 'in-home owner reaches only in-home trainers nearby', ids( $r ), array( 1, 3 ) );
 
-// 12. Format "any" with a short local pool is topped up with video trainers at any distance.
+// 12. Video box ticked: a short local pool is topped up with video trainers at any distance.
 $pool = array(
     trainer( 1, 0.01, 0.0 ),
     trainer( 2, 6.0, 0.0, array( 'services' => array( 'video' ) ) ),
     trainer( 3, 0.0, 9.0, array( 'services' => array( 'private' ) ) ),
 );
-$r = DH_OR_Matcher::match( $pool, req( array( 'format' => 'any' ) ), opts() );
+$r = DH_OR_Matcher::match( $pool, req( array( 'format' => 'any', 'video_ok' => true ) ), opts() );
+$unticked = ids( DH_OR_Matcher::match( $pool, req( array( 'format' => 'any' ) ), opts() ) );
+check( 'no far video trainers when the video box is unticked', in_array( 2, $unticked, true ), false );
 $got = ids( $r );
 sort( $got );
 check( 'format any tops up with far video trainers only', $got, array( 1, 2 ) );
