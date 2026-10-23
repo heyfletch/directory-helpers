@@ -379,7 +379,19 @@ $trainer_msg = DH_OR_Messages::trainer_notice( array(
     'open_url' => 'https://example.test/gd-request/trainer/abc/', 'optout_url' => 'https://example.test/gd-request/optout/abc/',
     'postal' => '[postal address not set]',
 ) );
-check( 'trainer subject is accurate', $trainer_msg['subject'], 'New dog training request near Freeport, IL' );
+check( 'trainer subject is accurate', $trainer_msg['subject'], 'A dog owner near Freeport, IL is looking for a trainer' );
+check_true( 'first request introduces Joe and Goody Doggy', false !== strpos( $trainer_msg['text'], "I'm Joe, and I run Goody Doggy" ) );
+check_true( 'first request says it is free', false !== strpos( $trainer_msg['text'], 'no fee and no commission' ) );
+check_true( 'every request links the how-it-works page', false !== strpos( $trainer_msg['html'], DH_OR_Messages::TRAINER_INFO_URL ) );
+check_true( 'email carries the Goody Doggy logo', false !== strpos( $trainer_msg['html'], 'email-logo.png' ) );
+$repeat_msg = DH_OR_Messages::trainer_notice( array(
+    'trainer_name' => 'Benson K-9 Training', 'city' => 'Freeport, IL', 'zip' => '61032', 'distance' => 7.4,
+    'text' => 'Pulls on the leash.', 'specialties' => array(), 'dog_age' => 'adult', 'format' => 'any', 'flags' => array(), 'notified_count' => 1,
+    'open_url' => 'u', 'optout_url' => 'o', 'postal' => 'p', 'first' => false,
+) );
+check( 'repeat request subject', $repeat_msg['subject'], 'Another dog owner near Freeport, IL is looking for a trainer' );
+check( 'repeat request skips the introduction', strpos( $repeat_msg['text'], "I'm Joe" ), false );
+check_true( 'repeat request keeps the opt-out', false !== strpos( $repeat_msg['text'], 'Stop requests like this: o' ) );
 check_true( 'trainer text has the open link', false !== strpos( $trainer_msg['text'], 'https://example.test/gd-request/trainer/abc/' ) );
 check_true( 'trainer html has the Read and reply button', false !== strpos( $trainer_msg['html'], 'Read and reply' ) );
 check_true( 'trainer text has the opt-out link', false !== strpos( $trainer_msg['text'], '/gd-request/optout/abc/' ) );

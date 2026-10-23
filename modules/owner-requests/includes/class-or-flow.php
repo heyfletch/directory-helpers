@@ -232,6 +232,8 @@ class DH_OR_Flow {
                 'open_url'       => DH_OR_Pages::url( 'trainer', $rr['token'] ),
                 'optout_url'     => DH_OR_Pages::url( 'optout', $rr['token'] ),
                 'postal'         => $postal,
+                'profile_url'    => get_permalink( $r['profile_id'] ),
+                'first'          => ! DH_OR_Store::has_earlier_notice( $r['profile_id'], $request->id ),
             ) );
             $status = DH_OR_Mailer::send( 'trainer', $to, $msg, array(
                 'request_id'      => (int) $request->id,

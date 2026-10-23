@@ -146,6 +146,13 @@ class DH_OR_Store {
         return $out;
     }
 
+    /** Whether a trainer has already been sent a real request (dry runs never reached them). */
+    public static function has_earlier_notice( $profile_id, $request_id ) {
+        global $wpdb;
+        $t = DH_OR_Schema::table( 'request_routes' );
+        return (bool) $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$t} WHERE profile_id = %d AND request_id <> %d AND status = 'sent' LIMIT 1", (int) $profile_id, (int) $request_id ) );
+    }
+
     /* ---------- events ---------- */
 
     public static function add_event( $request_id, $route_id, $event, $detail = array() ) {
