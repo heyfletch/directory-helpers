@@ -207,7 +207,11 @@ function dh_or_form_definition() {
         'element'        => 'terms_and_condition',
         'attributes'     => array( 'type' => 'checkbox', 'name' => 'consent', 'value' => false, 'class' => '' ),
         'settings'       => array(
-            'tnc_html'           => esc_html( DH_OR_Gates::CONSENT_TEXT )
+            'tnc_html'           => str_replace(
+                    'delete my request',
+                    '<a target="_blank" rel="noopener" href="' . esc_url( home_url( '/privacy-request/' ) ) . '">delete my request</a>',
+                    esc_html( DH_OR_Gates::CONSENT_TEXT )
+                )
                 . ' <a target="_blank" rel="noopener" href="' . esc_url( home_url( '/privacy-policy/' ) ) . '">Privacy Policy</a>.',
             'has_checkbox'       => true,
             'admin_field_label'  => 'Consent',
