@@ -236,6 +236,24 @@ $a = array( trainer( 1, 0.01, 0.0, array( 'featured' => 500 ) ), trainer( 2, 0.0
 $b = array( trainer( 1, 0.01, 0.0 ), trainer( 2, 0.01, 0.0, array( 'featured' => 500 ) ) );
 check( 'featured flag does not change order', ids( DH_OR_Matcher::match( $a, req(), opts() ) ), ids( DH_OR_Matcher::match( $b, req(), opts() ) ) );
 
+// 9b. Reserved spot: an owner open to video gets the best-fitting Featured video trainer, wherever they are.
+$full = array();
+for ( $i = 1; $i <= 6; $i++ ) {
+    $full[] = trainer( $i, 0.01 * $i, 0.0, array( 'rating' => 5.0, 'reviews' => 100 ) );
+}
+$fv = trainer( 50, 10.0, 0.0, array( 'rating' => 3.5, 'reviews' => 3, 'services' => array( 'video' ), 'featured' => true ) );
+$r  = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req(), opts() );
+check( 'reserved spot: Featured video trainer is in a full list', in_array( 50, ids( $r ), true ), true );
+check( 'reserved spot: list stays at five', count( $r['routes'] ), 5 );
+check( 'reserved spot: Featured video trainer takes the last spot', end( $r['routes'] )['profile_id'], 50 );
+$r = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req( array( 'format' => 'home' ) ), opts() );
+check( 'reserved spot: not for owners who want in-home training', in_array( 50, ids( $r ), true ), false );
+$r = DH_OR_Matcher::match( array_merge( $full, array( $fv ) ), req( array( 'specialties' => array( 'agility' ) ) ), opts() );
+check( 'reserved spot: only when the trainer fits the dog problem', in_array( 50, ids( $r ), true ), false );
+$nf = trainer( 51, 10.0, 0.0, array( 'services' => array( 'video' ) ) );
+$r  = DH_OR_Matcher::match( array_merge( $full, array( $nf ) ), req(), opts() );
+check( 'reserved spot: never for a trainer who is not Featured', in_array( 51, ids( $r ), true ), false );
+
 // 10. Order is rank score, then distance.
 $pool = array(
     trainer( 1, 0.05, 0.0, array( 'rating' => 4.0, 'reviews' => 5 ) ),

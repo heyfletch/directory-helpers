@@ -219,6 +219,40 @@ class DH_OR_Matcher {
             }
             $routes[] = self::route_row( $c, $c['fit_notes'], false );
         }
+        // Reserved spot: an owner open to video always gets the best-fitting Featured video trainer, in the last spot if the list is full.
+        if ( in_array( $format, array( 'video', 'any' ), true ) ) {
+            $routed = array_column( $routes, 'profile_id' );
+            $best   = null;
+            foreach ( $base as $id => $c ) {
+                if ( $id === $viewed_id || in_array( $id, $routed, true ) || empty( $c['featured'] ) || ! in_array( 'video', (array) $c['services'], true ) ) {
+                    continue;
+                }
+                $notes = $fits( $c );
+                if ( null === $notes ) {
+                    continue;
+                }
+                if ( null === $best || $c['score'] > $best['score'] ) {
+                    $c['fit_notes'] = array_merge( $notes, array( 'Featured, reserved spot' ) );
+                    $c['by_video']  = $c['distance'] > $radius_used;
+                    $best           = $c;
+                }
+            }
+            if ( $best ) {
+                $has_featured = false;
+                foreach ( $routes as $r ) {
+                    if ( ! $r['is_viewed'] && ! empty( $base[ $r['profile_id'] ]['featured'] ) ) {
+                        $has_featured = true;
+                    }
+                }
+                if ( ! $has_featured ) {
+                    if ( count( $routes ) >= $max ) {
+                        array_pop( $routes );
+                    }
+                    $routes[] = self::route_row( $best, $best['fit_notes'], false );
+                }
+            }
+        }
+
         foreach ( $routes as $i => &$row ) {
             $row['rank'] = $i + 1;
         }

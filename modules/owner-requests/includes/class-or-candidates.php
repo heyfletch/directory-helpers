@@ -61,10 +61,10 @@ class DH_OR_Candidates {
         $ids = array_map( 'intval', $ids );
 
         if ( $video_anywhere ) {
-            // Video trainers at any distance: only those a lane-A message could reach.
+            // Video trainers at any distance: only those a lane-A message could reach (their own email, or a Featured billing email).
             $far = $wpdb->get_col(
                 "SELECT DISTINCT s.post_id FROM {$wpdb->postmeta} s
-                 INNER JOIN {$wpdb->postmeta} e ON e.post_id = s.post_id AND e.meta_key = 'contact_email' AND e.meta_value <> ''
+                 INNER JOIN {$wpdb->postmeta} e ON e.post_id = s.post_id AND e.meta_key IN ('contact_email', 'featured_billing_email') AND e.meta_value <> ''
                  INNER JOIN {$wpdb->posts} p ON p.ID = s.post_id AND p.post_type = 'profile' AND p.post_status = 'publish'
                  WHERE s.meta_key = 'service_types' AND s.meta_value LIKE '%\"video\"%'"
             );
@@ -104,9 +104,9 @@ class DH_OR_Candidates {
                 $plng     = $lng;
                 $unplaced = true;
             }
-            $lane = '';
-            $ce   = trim( (string) get_post_meta( $id, 'contact_email', true ) );
-            if ( '' !== $ce && is_email( $ce ) ) {
+            $lane     = '';
+            $featured = (int) get_post_meta( $id, 'featured', true ) > 0;
+            if ( '' !== self::trainer_email( $id ) ) {
                 $lane = 'A';
             } elseif ( isset( $b_ids[ $id ] ) ) {
                 $lane = 'B';
@@ -130,6 +130,7 @@ class DH_OR_Candidates {
                 'services'    => self::meta_list( $id, 'service_types' ),
                 'certs'       => self::meta_list( $id, 'certifications' ),
                 'lane'        => $lane,
+                'featured'    => $featured,
                 'unplaced'    => $unplaced,
             );
         }
@@ -200,6 +201,10 @@ class DH_OR_Candidates {
      */
     public static function trainer_email( $profile_id ) {
         $ce = trim( (string) get_post_meta( (int) $profile_id, 'contact_email', true ) );
+        if ( '' === $ce && (int) get_post_meta( (int) $profile_id, 'featured', true ) > 0 ) {
+            // A paying Featured trainer is reachable at the email they pay with.
+            $ce = trim( (string) get_post_meta( (int) $profile_id, 'featured_billing_email', true ) );
+        }
         return ( '' !== $ce && is_email( $ce ) ) ? strtolower( $ce ) : '';
     }
 
