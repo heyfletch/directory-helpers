@@ -43,7 +43,7 @@ class DH_OR_Settings {
             'ip_day'             => 3,
             'retention_months'   => 24,
             // Plan values: "start at 15 miles, widen to 25, then 50" and "at least three".
-            'radii'              => array( 15, 25, 50 ),
+            'radii'              => array( 15, 25 ),
             'min_trainers'       => 3,
             // Not approved by Joe: 0 means no per-ZIP cap.
             'zip_day'            => 0,

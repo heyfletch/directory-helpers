@@ -10,12 +10,12 @@
  *  - Candidates already exclude unpublished, closed, restricted and store
  *    listings (the loader); this class also skips suppressed trainers, trainers
  *    whose lane is off, and trainers at the weekly cap.
- *  - Distance from the owner's ZIP: start at the first radius, widen until the
- *    minimum count is reached, stop at the last radius.
+ *  - Distance from the owner's ZIP: the first radius, widened to the next only
+ *    when nobody fits inside it (Joe, Oct 23: 15 miles, 25 if empty).
  *  - Fit: specialty overlap, dog age, format. Aggression, bite or medical
  *    requests go only to trainers holding a behavior credential.
- *  - Order: public rank score (rating and reviews), then distance. Featured has
- *    no input here and no effect.
+ *  - Order: nearest first, then public rank score (rating and reviews).
+ *    Featured has no input here and no effect.
  *  - Profile-page requests: the viewed trainer goes first when eligible.
  *
  * @package Directory_Helpers
@@ -81,7 +81,7 @@ class DH_OR_Matcher {
         $lanes      = isset( $opts['lanes'] ) ? (array) $opts['lanes'] : array( 'A' );
         $min        = isset( $opts['min'] ) ? (int) $opts['min'] : 3;
         $max        = isset( $opts['max'] ) ? (int) $opts['max'] : 5;
-        $radii      = isset( $opts['radii'] ) ? array_values( (array) $opts['radii'] ) : array( 15, 25, 50 );
+        $radii      = isset( $opts['radii'] ) ? array_values( (array) $opts['radii'] ) : array( 15, 25 );
         $cap        = isset( $opts['weekly_cap'] ) ? (int) $opts['weekly_cap'] : 3;
         $recent     = isset( $opts['recent'] ) ? (array) $opts['recent'] : array();
         $suppressed = isset( $opts['suppressed'] ) ? array_flip( array_map( 'intval', (array) $opts['suppressed'] ) ) : array();
@@ -184,7 +184,7 @@ class DH_OR_Matcher {
                 $pool[ $id ]    = $c;
             }
             $radius_used = $r;
-            if ( count( $pool ) >= $min ) {
+            if ( $pool ) {
                 break;
             }
         }
@@ -207,11 +207,14 @@ class DH_OR_Matcher {
 
         $pool_size = count( $pool );
         uasort( $pool, function ( $a, $b ) {
+            if ( $a['by_video'] !== $b['by_video'] ) {
+                return $a['by_video'] ? 1 : -1;
+            }
+            if ( round( $a['distance'], 1 ) !== round( $b['distance'], 1 ) ) {
+                return $a['distance'] < $b['distance'] ? -1 : 1;
+            }
             if ( $a['score'] !== $b['score'] ) {
                 return $a['score'] < $b['score'] ? 1 : -1;
-            }
-            if ( round( $a['distance'], 3 ) !== round( $b['distance'], 3 ) ) {
-                return $a['distance'] < $b['distance'] ? -1 : 1;
             }
             return $a['id'] <=> $b['id'];
         } );

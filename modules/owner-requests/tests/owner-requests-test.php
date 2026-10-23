@@ -135,11 +135,28 @@ function req( $extra = array() ) {
     return array_merge( array( 'lat' => $MKE['lat'], 'lng' => $MKE['lng'], 'specialties' => array(), 'dog_age' => '', 'format' => 'any', 'flags' => array(), 'viewed_id' => 0 ), $extra );
 }
 function opts( $extra = array() ) {
-    return array_merge( array( 'lanes' => array( 'A' ), 'min' => 3, 'max' => 5, 'radii' => array( 15, 25, 50 ), 'weekly_cap' => 3, 'recent' => array(), 'suppressed' => array(), 'behavior_certs' => array( 'CBCC-KA', 'IAABC-CDBC' ) ), $extra );
+    return array_merge( array( 'lanes' => array( 'A' ), 'min' => 3, 'max' => 5, 'radii' => array( 15, 25 ), 'weekly_cap' => 3, 'recent' => array(), 'suppressed' => array(), 'behavior_certs' => array( 'CBCC-KA', 'IAABC-CDBC' ) ), $extra );
 }
 function ids( $res ) {
     return array_map( function ( $r ) { return $r['profile_id']; }, $res['routes'] );
 }
+
+// 0. Bethesda test (Joe, Oct 23): two trainers close by, three better-rated ones 30 to 50 miles out.
+//    Only the close two go, nearest first; far trainers never fill the list.
+$beth = array(
+    trainer( 1, 0.017, 0.0, array( 'rating' => 4.8, 'reviews' => 30 ) ),   // about 1.2 miles
+    trainer( 2, 0.137, 0.0, array( 'rating' => 4.9, 'reviews' => 40 ) ),   // about 9.5 miles
+    trainer( 3, 0.58, 0.0, array( 'rating' => 5.0, 'reviews' => 875 ) ),   // about 40 miles
+    trainer( 4, 0.47, 0.0, array( 'rating' => 5.0, 'reviews' => 300 ) ),   // about 32 miles
+    trainer( 5, 0.69, 0.0, array( 'rating' => 4.9, 'reviews' => 200 ) ),   // about 48 miles
+);
+$r = DH_OR_Matcher::match( $beth, req(), opts( array( 'radii' => array( 15, 25 ) ) ) );
+check( 'bethesda: only trainers within 15 miles, nearest first', ids( $r ), array( 1, 2 ) );
+check( 'bethesda: radius stays at 15', $r['radius_used'], 15 );
+$r = DH_OR_Matcher::match( array_slice( $beth, 2 ), req(), opts( array( 'radii' => array( 15, 25 ) ) ) );
+check( 'nobody within 25 miles: nobody is sent', ids( $r ), array() );
+$r = DH_OR_Matcher::match( array( trainer( 6, 0.29, 0.0 ), trainer( 7, 0.6, 0.0 ) ), req(), opts( array( 'radii' => array( 15, 25 ) ) ) );
+check( 'nobody within 15 miles: widens to 25 only', ids( $r ), array( 6 ) );
 
 // 1. Dense city: 12 trainers within about 5 miles.
 $dense = array();
@@ -150,24 +167,24 @@ $r = DH_OR_Matcher::match( $dense, req(), opts() );
 check( 'dense city: never more than five', count( $r['routes'] ), 5 );
 check( 'dense city: radius used is 15', $r['radius_used'], 15 );
 check( 'dense city: not thin', $r['thin_market'], false );
-check( 'dense city: best rank first', $r['routes'][0]['profile_id'], 12 );
+check( 'dense city: nearest first', ids( $r ), array( 1, 2, 3, 4, 5 ) );
 check_true( 'dense city: every route within the radius used', array_reduce( $r['routes'], function ( $c, $x ) use ( $r ) { return $c && $x['distance'] <= $r['radius_used']; }, true ) );
 
-// 2. Small town: 2 trainers at 15 miles, 2 more at 20 miles -> widens to 25 and takes 4.
+// 2. Small town: 2 trainers inside 15 miles, 2 more at 20 to 26 miles -> stays at 15 and takes the close 2.
 $town = array(
     trainer( 1, 0.05, 0.0 ), trainer( 2, 0.0, 0.05 ),
     trainer( 3, 0.29, 0.0, array( 'rating' => 4.9 ) ), trainer( 4, 0.0, 0.38, array( 'rating' => 4.8 ) ),
 );
 $r = DH_OR_Matcher::match( $town, req(), opts() );
-check( 'small town: widens to 25 miles', $r['radius_used'], 25 );
-check( 'small town: four recipients', count( $r['routes'] ), 4 );
+check( 'small town: stays at 15 miles', $r['radius_used'], 15 );
+check( 'small town: only the close two', count( $r['routes'] ), 2 );
 
-// 3. No trainer within 50 miles.
+// 3. No trainer within 25 miles.
 $far = array( trainer( 1, 1.5, 0.0 ), trainer( 2, 0.0, 2.0 ) );
 $r = DH_OR_Matcher::match( $far, req(), opts() );
-check( 'no trainer within 50 miles: none routed', count( $r['routes'] ), 0 );
-check( 'no trainer within 50 miles: thin', $r['thin_market'], true );
-check( 'no trainer within 50 miles: radius used 50', $r['radius_used'], 50 );
+check( 'no trainer within 25 miles: none routed', count( $r['routes'] ), 0 );
+check( 'no trainer within 25 miles: thin', $r['thin_market'], true );
+check( 'no trainer within 25 miles: radius used 25', $r['radius_used'], 25 );
 
 // 4. One trainer close: sent to the one, flagged thin.
 $r = DH_OR_Matcher::match( array( trainer( 1, 0.02, 0.0 ) ), req(), opts() );
