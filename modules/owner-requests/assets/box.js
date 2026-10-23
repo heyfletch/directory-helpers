@@ -1,9 +1,10 @@
 /**
  * Owner request box: fills the hidden fields and emits browser events.
  *
- * Events are DOM CustomEvents on window, named dh-request-box:<name>. Nothing
- * here calls GA4, gtag, dataLayer or AnalyticsWP; the tracking proposal decides
- * where each one is sent.
+ * Events are DOM CustomEvents on window, named dh-request-box:<name>, and each
+ * is also sent to GA4 (request_box_view, request_start, request_submit,
+ * request_error) and AnalyticsWP with only the page and its type, never what
+ * the owner typed.
  *
  *   view     the box is at least half on screen (once per page view)
  *   start    first input or focus inside the form (once)
@@ -30,6 +31,44 @@
       );
     } catch (e) {
       /* old browser: no events */
+    }
+    track(name, detail);
+  }
+
+  var TRACKED = {
+    view: "request_box_view",
+    start: "request_start",
+    submit: "request_submit",
+    error: "request_error",
+  };
+
+  function track(name, detail) {
+    var event = TRACKED[name];
+    if (!event) {
+      return;
+    }
+    var props = {
+      source_type: detail.source_type,
+      source_post: detail.source_post,
+    };
+    try {
+      // Queued in dataLayer, so GA4 still gets it if gtag.js loads later.
+      window.dataLayer = window.dataLayer || [];
+      var gtag =
+        window.gtag ||
+        function () {
+          window.dataLayer.push(arguments);
+        };
+      gtag("event", event, props);
+    } catch (e) {
+      /* tracking never blocks the form */
+    }
+    try {
+      if (window.AnalyticsWP && typeof window.AnalyticsWP.event === "function") {
+        window.AnalyticsWP.event(event, props);
+      }
+    } catch (e) {
+      /* tracking never blocks the form */
     }
   }
 
