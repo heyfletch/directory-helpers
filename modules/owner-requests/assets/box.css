@@ -257,6 +257,29 @@
   color: var(--rb-blue);
 }
 
+/* Open to video: sits beside the two dropdowns, lined up with their boxes */
+.dh-rb .dh-rb-f--video {
+  align-self: end;
+}
+.dh-rb .dh-rb-f--video .ff-el-form-check-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--rb-ink);
+  cursor: pointer;
+}
+.dh-rb .dh-rb-f--video input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--rb-blue);
+}
+
 /* Submit */
 .dh-rb .ff_submit_btn_wrapper {
   margin: 0 !important;

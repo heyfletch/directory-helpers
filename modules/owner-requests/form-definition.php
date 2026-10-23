@@ -175,7 +175,7 @@ function dh_or_form_definition() {
         'element'        => 'input_checkbox',
         'attributes'     => array( 'type' => 'checkbox', 'name' => 'video_ok', 'value' => array() ),
         'settings'       => array(
-            'container_class'    => 'dh-rb-f dh-rb-f--wide dh-rb-f--video',
+            'container_class'    => 'dh-rb-f dh-rb-f--video',
             'label'              => '',
             'help_message'       => '',
             'admin_field_label'  => 'Open to video',
