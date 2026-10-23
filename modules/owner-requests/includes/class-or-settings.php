@@ -41,7 +41,7 @@ class DH_OR_Settings {
             'owner_email_day'    => 1,
             'owner_email_week'   => 3,
             'ip_day'             => 3,
-            'retention_months'   => 12,
+            'retention_months'   => 24,
             // Plan values: "start at 15 miles, widen to 25, then 50" and "at least three".
             'radii'              => array( 15, 25, 50 ),
             'min_trainers'       => 3,
