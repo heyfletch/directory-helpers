@@ -155,6 +155,27 @@ function dh_or_form_definition() {
         );
     };
 
+    $fields[] = array(
+        'index'          => 4,
+        'element'        => 'input_checkbox',
+        'attributes'     => array( 'type' => 'checkbox', 'name' => 'format', 'value' => array() ),
+        'settings'       => array(
+            'container_class'    => 'dh-rb-f dh-rb-f--wide dh-rb-f--format',
+            'label'              => 'What kind of training do you want? Pick any that fit.',
+            'help_message'       => '',
+            'admin_field_label'  => 'Kind of training',
+            'advanced_options'   => $options( array(
+                'home' => 'In-home training', 'group' => 'A group class', 'board' => 'Board and train',
+            ) ),
+            'randomize_options'  => 'no',
+            'layout_class'       => 'ff_list_buttons',
+            'validation_rules'   => $optional,
+            'conditional_logics' => array(),
+        ),
+        'editor_options' => array( 'title' => 'Check Box', 'icon_class' => 'ff-edit-checkbox-1', 'template' => 'inputCheckable' ),
+        'uniqElKey'      => 'el_dhor_format',
+    );
+
     $fields[] = $select( 3, 'dog_age', "Your dog's age", array(
         'puppy'      => 'Puppy (under 1 year)',
         'adolescent' => 'Adolescent (1 to 2 years)',
@@ -162,13 +183,6 @@ function dh_or_form_definition() {
         'senior'     => 'Senior (8 years or more)',
         'unsure'     => 'Not sure',
     ), 'Choose an age' );
-
-    $fields[] = $select( 4, 'format', 'What kind of training do you want?', array(
-        'any'   => 'Any kind',
-        'home'  => 'In-home training',
-        'group' => 'A group class',
-        'board' => 'Board and train',
-    ), 'Choose one' );
 
     $fields[] = array(
         'index'          => 21,

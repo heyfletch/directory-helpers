@@ -283,6 +283,27 @@ check( 'video-only owner reaches video trainers at any distance', $got, array( 2
 $r = DH_OR_Matcher::match( $pool, req( array( 'format' => 'home' ) ), opts() );
 check( 'in-home owner reaches only in-home trainers nearby', ids( $r ), array( 1, 3 ) );
 
+// 11b. Several kinds ticked: a trainer offering any one of them fits; order stays rank, then distance.
+$pool = array(
+    trainer( 1, 0.01, 0.0, array( 'services' => array( 'home' ) ) ),
+    trainer( 2, 0.02, 0.0, array( 'services' => array( 'group' ) ) ),
+    trainer( 3, 0.03, 0.0, array( 'services' => array( 'board' ) ) ),
+    trainer( 4, 0.04, 0.0, array( 'services' => array( 'private' ) ) ),
+);
+$one  = ids( DH_OR_Matcher::match( $pool, req( array( 'format' => 'home' ) ), opts() ) );
+$two  = ids( DH_OR_Matcher::match( $pool, req( array( 'format' => 'home,group' ) ), opts() ) );
+check( 'one kind ticked reaches only that kind', $one, array( 1 ) );
+check( 'two kinds ticked reach trainers offering either, nearest first', $two, array( 1, 2 ) );
+check( 'nothing ticked reaches every kind', ids( DH_OR_Matcher::match( $pool, req( array( 'format' => 'any' ) ), opts() ) ), array( 1, 2, 3, 4 ) );
+check( 'formats: ticked boxes in form order', DH_OR_Gates::formats( array( 'board', 'home' ) ), 'home,board' );
+check( 'formats: nothing ticked is any', DH_OR_Gates::formats( array() ), 'any' );
+check( 'formats: unknown values dropped', DH_OR_Gates::formats( array( 'home', 'spa' ) ), 'home' );
+check( 'formats: comma list from the command line', DH_OR_Gates::formats( 'group,home' ), 'home,group' );
+check( 'label: one kind', DH_OR_Messages::format_label( 'home' ), 'In-home training' );
+check( 'label: two kinds', DH_OR_Messages::format_label( 'home,group' ), 'In-home training or a group class' );
+check( 'label: three kinds', DH_OR_Messages::format_label( 'home,group,board' ), 'In-home training, a group class or board and train' );
+check( 'label: any', DH_OR_Messages::format_label( 'any' ), 'Any kind of training' );
+
 // 12. Video box ticked: a short local pool is topped up with video trainers at any distance.
 $pool = array(
     trainer( 1, 0.01, 0.0 ),

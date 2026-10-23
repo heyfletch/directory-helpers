@@ -87,7 +87,7 @@ class DH_OR_Pages {
         $where  = $city ? 'near ' . $city : 'near ZIP ' . $request->zip;
         $specs  = DH_OR_Messages::specialty_list( $request->specialties ? explode( ',', $request->specialties ) : array() );
         $age    = isset( DH_OR_Messages::AGE_LABELS[ $request->dog_age ] ) ? DH_OR_Messages::AGE_LABELS[ $request->dog_age ] : 'Not given';
-        $fmt    = isset( DH_OR_Messages::FORMAT_LABELS[ $request->format ] ) ? DH_OR_Messages::FORMAT_LABELS[ $request->format ] : 'Any kind of training';
+        $fmt    = DH_OR_Messages::format_label( $request->format );
         $flags  = $request->flags ? explode( ',', $request->flags ) : array();
 
         $body  = $notice;

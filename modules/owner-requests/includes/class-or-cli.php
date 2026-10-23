@@ -271,7 +271,7 @@ class DH_OR_CLI {
         $text   = isset( $assoc['text'] ) ? DH_OR_Text::clean_problem( $assoc['text'] ) : '';
         $screen = DH_OR_Screen::screen( $text, $chips, isset( $assoc['age'] ) ? $assoc['age'] : '' );
         $lanes  = isset( $assoc['lanes'] ) ? array_map( 'trim', explode( ',', strtoupper( $assoc['lanes'] ) ) ) : DH_OR_Settings::active_lanes();
-        $format = isset( $assoc['format'] ) ? $assoc['format'] : 'any';
+        $format = DH_OR_Gates::formats( isset( $assoc['format'] ) ? $assoc['format'] : '' );
         $video  = isset( $assoc['video'] ) || 'video' === $format;
         $radii  = array_map( 'intval', (array) DH_OR_Settings::get( 'radii' ) );
         $viewed = isset( $assoc['profile'] ) ? (int) $assoc['profile'] : 0;

@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class DH_OR_Schema {
 
-    const DB_VERSION     = '2';
+    const DB_VERSION     = '3';
     const VERSION_OPTION = 'dh_or_db_version';
 
     public static function table( $name ) {
@@ -69,7 +69,7 @@ class DH_OR_Schema {
             problem_text text,
             chips varchar(255) NOT NULL DEFAULT '',
             dog_age varchar(12) NOT NULL DEFAULT '',
-            format varchar(12) NOT NULL DEFAULT '',
+            format varchar(32) NOT NULL DEFAULT '',
             video_ok tinyint(1) NOT NULL DEFAULT 0,
             specialty_primary varchar(20) NOT NULL DEFAULT '',
             specialties varchar(255) NOT NULL DEFAULT '',

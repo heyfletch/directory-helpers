@@ -26,6 +26,19 @@ class DH_OR_Gates {
 
     private static $disposable = null;
 
+    /**
+     * The kinds of training an owner ticked, stored comma-separated in form order
+     * ("home,group"). Nothing ticked, or only unknown values, is "any".
+     */
+    public static function formats( $raw ) {
+        $picked = is_array( $raw ) ? $raw : explode( ',', (string) $raw );
+        $picked = array_map( function ( $v ) {
+            return strtolower( preg_replace( '/[^a-z_\-]/i', '', (string) $v ) );
+        }, $picked );
+        $picked = array_values( array_intersect( array_diff( self::FORMATS, array( 'any' ) ), $picked ) );
+        return $picked ? implode( ',', $picked ) : 'any';
+    }
+
     /** Real client IP as the server sees it. */
     public static function client_ip() {
         return isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
@@ -48,8 +61,7 @@ class DH_OR_Gates {
         $age = sanitize_key( $g( 'dog_age' ) );
         $age = in_array( $age, self::AGES, true ) ? $age : '';
 
-        $format = sanitize_key( $g( 'format', 'any' ) );
-        $format = in_array( $format, self::FORMATS, true ) ? $format : 'any';
+        $format = self::formats( $g( 'format', array() ) );
 
         $video_ok = $g( 'video_ok', array() );
         $video_ok = 'video' === $format || in_array( 'yes', (array) $video_ok, true );

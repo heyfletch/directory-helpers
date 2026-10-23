@@ -37,6 +37,21 @@ class DH_OR_Messages {
         'board' => 'Board and train', 'video' => 'Video calls',
     );
 
+    /** "In-home training or a group class" for the kinds an owner ticked; "Any kind of training" when none. */
+    public static function format_label( $format ) {
+        $labels = array();
+        foreach ( explode( ',', (string) $format ) as $f ) {
+            if ( 'any' !== $f && isset( self::FORMAT_LABELS[ $f ] ) ) {
+                $labels[] = $labels ? lcfirst( self::FORMAT_LABELS[ $f ] ) : self::FORMAT_LABELS[ $f ];
+            }
+        }
+        if ( ! $labels ) {
+            return self::FORMAT_LABELS['any'];
+        }
+        $last = array_pop( $labels );
+        return $labels ? implode( ', ', $labels ) . ' or ' . $last : $last;
+    }
+
     const VET_LINE = 'If your dog is hurt or sick, call your vet first. A trainer cannot treat a medical problem.';
 
     private static function h( $s ) {
@@ -118,7 +133,7 @@ class DH_OR_Messages {
         $where   = $d['city'] ? 'near ' . $d['city'] : 'near ZIP ' . $d['zip'];
         $subject = 'New dog training request ' . $where;
         $age     = isset( self::AGE_LABELS[ $d['dog_age'] ] ) ? self::AGE_LABELS[ $d['dog_age'] ] : 'Not given';
-        $fmt     = isset( self::FORMAT_LABELS[ $d['format'] ] ) ? self::FORMAT_LABELS[ $d['format'] ] : 'Any kind of training';
+        $fmt     = self::format_label( $d['format'] );
         $help    = self::specialty_list( $d['specialties'] );
         $miles   = (int) round( $d['distance'] );
         $dist    = $miles <= 1 ? 'about 1 mile from your listing' : 'about ' . $miles . ' miles from your listing';

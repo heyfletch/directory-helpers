@@ -257,7 +257,11 @@
   color: var(--rb-blue);
 }
 
-/* Open to video: sits beside the two dropdowns, lined up with their boxes */
+/* Dog age and Open to video share a row under the training kind buttons */
+.dh-rb .dh-rb-f--dog_age,
+.dh-rb .dh-rb-f--video {
+  grid-column: span 3;
+}
 .dh-rb .dh-rb-f--video {
   align-self: end;
 }
@@ -373,7 +377,9 @@
   .dh-rb fieldset {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .dh-rb .ff-el-group {
+  .dh-rb .ff-el-group,
+  .dh-rb .dh-rb-f--dog_age,
+  .dh-rb .dh-rb-f--video {
     grid-column: span 1;
   }
   .dh-rb .dh-rb-f--wide,

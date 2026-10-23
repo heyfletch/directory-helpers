@@ -130,10 +130,17 @@ class DH_OR_Matcher {
         }
 
         // Fit filter for the ranked pool.
-        $fits = function ( array $c, $check_format = true ) use ( $format, $want_specs, $dog_age ) {
+        // A trainer fits when they offer any one of the kinds the owner ticked.
+        $want_services = array();
+        foreach ( explode( ',', $format ) as $f ) {
+            if ( isset( self::FORMAT_SERVICE[ $f ] ) ) {
+                $want_services = array_merge( $want_services, self::FORMAT_SERVICE[ $f ] );
+            }
+        }
+        $fits = function ( array $c, $check_format = true ) use ( $format, $want_services, $want_specs, $dog_age ) {
             $notes = array();
-            if ( $check_format && isset( self::FORMAT_SERVICE[ $format ] ) ) {
-                if ( ! array_intersect( self::FORMAT_SERVICE[ $format ], (array) $c['services'] ) ) {
+            if ( $check_format && $want_services ) {
+                if ( ! array_intersect( $want_services, (array) $c['services'] ) ) {
                     return null;
                 }
                 $notes[] = 'format ' . $format;
