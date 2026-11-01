@@ -101,6 +101,14 @@ class DH_LSCache_Integration {
         if ( isset( $warmed[ $key ] ) ) { return; }
         $warmed[ $key ] = true;
 
+        // WP-CLI jobs (refresh-closed, apply-ratings, rank recalcs) purge in a loop.
+        // Warm each page to completion before the next purge, so the loop is paced by
+        // the server and can never stack hundreds of uncached renders at once.
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            $this->warm( $url, 60, true );
+            return;
+        }
+
         // Attempt immediate non-blocking warm
         $this->warm( $url, 5, false );
 
