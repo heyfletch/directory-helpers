@@ -29,6 +29,11 @@ class DH_Bricks_Query_Helpers {
     const CITY_LIST_ELEMENT_ID = 'onimid';
 
     /**
+     * Object cache key (group directory_helpers) for profile_coordinates().
+     */
+    const COORDINATES_CACHE_KEY = 'dh_profile_coordinates';
+
+    /**
      * Drop Featured profiles from the city page's main trainer grid.
      *
      * Round 17 (2026-09-06): the city page now shows its Featured trainers in a section of their own
@@ -127,8 +132,6 @@ class DH_Bricks_Query_Helpers {
      */
     public static function get_nearby_profiles_query_args( $radius = null ) {
         // Configuration
-        $meta_lat = 'latitude';
-        $meta_lng = 'longitude';
         $niche_tax = 'niche';
         $area_tax = 'area';
         $city_rank_meta = 'city_rank';
@@ -221,33 +224,7 @@ class DH_Bricks_Query_Helpers {
         $city_lng = get_term_meta( $target_term->term_id, 'longitude', true );
 
         if ( $city_lat && $city_lng && ! empty( $niche_ids ) ) {
-            // Build niche filter for SQL (already validated as non-empty above, but double-check)
-            $niche_ids_sql = implode( ',', array_map( 'intval', $niche_ids ) );
-            
-            $sql = $wpdb->prepare( "
-                SELECT p.ID, 
-                    ( 3959 * acos(
-                        cos( radians(%f) ) *
-                        cos( radians( lat.meta_value ) ) *
-                        cos( radians( lng.meta_value ) - radians(%f) ) +
-                        sin( radians(%f) ) *
-                        sin( radians( lat.meta_value ) )
-                    ) ) AS distance
-                FROM {$wpdb->posts} p
-                INNER JOIN {$wpdb->postmeta} lat ON p.ID = lat.post_id AND lat.meta_key = %s
-                INNER JOIN {$wpdb->postmeta} lng ON p.ID = lng.post_id AND lng.meta_key = %s
-                INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
-                INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id 
-                    AND tt.taxonomy = 'niche' AND tt.term_id IN ({$niche_ids_sql})
-                WHERE p.post_type = 'profile'
-                AND p.post_status = 'publish'
-                HAVING distance < %d
-            ", $city_lat, $city_lng, $city_lat, $meta_lat, $meta_lng, $radius );
-            
-            $proximity_results = $wpdb->get_results( $sql );
-            foreach ( $proximity_results as $row ) {
-                $proximity_data[ $row->ID ] = (float) $row->distance;
-            }
+            $proximity_data = self::nearby_profile_distances( $city_lat, $city_lng, $niche_ids, $radius );
         }
 
         // 4. Merge results (proximity OR area term)
@@ -324,6 +301,100 @@ class DH_Bricks_Query_Helpers {
     }
     
     /**
+     * Published profiles in the given niches within $radius miles of a point, as
+     * [ profile ID => miles ] in ascending ID order.
+     *
+     * Distances are computed in PHP from profile_coordinates(). The old single SQL
+     * join read each profile's coordinates through the post_id index and took ~18s
+     * on every uncached city page.
+     *
+     * @param float $lat       Point latitude (degrees)
+     * @param float $lng       Point longitude (degrees)
+     * @param int[] $niche_ids Niche term IDs
+     * @param int   $radius    Miles
+     * @return array<int, float>
+     */
+    public static function nearby_profile_distances( $lat, $lng, $niche_ids, $radius ) {
+        global $wpdb;
+
+        $niche_ids_sql = implode( ',', array_map( 'intval', $niche_ids ) );
+        $candidate_ids = $wpdb->get_col( "
+            SELECT DISTINCT p.ID
+            FROM {$wpdb->posts} p
+            INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
+            INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+                AND tt.taxonomy = 'niche' AND tt.term_id IN ({$niche_ids_sql})
+            WHERE p.post_type = 'profile'
+            AND p.post_status = 'publish'
+            ORDER BY p.ID
+        " );
+
+        $coords = self::profile_coordinates();
+        $lat_r  = deg2rad( (float) $lat );
+        $lng_r  = deg2rad( (float) $lng );
+
+        $distances = [];
+        foreach ( $candidate_ids as $id ) {
+            $id = (int) $id;
+            if ( ! isset( $coords[ $id ] ) ) {
+                continue;
+            }
+            $p_lat = deg2rad( $coords[ $id ][0] );
+            $cos_d = cos( $lat_r ) * cos( $p_lat ) * cos( deg2rad( $coords[ $id ][1] ) - $lng_r ) + sin( $lat_r ) * sin( $p_lat );
+            $miles = 3959 * acos( max( -1, min( 1, $cos_d ) ) );
+            if ( $miles < $radius ) {
+                $distances[ $id ] = $miles;
+            }
+        }
+        return $distances;
+    }
+
+    /**
+     * Latitude and longitude of every post that has both, as [ post ID => [ lat, lng ] ].
+     *
+     * Two meta_key index scans (~1s), cached for a day and cleared by
+     * clear_coordinates_on_meta_change() whenever a latitude or longitude changes.
+     *
+     * @return array<int, float[]>
+     */
+    private static function profile_coordinates() {
+        $coords = wp_cache_get( self::COORDINATES_CACHE_KEY, 'directory_helpers' );
+        if ( is_array( $coords ) ) {
+            return $coords;
+        }
+
+        global $wpdb;
+        $lats = [];
+        foreach ( $wpdb->get_results( "SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = 'latitude'", ARRAY_N ) as $row ) {
+            $lats[ (int) $row[0] ] = (float) $row[1];
+        }
+        $coords = [];
+        foreach ( $wpdb->get_results( "SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = 'longitude'", ARRAY_N ) as $row ) {
+            $id = (int) $row[0];
+            if ( isset( $lats[ $id ] ) ) {
+                $coords[ $id ] = [ $lats[ $id ], (float) $row[1] ];
+            }
+        }
+
+        wp_cache_set( self::COORDINATES_CACHE_KEY, $coords, 'directory_helpers', DAY_IN_SECONDS );
+        return $coords;
+    }
+
+    /**
+     * added/updated/deleted_post_meta listener: drop the coordinate cache when a
+     * latitude or longitude changes.
+     *
+     * @param int|int[] $meta_id
+     * @param int       $object_id
+     * @param string    $meta_key
+     */
+    public static function clear_coordinates_on_meta_change( $meta_id, $object_id, $meta_key ) {
+        if ( 'latitude' === $meta_key || 'longitude' === $meta_key ) {
+            wp_cache_delete( self::COORDINATES_CACHE_KEY, 'directory_helpers' );
+        }
+    }
+
+    /**
      * Clear proximity cache for a specific area and niche combination
      * 
      * @param int $area_term_id Area term ID
@@ -358,3 +429,6 @@ class DH_Bricks_Query_Helpers {
 }
 
 add_filter( 'bricks/posts/query_vars', array( 'DH_Bricks_Query_Helpers', 'exclude_featured_from_city_list' ), 20, 3 );
+add_action( 'added_post_meta', array( 'DH_Bricks_Query_Helpers', 'clear_coordinates_on_meta_change' ), 10, 3 );
+add_action( 'updated_post_meta', array( 'DH_Bricks_Query_Helpers', 'clear_coordinates_on_meta_change' ), 10, 3 );
+add_action( 'deleted_post_meta', array( 'DH_Bricks_Query_Helpers', 'clear_coordinates_on_meta_change' ), 10, 3 );
