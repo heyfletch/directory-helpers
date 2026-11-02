@@ -1249,6 +1249,69 @@ class DH_External_Link_Management {
     }
 
     private function http_check_url($url, $timeout = 15, $link_id = null) {
+        // reject_unsafe_urls misses link-local (169.254.0.0/16, cloud metadata) and IPv6 internal ranges,
+        // so vet the first host here and every redirect hop, only while this checker runs.
+        $first_host = (string) parse_url((string) $url, PHP_URL_HOST);
+        if ($first_host !== '' && $this->host_is_internal($first_host)) {
+            return array(0, 'Blocked: host resolves to an internal address');
+        }
+        add_action('requests-requests.before_redirect', array($this, 'block_internal_redirect'));
+        try {
+            return $this->http_check_url_request($url, $timeout, $link_id);
+        } finally {
+            remove_action('requests-requests.before_redirect', array($this, 'block_internal_redirect'));
+        }
+    }
+
+    /**
+     * Requests redirect hook (see http_check_url): refuse a Location that points at an internal host.
+     */
+    public function block_internal_redirect($location) {
+        $host = (string) parse_url((string) $location, PHP_URL_HOST);
+        if ($host !== '' && $this->host_is_internal($host)) {
+            $exception = class_exists('WpOrg\\Requests\\Exception') ? 'WpOrg\\Requests\\Exception' : 'Requests_Exception';
+            throw new $exception('Blocked: redirect to an internal address', 'dh_internal_redirect');
+        }
+    }
+
+    /**
+     * True when a host is, or resolves to, an address WordPress's own unsafe-URL check lets through:
+     * IPv4 link-local plus IPv6 loopback, unique-local, link-local and IPv4-mapped.
+     */
+    private function host_is_internal($host) {
+        $host = trim($host, '[]');
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return $this->ip_is_internal($host);
+        }
+        // The system resolver also expands forms such as 2852039166 or 0251.0376.0251.0376 to IPv4 addresses
+        $v4 = gethostbynamel($host);
+        $ips = $v4 ? $v4 : array();
+        if (function_exists('dns_get_record')) {
+            foreach ((array) @dns_get_record($host, DNS_AAAA) as $record) {
+                if (!empty($record['ipv6'])) { $ips[] = $record['ipv6']; }
+            }
+        }
+        foreach ($ips as $ip) {
+            if ($this->ip_is_internal($ip)) { return true; }
+        }
+        return false;
+    }
+
+    private function ip_is_internal($ip) {
+        $bin = @inet_pton($ip);
+        if ($bin === false) { return false; }
+        if (strlen($bin) === 4) {
+            return ord($bin[0]) === 169 && ord($bin[1]) === 254; // includes 169.254.169.254
+        }
+        $b0 = ord($bin[0]);
+        $b1 = ord($bin[1]);
+        return $bin === inet_pton('::1') || $bin === inet_pton('::')
+            || strncmp($bin, inet_pton('::ffff:0:0'), 12) === 0
+            || ($b0 === 0xfe && ($b1 & 0xc0) === 0x80)
+            || ($b0 & 0xfe) === 0xfc;
+    }
+
+    private function http_check_url_request($url, $timeout = 15, $link_id = null) {
         // Multiple user-agent strings to try (latest versions as of October 2025)
         $user_agents = array(
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
