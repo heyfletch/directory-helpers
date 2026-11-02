@@ -45,6 +45,7 @@ class DH_Search_Test {
     public function __construct() {
         add_filter('bricks/element/settings', array($this, 'filter_city_heading'), 10, 2);
         add_filter('bricks/frontend/render_element', array($this, 'append_city_link'), 10, 2);
+        add_action('wp_head', array($this, 'print_city_link_style'));
         add_filter('the_content', array($this, 'strip_cost_year'), 20);
         add_action('template_redirect', array($this, 'no_cache_preview'), 0);
         add_action(self::CRON_HOOK, array($this, 'run_nightly'));
@@ -209,11 +210,23 @@ class DH_Search_Test {
         $label = $count >= 2
             ? sprintf('See all %d dog trainers in %s', $count, $city)
             : sprintf('See dog trainers in and near %s', $city);
+        // brxe-text gives the link the site's in-text link style.
         return $html . sprintf(
-            '<div class="gd2-root gd2-city-link"><div class="gd2-container"><p>Comparing trainers? <a href="%s" data-gd-track="profile_to_city">%s</a></p></div></div>',
+            '<div class="gd2-root gd2-city-link"><div class="gd2-container brxe-text"><p>Comparing trainers? <a href="%s" data-gd-track="profile_to_city">%s</a></p></div></div>',
             esc_url(get_permalink($city_id)),
             esc_html($label)
         );
+    }
+
+    /**
+     * A sidebar ad that ends the Profile Section keeps its own bottom margin, which would
+     * leave more space above the line than below it; drop that margin when the line follows.
+     */
+    public function print_city_link_style() {
+        if (!is_singular('profile') || !self::is_test_page(get_queried_object())) {
+            return;
+        }
+        echo '<style id="dh-search-test">.brx-body .gd2-profile-section:has(+ .gd2-city-link) .gd2-profile-side > .gd2-sponsor:last-child{margin-bottom:0}</style>' . "\n";
     }
 
     /**
