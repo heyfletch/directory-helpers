@@ -267,6 +267,7 @@ class Directory_Helpers {
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-record-restriction-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-backfill-listing-lastmod-command.php';
         require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-dh-links-command.php';
+        require_once DIRECTORY_HELPERS_PATH . 'includes/cli/class-search-test-command.php';
         WP_CLI::add_command( 'directory-helpers deduplicate_area_terms', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_area_term_format', 'DH_Deduplicate_Area_Terms_Command' );
         WP_CLI::add_command( 'directory-helpers update_state_listing_titles', 'DH_Deduplicate_Area_Terms_Command' );
@@ -289,6 +290,7 @@ class Directory_Helpers {
         WP_CLI::add_command( 'directory-helpers links-recheck', array( new DH_Links_Command(), 'links_recheck' ) );
         WP_CLI::add_command( 'directory-helpers profile-urls-check', array( new DH_Links_Command(), 'profile_urls_check' ) );
         WP_CLI::add_command( 'directory-helpers links-report', array( new DH_Links_Command(), 'links_report' ) );
+        WP_CLI::add_command( 'directory-helpers search-test', 'DH_Search_Test_Command' );
     }
 
     /**
@@ -948,6 +950,12 @@ class Directory_Helpers {
                 'description' => __('Rank Math variables %dh_city_seo_title% and %dh_city_seo_desc% for count-led city-listing titles and meta descriptions, using _profile_count from Listing Counts. Cities with fewer than 2 profiles get a no-count fallback.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/seo-listing-titles/seo-listing-titles.php',
                 'class' => 'DH_SEO_Listing_Titles'
+            ),
+            'search-test' => array(
+                'name' => __('Search Test', 'directory-helpers'),
+                'description' => __('Search Plan test on half the cities (crc32 of salt and area slug): "Dog Training in [City], [ST]" city titles and headings, rating-led profile titles and trainer-only descriptions, and a "Comparing trainers?" profile-to-city line tracked as profile_to_city; Featured Placement profiles left out. Every city page drops "(Updated for YYYY)" from its cost heading. Nightly purge of about 1,000 changed pages. WP-CLI: wp directory-helpers search-test prepare|start|status|export|stop.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/search-test/search-test.php',
+                'class' => 'DH_Search_Test'
             ),
             'reports' => array(
                 'name' => __('Reports', 'directory-helpers'),

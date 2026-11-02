@@ -9,6 +9,8 @@
  * - %dh_city_seo_desc%:  matching meta description
  * Cities with fewer than 2 published profiles fall back to a no-count pattern
  * so titles never read "1 Dog Trainers".
+ * Search Test cities (modules/search-test) get "Dog Training in ..." city titles and
+ * rating-led profile titles with trainer-only descriptions; Featured Placement profiles never do.
  *
  * @package Directory_Helpers
  */
@@ -105,6 +107,12 @@ class DH_SEO_Listing_Titles {
         list($post, $count) = $ctx;
         $city = $post->post_title;
         $year = date('Y');
+        if (class_exists('DH_Search_Test') && DH_Search_Test::is_test_page($post)) {
+            if ($count >= 2) {
+                return sprintf('Dog Training in %s: Compare %d Trainers by Real Reviews (%s)', $city, $count, $year);
+            }
+            return sprintf('Dog Training in %s: Local Trainers and Real Reviews (%s)', $city, $year);
+        }
         if ($count >= 2) {
             return sprintf('%d Dog Trainers in %s - Ranked by Real Reviews (%s)', $count, $city, $year);
         }
@@ -167,6 +175,13 @@ class DH_SEO_Listing_Titles {
             return '';
         }
         list($post, $niche, $location) = $ctx;
+        if (class_exists('DH_Search_Test') && DH_Search_Test::is_test_page($post)) {
+            $rating = $this->get_rating($post->ID);
+            if (!$rating) {
+                return $post->post_title . ' - Services and Contact Info';
+            }
+            return sprintf('%s - Rated %s by %s %s', $post->post_title, $rating[0], number_format($rating[1]), $rating[1] === 1 ? 'Review' : 'Reviews');
+        }
         $title = sprintf('%s Reviews & Ratings - %s', $post->post_title, $niche);
         if ($location) {
             $title .= ' in ' . $location;
@@ -186,6 +201,66 @@ class DH_SEO_Listing_Titles {
         }
         list($post, $niche, $location) = $ctx;
         $where = $location ? ' in ' . $location : '';
+        if (class_exists('DH_Search_Test') && DH_Search_Test::is_test_page($post)) {
+            return $this->get_test_profile_desc($post, $niche, $where);
+        }
         return sprintf('%s%s: reviews, ratings, services offered, and contact info. See how this %s compares to other local pros on Goody Doggy.', $post->post_title, $where, strtolower($niche));
+    }
+
+    /**
+     * Search Test profile description, about the trainer only, e.g. "Happy Dog Sports in Leander, TX
+     * is rated 5.0 by 18 reviews, with 21+ years of experience and CPDT-KA and CTC credentials.
+     * See services and contact info."
+     *
+     * @param WP_Post $post
+     * @param string  $niche
+     * @param string  $where " in City, ST" or ''
+     * @return string
+     */
+    private function get_test_profile_desc($post, $niche, $where) {
+        $facts = array();
+        $years = (int) get_post_meta($post->ID, 'years_experience', true);
+        if ($years > 0) {
+            $facts[] = sprintf('%d+ %s of experience', $years, $years === 1 ? 'year' : 'years');
+        }
+        // "Other" is the generic "Credentialed" choice, not a named credential.
+        $certs = array_slice(array_values(array_diff((array) get_post_meta($post->ID, 'certifications', true), array('Other', ''))), 0, 3);
+        if ($certs) {
+            $last    = array_pop($certs);
+            $facts[] = ($certs ? implode(', ', $certs) . ' and ' : '') . $last . ' ' . ($certs ? 'credentials' : 'credential');
+        }
+        // Imported records store "true"/"false" strings, so only these two mean yes.
+        if (in_array(get_post_meta($post->ID, 'free_consult', true), array('true', '1'), true)) {
+            $facts[] = 'a free consultation';
+        }
+        $with = '';
+        if ($facts) {
+            $last = array_pop($facts);
+            $with = ($facts ? implode(', ', $facts) . (count($facts) > 1 ? ',' : '') . ' and ' : '') . $last;
+        }
+        $rating = $this->get_rating($post->ID);
+        if ($rating) {
+            $lead = sprintf('%s%s is rated %s by %s %s', $post->post_title, $where, $rating[0], number_format($rating[1]), $rating[1] === 1 ? 'review' : 'reviews');
+            $lead .= $with ? ', with ' . $with : '';
+        } else {
+            $lead = sprintf('%s is a %s%s', $post->post_title, strtolower($niche), $where);
+            $lead .= $with ? ' with ' . $with : '';
+        }
+        return $lead . '. See services and contact info.';
+    }
+
+    /**
+     * The profile's rating as [one-decimal value, review count] when it has reviews.
+     *
+     * @param int $post_id
+     * @return array|null
+     */
+    private function get_rating($post_id) {
+        $count = (int) get_post_meta($post_id, 'rating_votes_count', true);
+        $value = (float) get_post_meta($post_id, 'rating_value', true);
+        if ($count < 1 || $value <= 0) {
+            return null;
+        }
+        return array(number_format($value, 1), $count);
     }
 }
