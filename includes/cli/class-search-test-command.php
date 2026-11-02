@@ -160,6 +160,9 @@ class DH_Search_Test_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function purge_night( $args, $assoc_args ) {
+        while ( ob_get_level() ) {
+            ob_end_flush();
+        }
         WP_CLI::line( wp_date( 'Y-m-d H:i T', null, new DateTimeZone( 'America/New_York' ) ) . ' purge-night' );
         if ( $this->other_job_running() ) {
             WP_CLI::warning( 'prime-all or apply-ratings is running; skipped tonight.' );
