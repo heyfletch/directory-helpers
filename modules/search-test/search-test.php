@@ -219,14 +219,15 @@ class DH_Search_Test {
     }
 
     /**
-     * A sidebar ad that ends the Profile Section keeps its own bottom margin, which would
-     * leave more space above the line than below it; drop that margin when the line follows.
+     * Keep the line centered between the profile and the Owner's Box: a sidebar ad that ends
+     * the Profile Section drops its own bottom margin, and the text rises 2px so the link's
+     * underline does not make the space below look smaller.
      */
     public function print_city_link_style() {
         if (!is_singular('profile') || !self::is_test_page(get_queried_object())) {
             return;
         }
-        echo '<style id="dh-search-test">.brx-body .gd2-profile-section:has(+ .gd2-city-link) .gd2-profile-side > .gd2-sponsor:last-child{margin-bottom:0}</style>' . "\n";
+        echo '<style id="dh-search-test">.brx-body .gd2-profile-section:has(+ .gd2-city-link) .gd2-profile-side > .gd2-sponsor:last-child{margin-bottom:0}.brx-body .gd2-city-link p{transform:translateY(-2px)}</style>' . "\n";
     }
 
     /**
