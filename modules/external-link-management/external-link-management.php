@@ -1274,6 +1274,7 @@ class DH_External_Link_Management {
             'redirection' => 5, 
             'headers' => $headers, 
             'sslverify' => false,
+            'reject_unsafe_urls' => true, // Block localhost and private IP ranges, including via redirects
         );
 
         // Detect binary assets (PDF, images, archives, media)
@@ -1363,6 +1364,7 @@ class DH_External_Link_Management {
                     'timeout' => $timeout,
                     'redirection' => 5,
                     'sslverify' => false,
+                    'reject_unsafe_urls' => true,
                     'headers' => array(
                         'user-agent' => $user_agents[1], // Mac Chrome
                         'accept' => '*/*',
