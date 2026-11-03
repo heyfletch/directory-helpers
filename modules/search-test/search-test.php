@@ -6,9 +6,10 @@
  * Half the cities, picked by crc32(salt|area slug), are test cities. While the test runs:
  * - test city pages get the heading "Dog Training in [City], [ST]" (titles live in DH_SEO_Listing_Titles)
  * - test city profiles get rating-led titles and trainer-only descriptions (DH_SEO_Listing_Titles)
- *   and a "Comparing trainers?" line after the profile's own sections, linking to the city page
  * - Featured Placement profiles keep today's version
  * Every city page drops "(Updated for YYYY)" from its cost heading at display time (dh_cost_year_cleanup).
+ * Separate from the test, every non-Featured profile gets a "Comparing trainers?" line after the
+ * profile's own sections, linking to its city page.
  *
  * Nothing changes until `wp directory-helpers search-test start`. Once a salt is set, adding
  * ?dh_st_preview=<key> to any page shows it as it will look while the test runs, never cached.
@@ -147,6 +148,18 @@ class DH_Search_Test {
     }
 
     /**
+     * Whether a profile shows the "Comparing trainers?" line: every profile but Featured
+     * Placement profiles, whether or not the test runs.
+     *
+     * @param int|WP_Post $post
+     * @return bool
+     */
+    public static function shows_city_link($post) {
+        $post = get_post($post);
+        return $post && $post->post_type === 'profile' && !self::is_featured($post->ID);
+    }
+
+    /**
      * Published city-listing for an area term.
      *
      * @param int $term_id
@@ -183,7 +196,7 @@ class DH_Search_Test {
     }
 
     /**
-     * Test city profiles: the "Comparing trainers?" line after the Profile Section.
+     * Non-Featured profiles: the "Comparing trainers?" line after the Profile Section.
      *
      * @param string $html
      * @param object $element Bricks element instance
@@ -197,7 +210,7 @@ class DH_Search_Test {
             return $html;
         }
         $post = get_queried_object();
-        if (!self::is_test_page($post)) {
+        if (!self::shows_city_link($post)) {
             return $html;
         }
         $area    = DH_Taxonomy_Helpers::get_primary_area_term($post->ID);
@@ -224,7 +237,7 @@ class DH_Search_Test {
      * underline does not make the space below look smaller.
      */
     public function print_city_link_style() {
-        if (!is_singular('profile') || !self::is_test_page(get_queried_object())) {
+        if (!is_singular('profile') || !self::shows_city_link(get_queried_object())) {
             return;
         }
         echo '<style id="dh-search-test">.brx-body .gd2-profile-section:has(+ .gd2-city-link) .gd2-profile-side > .gd2-sponsor:last-child{margin-bottom:0}.brx-body .gd2-city-link p{transform:translateY(-2px)}</style>' . "\n";

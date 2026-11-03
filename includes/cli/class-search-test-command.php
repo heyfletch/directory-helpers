@@ -3,8 +3,8 @@
  * WP-CLI command: search-test
  *
  * Runs the Search Plan test from the Search Test module (modules/search-test):
- * half the cities, picked by crc32(salt|area slug), get the test titles,
- * heading and profile-to-city line; every city page loses "(Updated for YYYY)".
+ * half the cities, picked by crc32(salt|area slug), get the test titles
+ * and heading; every city page loses "(Updated for YYYY)".
  *
  * Usage:
  *   wp directory-helpers search-test prepare --salt=<salt>   (set the groups; nothing live changes, preview works)
@@ -43,7 +43,7 @@ class DH_Search_Test_Command extends WP_CLI_Command {
     }
 
     /**
-     * Start the test: titles, heading and line go live on test cities, the year comes off every
+     * Start the test: titles and heading go live on test cities, the year comes off every
      * city page, and every changed page is queued for the nightly purge.
      *
      * @when after_wp_load
