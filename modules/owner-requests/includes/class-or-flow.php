@@ -234,6 +234,7 @@ class DH_OR_Flow {
                 'postal'         => $postal,
                 'profile_url'    => get_permalink( $r['profile_id'] ),
                 'first'          => ! DH_OR_Store::has_earlier_notice( $r['profile_id'], $request->id ),
+                'featured'       => (int) get_post_meta( $r['profile_id'], 'featured', true ) > 0,
             ) );
             $status = DH_OR_Mailer::send( 'trainer', $to, $msg, array(
                 'request_id'      => (int) $request->id,

@@ -114,6 +114,9 @@ class DH_OR_Messages {
     /** The page that explains requests to trainers. */
     const TRAINER_INFO_URL = 'https://goodydoggy.com/trainer-requests/';
 
+    /** The Featured Placement checkout page, linked from the offer in every trainer notice. */
+    const FEATURED_URL = 'https://goodydoggy.com/featured-checkout/';
+
     private static function wrap( $title, $body_html, $footer_html ) {
         return '<!doctype html><html><body style="margin:0;padding:0;background:#ebf7fe;">'
             . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ebf7fe;"><tr><td align="center" style="padding:24px 12px;">'
@@ -139,8 +142,12 @@ class DH_OR_Messages {
      * A trainer's first request opens with Joe's short introduction, since most
      * trainers have never heard of Goody Doggy; later requests skip it.
      *
+     * Learning mode: every notice says the request is free because dog owner requests
+     * are being tested, and carries the Featured Placement offer. A trainer who is
+     * already Featured (featured = true) gets no offer.
+     *
      * $d: trainer_name, city, distance, text, specialties[], dog_age, format, flags[], notified_count,
-     *     open_url, optout_url, postal, profile_url, first.
+     *     open_url, optout_url, postal, profile_url, first, featured.
      */
     public static function trainer_notice( array $d ) {
         $first   = ! isset( $d['first'] ) || ! empty( $d['first'] );
@@ -169,9 +176,17 @@ class DH_OR_Messages {
         $lead  = $first
             ? 'A dog owner ' . $where . ' just asked for training help, and it sounds like the kind of training you do. Here\'s what they wrote:'
             : 'Another dog owner ' . $where . ' asked for training help on Goody Doggy, and it sounds like the kind of training you do. Here\'s what they wrote:';
+        $test  = 'We\'re testing dog owner requests right now.';
         $free  = $first
-            ? array( 'This request is free. There\'s no fee and no commission.', 'Reply to the owner directly, and you don\'t need to get back to me. I\'m just playing matchmaker.' )
-            : array( 'Same as before, there\'s no fee. Reply to the owner directly, and you don\'t need to get back to me.' );
+            ? array( 'This request is free. There\'s no fee and no commission. ' . $test, 'Reply to the owner directly, and you don\'t need to get back to me. I\'m just playing matchmaker.' )
+            : array( 'Same as before, there\'s no fee. ' . $test . ' Reply to the owner directly, and you don\'t need to get back to me.' );
+
+        // The Featured Placement offer. It names the dog owner's city, never the dog owner, since a trainer sees the dog owner's first name only after opening the request.
+        $city_name  = trim( (string) preg_replace( '/,[^,]*$/', '', (string) $d['city'] ) );
+        $offer      = empty( $d['featured'] );
+        $offer_head = 'Get seen first by dog owners ' . ( '' !== $city_name ? 'near ' . $city_name : 'near you' );
+        $offer_body = 'Featured Placement puts you at the top of ' . ( '' !== $city_name ? 'the ' . $city_name . ' dog trainers page' : 'your city\'s dog trainers page' ) . ', adds a Featured Trainer badge, and shows fewer ads on your profile. $19 a month, with a 14-day satisfaction guarantee.';
+        $offer_btn  = 'Get Featured Placement';
 
         $text  = 'Hi ' . $d['trainer_name'] . ",\n\n";
         if ( $first ) {
@@ -193,6 +208,9 @@ class DH_OR_Messages {
         $text .= "\nRead and reply:\n" . $d['open_url'] . "\n\n";
         $text .= implode( "\n\n", $free ) . "\n\n";
         $text .= "Joe Fletcher\nOwner, Goody Doggy\n\n";
+        if ( $offer ) {
+            $text .= $offer_head . "\n" . $offer_body . "\n" . $offer_btn . ': ' . self::FEATURED_URL . "\n\n";
+        }
         $text .= '--' . "\nHow Goody Doggy requests work: " . self::TRAINER_INFO_URL . "\n";
         $text .= 'Don\'t want these? Stop requests like this: ' . $d['optout_url'] . "\n";
         $text .= "You got this because your business is listed on Goody Doggy and a dog owner asked for a trainer.\n" . $d['postal'] . "\n";
@@ -220,6 +238,14 @@ class DH_OR_Messages {
             $body .= $p . self::h( $line ) . '</p>';
         }
         $body .= '<p style="margin:0;">Joe Fletcher<br><span style="color:#5a6a7b;">Owner, Goody Doggy</span></p>';
+        if ( $offer ) {
+            $body .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding-top:24px;">'
+                . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff8dc;border:1px solid #ffd64f;border-radius:12px;"><tr><td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#1b2b3a;">'
+                . '<p style="margin:0 0 8px 0;font-size:18px;line-height:24px;font-weight:bold;color:#034c7c;"><span style="color:#d99a00;">&#9733;</span> ' . self::h( $offer_head ) . '</p>'
+                . '<p style="margin:0;">' . self::h( $offer_body ) . '</p>'
+                . '<p style="margin:14px 0 0 0;"><a href="' . self::h( self::FEATURED_URL ) . '" style="display:inline-block;background:#ffd64f;color:#034c7c;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px;">' . self::h( $offer_btn ) . '</a></p>'
+                . '</td></tr></table></td></tr></table>';
+        }
 
         $footer = '<a href="' . self::h( self::TRAINER_INFO_URL ) . '" style="color:#0572bd;">How Goody Doggy requests work</a> &nbsp;|&nbsp; '
             . '<a href="' . self::h( $d['optout_url'] ) . '" style="color:#5a6a7b;">Stop requests like this</a><br>'
