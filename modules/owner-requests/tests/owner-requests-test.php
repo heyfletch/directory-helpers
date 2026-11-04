@@ -465,3 +465,4 @@ check( 'no bare owner in any template', (bool) preg_match( '/(?<!dog )\bowners?\
 
 echo "\n{$tests} checks, {$failures} failed\n";
 exit( $failures ? 1 : 0 );
+check_true( 'email logo always uses https', 0 === strpos( DH_OR_Messages::logo_url(), 'https://' ) );

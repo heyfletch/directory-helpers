@@ -108,7 +108,7 @@ class DH_OR_Messages {
     /** Where the email logo lives (a PNG, since many inboxes block SVG). */
     public static function logo_url() {
         $base = defined( 'DIRECTORY_HELPERS_URL' ) ? DIRECTORY_HELPERS_URL : 'https://goodydoggy.com/wp-content/plugins/directory-helpers/';
-        return $base . 'modules/owner-requests/assets/email-logo.png';
+        return preg_replace( '#^http://#', 'https://', $base ) . 'modules/owner-requests/assets/email-logo.png';
     }
 
     /** The page that explains requests to trainers. */
