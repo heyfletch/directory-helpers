@@ -475,6 +475,11 @@ check_true( 'later email signature has the photo', false !== strpos( $total_msg[
 check_true( 'unsubscribe label in the footer', false !== strpos( $total_msg['html'], 'Unsubscribe from these dog training requests</a>' ) && false === strpos( $total_msg['html'], 'Stop requests like this' ) );
 require_once $inc . 'class-or-flow.php';
 check( 'outcome buttons in order', array_values( DH_OR_Flow::OUTCOMES ), array( 'I contacted the dog owner', 'Booked as a client', 'The dog owner didn\'t reply', 'Not a good fit' ) );
+$ci = DH_OR_Messages::trainer_checkin( array( 'trainer_name' => 'The Polite Dog', 'where' => 'near Bethesda', 'open_url' => 'https://example.test/t/x/', 'optout_url' => 'https://example.test/o/x/', 'postal' => 'P' ) );
+check( 'check-in subject', $ci['subject'], 'Did you reach the dog owner near Bethesda?' );
+check_true( 'check-in lead is the approved wording', false !== strpos( $ci['text'], 'Last week a dog owner near Bethesda asked Goody Doggy for training help, and we sent you their request. Did you get a chance to reach them?' ) );
+check_true( 'check-in lists the four outcomes', false !== strpos( $ci['text'], "If you have a second, tap I contacted the dog owner, Booked as a client, The dog owner didn't reply, or Not a good fit on the request page. It helps us send you better matches." ) );
+check_true( 'check-in has the photo, button and unsubscribe', false !== strpos( $ci['html'], 'email-joe.jpg' ) && false !== strpos( $ci['html'], 'Open the request' ) && false !== strpos( $ci['html'], 'Unsubscribe from these dog training requests</a>' ) );
 check_true( 'every email has the Questions? Email Joe link', false !== strpos( $trainer_msg['html'], 'mailto:joe@goodydoggy.com' ) && false !== strpos( $total_msg['html'], 'mailto:joe@goodydoggy.com' ) && false !== strpos( $total_msg['text'], 'Questions? Email Joe: joe@goodydoggy.com' ) );
 check_true( 'offer button carries the tracking tag', false !== strpos( $trainer_msg['html'], 'featured-checkout/?utm_source=request-email&amp;utm_medium=email&amp;utm_campaign=learning-mode' ) && false !== strpos( $trainer_msg['text'], 'featured-checkout/?utm_source=request-email&utm_medium=email&utm_campaign=learning-mode' ) );
 check_true( 'footer names the requests page by its title', false !== strpos( $trainer_msg['html'], 'How dog owner requests for trainers work' ) );

@@ -54,7 +54,15 @@ class DH_OR_Settings {
             'postal_address'     => '',
             'from_name'          => 'Goody Doggy',
             'from_email'         => 'no-reply@goodydoggy.com',
+            // Joe's test address (Nov 4): its requests are marked test and every trainer email goes to test_inbox instead of the trainer.
+            'test_senders'       => array( 'joefletcher@gmail.com' ),
+            'test_inbox'         => 'joe@goodydoggy.com',
         );
+    }
+
+    /** Is this dog owner email one of Joe's test addresses? */
+    public static function is_test_sender( $email ) {
+        return in_array( strtolower( trim( (string) $email ) ), array_map( 'strtolower', (array) self::get( 'test_senders' ) ), true );
     }
 
     public static function all() {

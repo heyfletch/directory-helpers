@@ -168,7 +168,7 @@ class DH_OR_Gates {
         }
 
         // Rate caps (Joe's approved numbers, plus a per-ZIP cap that stays off until he sets one).
-        if ( empty( $errors['email'] ) && '' !== $p['email'] ) {
+        if ( empty( $errors['email'] ) && '' !== $p['email'] && ! DH_OR_Settings::is_test_sender( $p['email'] ) ) {
             $day  = (int) DH_OR_Settings::get( 'owner_email_day' );
             $week = (int) DH_OR_Settings::get( 'owner_email_week' );
             if ( $day > 0 && DH_OR_Store::count_since( 'owner_email', $p['email'], DAY_IN_SECONDS ) >= $day ) {
@@ -178,7 +178,7 @@ class DH_OR_Gates {
             }
         }
         $ip_cap = (int) DH_OR_Settings::get( 'ip_day' );
-        if ( $ip_cap > 0 && $ip && DH_OR_Store::count_since( 'ip_hash', DH_OR_Store::ip_hash( $ip ), DAY_IN_SECONDS ) >= $ip_cap ) {
+        if ( $ip_cap > 0 && $ip && ! DH_OR_Settings::is_test_sender( $p['email'] ) && DH_OR_Store::count_since( 'ip_hash', DH_OR_Store::ip_hash( $ip ), DAY_IN_SECONDS ) >= $ip_cap ) {
             $errors['problem'] = 'Too many requests came from this connection today. Please try again tomorrow.';
         }
         $zip_cap = (int) DH_OR_Settings::get( 'zip_day' );

@@ -23,7 +23,7 @@ class DH_Owner_Requests {
 
     public function __construct() {
         $dir = __DIR__ . '/includes/';
-        foreach ( array( 'text', 'screen', 'matcher', 'messages', 'settings', 'schema', 'store', 'candidates', 'gates', 'mailer', 'pages', 'flow', 'box', 'admin', 'guard', 'cli' ) as $part ) {
+        foreach ( array( 'text', 'screen', 'matcher', 'messages', 'settings', 'schema', 'store', 'candidates', 'gates', 'mailer', 'pages', 'flow', 'box', 'admin', 'guard', 'checkin', 'cli' ) as $part ) {
             require_once $dir . 'class-or-' . $part . '.php';
         }
 
@@ -37,6 +37,7 @@ class DH_Owner_Requests {
         new DH_OR_Box();
         new DH_OR_Admin();
         new DH_OR_Guard();
+        new DH_OR_Checkin();
 
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
             $cli = new DH_OR_CLI();
@@ -44,7 +45,7 @@ class DH_Owner_Requests {
                 'install-db' => 'install_db', 'load-data' => 'load_data', 'install-form' => 'install_form', 'stats' => 'stats',
                 'pause' => 'pause', 'resume' => 'resume', 'retract' => 'retract', 'suppress' => 'suppress', 'unsuppress' => 'unsuppress',
                 'purge-old' => 'purge_old', 'delete-test' => 'delete_test', 'match' => 'match', 'setting' => 'setting',
-                'ledger-pending' => 'ledger_pending', 'ledger-ack' => 'ledger_ack', 'suppress-sync' => 'suppress_sync', 'guard' => 'guard',
+                'ledger-pending' => 'ledger_pending', 'ledger-ack' => 'ledger_ack', 'suppress-sync' => 'suppress_sync', 'guard' => 'guard', 'checkin' => 'checkin',
             ) as $name => $method ) {
                 WP_CLI::add_command( 'dh-requests ' . $name, array( $cli, $method ) );
             }

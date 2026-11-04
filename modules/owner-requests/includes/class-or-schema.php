@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class DH_OR_Schema {
 
-    const DB_VERSION     = '3';
+    const DB_VERSION     = '4';
     const VERSION_OPTION = 'dh_or_db_version';
 
     public static function table( $name ) {
@@ -106,6 +106,8 @@ class DH_OR_Schema {
             is_viewed tinyint(1) NOT NULL DEFAULT 0,
             status varchar(20) NOT NULL DEFAULT 'queued',
             token_hash char(64) NOT NULL DEFAULT '',
+            checkin_token_hash char(64) NOT NULL DEFAULT '',
+            checkin_at datetime DEFAULT NULL,
             created_at datetime NOT NULL,
             notified_at datetime DEFAULT NULL,
             viewed_at datetime DEFAULT NULL,
@@ -117,6 +119,7 @@ class DH_OR_Schema {
             KEY request_id (request_id),
             KEY profile_created (profile_id, created_at),
             KEY token_hash (token_hash),
+            KEY checkin_token_hash (checkin_token_hash),
             KEY ledger_state (ledger_state)
         ) {$charset};" );
 

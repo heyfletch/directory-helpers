@@ -217,6 +217,19 @@ class DH_OR_CLI {
     }
 
     /**
+     * Send the trainer check-ins that are due (a week after a request, no outcome tapped yet).
+     *
+     * [--dry-run]
+     */
+    public function checkin( $args, $assoc ) {
+        $rows = DH_OR_Checkin::send_due( isset( $assoc['dry-run'] ) );
+        foreach ( $rows as $r ) {
+            WP_CLI::log( 'route ' . $r['route'] . ' ' . $r['trainer'] . ( $r['to'] ? ' -> ' . $r['to'] : '' ) . ': ' . $r['result'] );
+        }
+        WP_CLI::log( count( $rows ) . ' due' );
+    }
+
+    /**
      * Blank owner details older than the retention period, close unconfirmed holds after 7 days,
      * and clear dropped requests after 30 days.
      *

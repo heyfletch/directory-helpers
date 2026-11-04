@@ -129,6 +129,44 @@ class DH_OR_Messages {
         return preg_replace( '#^http://#', 'https://', $base ) . 'modules/owner-requests/assets/email-joe.jpg';
     }
 
+    /** Joe's sign-off with his photo, used in every email he signs. */
+    private static function signature_html() {
+        $sig = '<p style="margin:0;">Joe Fletcher<br><span style="color:#5a6a7b;">Owner, Goody Doggy</span><br><span style="font-size:15px;">Questions? <a href="mailto:' . self::h( self::JOE_EMAIL ) . '" style="color:#0572bd;font-weight:bold;">Email Joe</a></span></p>';
+        return '<table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+            . '<td style="padding:0 14px 0 0;vertical-align:middle;"><img src="' . self::h( self::photo_url() ) . '" width="56" height="56" alt="Joe Fletcher" style="display:block;border:0;width:56px;height:56px;border-radius:28px;"></td>'
+            . '<td style="vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#1b2b3a;">' . $sig . '</td></tr></table>';
+    }
+
+    /** Footer of every trainer email: how requests work, unsubscribe, why they got it, postal address. */
+    private static function trainer_footer_html( $optout_url, $postal ) {
+        return '<a href="' . self::h( self::TRAINER_INFO_URL ) . '" style="color:#0572bd;">How dog owner requests for trainers work</a> &nbsp;|&nbsp; '
+            . '<a href="' . self::h( $optout_url ) . '" style="color:#5a6a7b;">Unsubscribe from these dog training requests</a><br>'
+            . 'You got this because your business is listed on Goody Doggy and a dog owner asked for a trainer.<br>' . self::h( $postal );
+    }
+
+    /**
+     * Check-in a week after a request, to a trainer who has not tapped an outcome
+     * (wording Joe approved Nov 4). $d: trainer_name, where ("near Bethesda"),
+     * open_url, optout_url, postal.
+     */
+    public static function trainer_checkin( array $d ) {
+        $subject = 'Did you reach the dog owner ' . $d['where'] . '?';
+        $lead    = 'Last week a dog owner ' . $d['where'] . ' asked Goody Doggy for training help, and we sent you their request. Did you get a chance to reach them?';
+        $labels  = array_values( DH_OR_Flow::OUTCOMES );
+        $last    = array_pop( $labels );
+        $ask     = 'If you have a second, tap ' . implode( ', ', $labels ) . ', or ' . $last . ' on the request page. It helps us send you better matches.';
+        $text    = 'Hi ' . $d['trainer_name'] . ",\n\n" . $lead . "\n\nOpen the request:\n" . $d['open_url'] . "\n\n" . $ask . "\n\n"
+            . "Joe Fletcher\nOwner, Goody Doggy\nQuestions? Email Joe: " . self::JOE_EMAIL . "\n\n"
+            . "--\nHow dog owner requests for trainers work: " . self::TRAINER_INFO_URL . "\n"
+            . 'Unsubscribe from these dog training requests: ' . $d['optout_url'] . "\n"
+            . "You got this because your business is listed on Goody Doggy and a dog owner asked for a trainer.\n" . $d['postal'] . "\n";
+        $p    = '<p style="margin:0 0 14px 0;">';
+        $body = $p . 'Hi ' . self::h( $d['trainer_name'] ) . ',</p>' . $p . self::h( $lead ) . '</p>'
+            . self::button( $d['open_url'], 'Open the request' )
+            . $p . self::h( $ask ) . '</p>' . self::signature_html();
+        return array( 'subject' => $subject, 'text' => $text, 'html' => self::wrap( 'Did you reach the dog owner?', $body, self::trainer_footer_html( $d['optout_url'], $d['postal'] ) ) );
+    }
+
     private static function wrap( $title, $body_html, $footer_html ) {
         return '<!doctype html><html><body style="margin:0;padding:0;background:#ebf7fe;">'
             . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ebf7fe;"><tr><td align="center" style="padding:24px 12px;">'
@@ -257,11 +295,7 @@ class DH_OR_Messages {
         if ( '' !== $total ) {
             $body .= $p . '<strong>' . self::h( $total ) . '</strong></p>';
         }
-        $sig = '<p style="margin:0;">Joe Fletcher<br><span style="color:#5a6a7b;">Owner, Goody Doggy</span><br><span style="font-size:15px;">Questions? <a href="mailto:' . self::h( self::JOE_EMAIL ) . '" style="color:#0572bd;font-weight:bold;">Email Joe</a></span></p>';
-        $sig = '<table role="presentation" cellpadding="0" cellspacing="0"><tr>'
-            . '<td style="padding:0 14px 0 0;vertical-align:middle;"><img src="' . self::h( self::photo_url() ) . '" width="56" height="56" alt="Joe Fletcher" style="display:block;border:0;width:56px;height:56px;border-radius:28px;"></td>'
-            . '<td style="vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#1b2b3a;">' . $sig . '</td></tr></table>';
-        $body .= $sig;
+        $body .= self::signature_html();
         if ( $offer ) {
             $body .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding-top:24px;">'
                 . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff8dc;border:1px solid #ffd64f;border-radius:12px;"><tr><td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#1b2b3a;">'
@@ -271,9 +305,7 @@ class DH_OR_Messages {
                 . '</td></tr></table></td></tr></table>';
         }
 
-        $footer = '<a href="' . self::h( self::TRAINER_INFO_URL ) . '" style="color:#0572bd;">How dog owner requests for trainers work</a> &nbsp;|&nbsp; '
-            . '<a href="' . self::h( $d['optout_url'] ) . '" style="color:#5a6a7b;">Unsubscribe from these dog training requests</a><br>'
-            . 'You got this because your business is listed on Goody Doggy and a dog owner asked for a trainer.<br>' . self::h( $d['postal'] );
+        $footer = self::trainer_footer_html( $d['optout_url'], $d['postal'] );
 
         return array( 'subject' => $subject, 'text' => $text, 'html' => self::wrap( $first ? 'A dog owner needs a trainer' : 'Another dog owner needs a trainer', $body, $footer ) );
     }

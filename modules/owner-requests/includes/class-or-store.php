@@ -119,7 +119,8 @@ class DH_OR_Store {
             return null;
         }
         $t = DH_OR_Schema::table( 'request_routes' );
-        return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$t} WHERE token_hash = %s", self::hash_token( $raw ) ) );
+        $h = self::hash_token( $raw );
+        return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$t} WHERE token_hash = %s OR checkin_token_hash = %s LIMIT 1", $h, $h ) );
     }
 
     /**

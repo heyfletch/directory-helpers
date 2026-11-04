@@ -40,7 +40,7 @@ class DH_OR_Flow {
             $request_id  = DH_OR_Store::insert_request( array(
                 'status'            => 'received',
                 'tier'              => $screen['tier'],
-                'is_test'           => DH_OR_Settings::public_open() ? 0 : 1,
+                'is_test'           => ( DH_OR_Settings::public_open() && ! DH_OR_Settings::is_test_sender( $p['email'] ) ) ? 0 : 1,
                 'source_post_id'    => $p['source_post_id'],
                 'source_type'       => $p['source_type'],
                 'source_url'        => $p['source_post_id'] ? mb_substr( (string) get_permalink( $p['source_post_id'] ), 0, 255 ) : '',
@@ -209,9 +209,14 @@ class DH_OR_Flow {
                 $reachable++;
             }
         }
+        // Joe's test requests: each trainer's email goes to his test inbox, and the route is kept out of every count, cap and the contact log.
+        $test_inbox = DH_OR_Settings::is_test_sender( $request->owner_email ) ? (string) DH_OR_Settings::get( 'test_inbox' ) : '';
         foreach ( $route_rows as $rr ) {
             $r  = $rr['route'];
             $to = DH_OR_Candidates::trainer_email( $r['profile_id'] );
+            if ( '' !== $to && '' !== $test_inbox ) {
+                $to = $test_inbox;
+            }
             if ( '' === $to ) {
                 DH_OR_Store::update_route( $rr['id'], array( 'status' => 'skipped', 'ledger_state' => 'none', 'ledger_note' => 'no lane A email' ) );
                 continue;
@@ -245,7 +250,9 @@ class DH_OR_Flow {
                 'unsubscribe_url' => DH_OR_Pages::url( 'optout', $rr['token'] ),
             ) );
             if ( in_array( $status, array( 'dry_run', 'sent' ), true ) ) {
-                DH_OR_Store::update_route( $rr['id'], array( 'status' => $status, 'notified_at' => DH_OR_Store::now(), 'ledger_state' => 'pending' ) );
+                DH_OR_Store::update_route( $rr['id'], '' !== $test_inbox
+                    ? array( 'status' => 'test', 'notified_at' => DH_OR_Store::now(), 'ledger_state' => 'skip', 'ledger_note' => 'test request to ' . $test_inbox )
+                    : array( 'status' => $status, 'notified_at' => DH_OR_Store::now(), 'ledger_state' => 'pending' ) );
                 $notified[] = array(
                     'name' => DH_OR_Candidates::trainer_name( $r['profile_id'] ),
                     'city' => $r['city'],
@@ -307,7 +314,7 @@ class DH_OR_Flow {
             . '<p><a href="' . esc_url( $fallback ) . '">See trainers near you</a></p>' . $vet;
     }
 
-    private static function postal() {
+    public static function postal() {
         $p = trim( (string) DH_OR_Settings::get( 'postal_address' ) );
         return '' !== $p ? $p : '[postal address not set]';
     }
