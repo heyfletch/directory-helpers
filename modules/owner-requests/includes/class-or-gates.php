@@ -69,7 +69,7 @@ class DH_OR_Gates {
         $zip = DH_OR_Text::normalize_zip( $g( 'zip' ) );
 
         // Where the form was submitted from. The embed post id is Fluent Forms' own field;
-        // anything we cannot verify as a city or profile page becomes "other".
+        // anything we cannot verify as a city, state or profile page becomes "other".
         $post_id = (int) $g( '__fluent_form_embded_post_id', (int) $g( 'source_post_id' ) );
         $type    = 'other';
         $viewed  = 0;
@@ -77,6 +77,8 @@ class DH_OR_Gates {
             $pt = get_post_type( $post_id );
             if ( 'publish' === get_post_status( $post_id ) && 'city-listing' === $pt ) {
                 $type = 'city';
+            } elseif ( 'publish' === get_post_status( $post_id ) && 'state-listing' === $pt ) {
+                $type = 'state';
             } elseif ( 'publish' === get_post_status( $post_id ) && 'profile' === $pt ) {
                 $type   = 'profile';
                 $viewed = $post_id;

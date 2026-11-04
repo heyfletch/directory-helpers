@@ -4,8 +4,8 @@
  *
  * [dh_request_box] renders the box on any page (the slot the other bets ask
  * for). While `preview_only` is on, it renders only for logged-in users with
- * manage_options. Until the Bricks slot element is placed in the city-listing
- * and profile templates, `auto_inject` adds the box on those two page types at
+ * manage_options. Until the Bricks slot element is placed in the city-listing,
+ * state-listing and profile templates, `auto_inject` adds the box on those page types at
  * the Bricks `bricks_before_footer` hook, with no template change.
  *
  * Tracking: the script emits browser events (see assets/box.js) and wires none
@@ -32,7 +32,7 @@ class DH_OR_Box {
         if ( self::$rendered || ! DH_OR_Settings::get( 'auto_inject' ) ) {
             return;
         }
-        if ( ! is_singular( array( 'city-listing', 'profile' ) ) ) {
+        if ( ! is_singular( array( 'city-listing', 'state-listing', 'profile' ) ) ) {
             return;
         }
         echo $this->render(); // phpcs:ignore WordPress.Security.EscapeOutput -- built from escaped parts.
@@ -42,7 +42,7 @@ class DH_OR_Box {
         return $this->render();
     }
 
-    /** Page type the box is on: city, profile or other. */
+    /** Page type the box is on: city, state, profile or other. */
     private function context() {
         $post = get_post();
         $type = 'other';
@@ -51,6 +51,8 @@ class DH_OR_Box {
             $id = (int) $post->ID;
             if ( 'city-listing' === $post->post_type ) {
                 $type = 'city';
+            } elseif ( 'state-listing' === $post->post_type ) {
+                $type = 'state';
             } elseif ( 'profile' === $post->post_type ) {
                 $type = 'profile';
             }
