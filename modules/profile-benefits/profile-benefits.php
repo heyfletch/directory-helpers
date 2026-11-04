@@ -26,10 +26,7 @@ class DH_Profile_Benefits {
      * Whether ads may show for this profile. Non-profile contexts always show ads.
      */
     public static function show_ads($post_id = null) {
-        if (!$post_id) {
-            // Header and footer templates render with their own post in context, so a profile page always judges the profile being viewed.
-            $post_id = is_singular('profile') ? get_queried_object_id() : get_the_ID();
-        }
+        $post_id = $post_id ? $post_id : get_the_ID();
         if (!$post_id || get_post_type($post_id) !== 'profile') {
             return true;
         }
