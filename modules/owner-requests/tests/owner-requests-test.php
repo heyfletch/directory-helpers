@@ -462,6 +462,7 @@ check_true( 'receipt keeps the apostrophe as a plain character', false !== strpo
 $all = $repeat_msg['text'] . $repeat_msg['html'] . $featured_msg['text'] . $nocity_msg['text'] . $nocity_msg['html'] . $video_msg['text'] . $video_msg['html'] . $vid_receipt['text'] . $trainer_msg['text'] . $trainer_msg['html'] . $thin_msg['text'] . $ok_msg['text'] . DH_OR_Messages::owner_confirm( array( 'first_name' => 'Jo', 'zip' => '1', 'confirm_url' => 'u', 'delete_url' => 'u', 'postal' => 'p' ) )['text'];
 check( 'no em dashes in any template', false !== strpos( $all, "\xE2\x80\x94" ), false );
 check( 'no bare owner in any template', (bool) preg_match( '/(?<!dog )\bowners?\b/i', str_replace( array( 'Owner, Goody Doggy', 'owner-requests' ), '', $all ) ), false );
+check_true( 'email logo always uses https', 0 === strpos( DH_OR_Messages::logo_url(), 'https://' ) );
 
 echo "\n{$tests} checks, {$failures} failed\n";
 exit( $failures ? 1 : 0 );
