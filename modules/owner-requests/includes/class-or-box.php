@@ -4,9 +4,11 @@
  *
  * [dh_request_box] renders the box on any page (the slot the other bets ask
  * for). While `preview_only` is on, it renders only for logged-in users with
- * manage_options. Until the Bricks slot element is placed in the city-listing,
- * state-listing and profile templates, `auto_inject` adds the box on those page types at
- * the Bricks `bricks_before_footer` hook, with no template change.
+ * manage_options. With `auto_inject` on, the box renders right before the Bricks
+ * section named in SLOTS (the spots Joe chose on Oct 23: under the trainer list and
+ * before the Recommended Resource banner on city and state pages, above Listing Tools
+ * for Trainers on profiles), with no template change. If that section does not
+ * render, the box falls back to the `bricks_before_footer` hook.
  *
  * Tracking: the script emits browser events (see assets/box.js) and wires none
  * of them to GA4 or AnalyticsWP; the proposal for that goes to Joe first.
@@ -23,9 +25,28 @@ class DH_OR_Box {
 
     private static $rendered = false;
 
+    /** Bricks element id of the section the box renders before, per page type. */
+    const SLOTS = array(
+        'city-listing'  => 'kyoamc',
+        'state-listing' => 'revsah',
+        'profile'       => 'lwwtbo',
+    );
+
     public function __construct() {
         add_shortcode( 'dh_request_box', array( $this, 'shortcode' ) );
+        add_filter( 'bricks/frontend/render_element', array( $this, 'slot' ), 10, 2 );
         add_action( 'bricks_before_footer', array( $this, 'auto_inject' ), 5 );
+    }
+
+    public function slot( $html, $element ) {
+        if ( self::$rendered || ! DH_OR_Settings::get( 'auto_inject' ) || ! is_singular( array_keys( self::SLOTS ) ) ) {
+            return $html;
+        }
+        $type = get_post_type( get_queried_object_id() );
+        if ( ! isset( self::SLOTS[ $type ] ) || ! isset( $element->id ) || self::SLOTS[ $type ] !== $element->id ) {
+            return $html;
+        }
+        return $this->render() . $html;
     }
 
     public function auto_inject() {
