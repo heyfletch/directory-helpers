@@ -26,7 +26,9 @@
 .gd2-directory-section + .dh-rb {
   padding-top: 0;
 }
-.dh-rb + .gd2-padding-top--none {
+/* The banner sections pull themselves up with id rules (#brxe-kyoamc on city pages, #brxe-revsah on state pages). */
+.dh-rb + #brxe-kyoamc,
+.dh-rb + #brxe-revsah {
   margin-top: 0;
 }
 
