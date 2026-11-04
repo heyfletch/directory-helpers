@@ -184,7 +184,7 @@ class DH_OR_Messages {
         $city_name  = trim( (string) preg_replace( '/,[^,]*$/', '', (string) $d['city'] ) );
         $offer      = empty( $d['featured'] );
         $offer_head = 'Get seen first by dog owners ' . ( '' !== $city_name ? 'near ' . $city_name : 'near you' );
-        $offer_body = 'Featured Placement puts you at the top of ' . ( '' !== $city_name ? 'the ' . $city_name . ' dog trainers page' : 'your city\'s dog trainers page' ) . ', adds a Featured Trainer badge, and shows fewer ads on your profile. $19 a month, with a 14-day satisfaction guarantee.';
+        $offer_body = 'Featured Placement puts you at the top of ' . ( '' !== $city_name ? 'the ' . $city_name . ' dog trainers page' : 'your city\'s dog trainers page' ) . ', adds a Featured Trainer badge, and removes ads on your profile. $19 a month, with a 14-day satisfaction guarantee.';
         $offer_btn  = 'Get Featured Placement';
 
         $text  = 'Hi ' . $d['trainer_name'] . ",\n\n";
