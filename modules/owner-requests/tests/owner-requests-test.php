@@ -398,7 +398,7 @@ check_true( 'trainer text has the opt-out link', false !== strpos( $trainer_msg[
 check_true( 'trainer text has the postal line', false !== strpos( $trainer_msg['text'], '[postal address not set]' ) );
 check_true( 'trainer text says how many trainers got it', false !== strpos( $trainer_msg['text'], '3 trainers got this request' ) );
 check_true( 'trainer text notes the credential reason', false !== strpos( $trainer_msg['text'], 'behavior credential' ) );
-check( 'trainer message carries no email address', (bool) preg_match( '/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[a-z]{2,}/', $trainer_msg['text'] . $trainer_msg['html'] ), false );
+check( 'trainer message carries no dog owner email address', (bool) preg_match( '/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[a-z]{2,}/', str_replace( DH_OR_Messages::JOE_EMAIL, '', $trainer_msg['text'] . $trainer_msg['html'] ) ), false );
 
 // Learning mode (Joe's approved lead gen plan): every notice labels the request a free test and carries the Featured Placement offer.
 check_true( 'first notice labels the request a free test', false !== strpos( $trainer_msg['text'], "Feel free to reply to the dog owner directly. There's no fee, commission, or strings attached.\n\nWe're testing this new match-making feature on Goody Doggy, and you're one of the first trainers to receive a dog owner request for training like this. You don't need to get back to me." ) );
@@ -406,7 +406,7 @@ check_true( 'repeat notice says it is free', false !== strpos( $repeat_msg['text
 check_true( 'repeat notice skips the first-trainers line', false === strpos( $repeat_msg['text'], 'one of the first trainers' ) );
 check_true( 'offer heading names the dog owner city', false !== strpos( $trainer_msg['text'], 'Get seen first by dog owners near Freeport' ) && false === strpos( $trainer_msg['text'], 'Get seen first by dog owners near Freeport, IL' ) );
 check_true( 'offer says what Featured Placement does and costs', false !== strpos( $trainer_msg['text'], 'Featured Placement puts you at the top of the Freeport dog trainers page, adds a Featured Trainer badge, and removes ads on your profile. $19 a month, with a 14-day satisfaction guarantee.' ) );
-check_true( 'offer button links the Featured checkout in text and html', false !== strpos( $trainer_msg['text'], 'Get Featured Placement: https://goodydoggy.com/featured-checkout/' ) && false !== strpos( $trainer_msg['html'], 'href="https://goodydoggy.com/featured-checkout/"' ) );
+check_true( 'offer button links the Featured checkout in text and html', false !== strpos( $trainer_msg['text'], 'Get Featured Placement: https://goodydoggy.com/featured-checkout/?utm_source=request-email' ) && false !== strpos( $trainer_msg['html'], 'href="https://goodydoggy.com/featured-checkout/?utm_source=request-email' ) );
 check_true( 'repeat notice carries the offer too', false !== strpos( $repeat_msg['html'], 'Get Featured Placement' ) );
 check( 'offer names no dog owner', (bool) preg_match( '/dog owners like /i', $trainer_msg['text'] . $trainer_msg['html'] ), false );
 $featured_msg = DH_OR_Messages::trainer_notice( array(
@@ -463,6 +463,18 @@ $all = $repeat_msg['text'] . $repeat_msg['html'] . $featured_msg['text'] . $noci
 check( 'no em dashes in any template', false !== strpos( $all, "\xE2\x80\x94" ), false );
 check( 'no bare owner in any template', (bool) preg_match( '/(?<!dog )\bowners?\b/i', str_replace( array( 'Owner, Goody Doggy', 'owner-requests' ), '', $all ) ), false );
 check_true( 'email logo always uses https', 0 === strpos( DH_OR_Messages::logo_url(), 'https://' ) );
+$total_msg = DH_OR_Messages::trainer_notice( array(
+    'trainer_name' => 'Benson K-9 Training', 'city' => 'Freeport, IL', 'zip' => '61032', 'distance' => 7.4,
+    'text' => 'Pulls on the leash.', 'specialties' => array(), 'dog_age' => 'adult', 'format' => 'any', 'flags' => array(), 'notified_count' => 1,
+    'open_url' => 'u', 'optout_url' => 'o', 'postal' => 'p', 'first' => false, 'year_count' => 4,
+) );
+check_true( 'later email shows the running total', false !== strpos( $total_msg['text'], 'Goody Doggy has sent you 4 requests this year.' ) && false !== strpos( $total_msg['html'], 'Goody Doggy has sent you 4 requests this year.' ) );
+check_true( 'first email has no running total', false === strpos( $trainer_msg['text'], 'requests this year' ) );
+check_true( 'first email has Joe\'s photo by his name', false !== strpos( $trainer_msg['html'], 'email-joe.jpg' ) );
+check_true( 'later email has no photo', false === strpos( $total_msg['html'], 'email-joe.jpg' ) );
+check_true( 'every email has the Questions? Email Joe link', false !== strpos( $trainer_msg['html'], 'mailto:joe@goodydoggy.com' ) && false !== strpos( $total_msg['html'], 'mailto:joe@goodydoggy.com' ) && false !== strpos( $total_msg['text'], 'Questions? Email Joe: joe@goodydoggy.com' ) );
+check_true( 'offer button carries the tracking tag', false !== strpos( $trainer_msg['html'], 'featured-checkout/?utm_source=request-email&amp;utm_medium=email&amp;utm_campaign=learning-mode' ) && false !== strpos( $trainer_msg['text'], 'featured-checkout/?utm_source=request-email&utm_medium=email&utm_campaign=learning-mode' ) );
+check_true( 'footer names the requests page by its title', false !== strpos( $trainer_msg['html'], 'How dog owner requests for trainers work' ) );
 
 echo "\n{$tests} checks, {$failures} failed\n";
 exit( $failures ? 1 : 0 );

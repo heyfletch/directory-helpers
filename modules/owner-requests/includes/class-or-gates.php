@@ -22,7 +22,7 @@ class DH_OR_Gates {
     const AGES    = array( 'puppy', 'adolescent', 'adult', 'senior' );
 
     /** The exact consent line on the form. The text a request stores is this string. */
-    const CONSENT_TEXT = 'Send my request to up to five trainers near me. A trainer who opens my request sees my first name, my email, and my phone if I gave one, so they can reply. I can delete my request at any time.';
+    const CONSENT_TEXT = 'Send my request to up to three trainers near me. A trainer who opens my request sees my first name, my email, and my phone if I gave one, so they can reply. I can delete my request at any time.';
 
     private static $disposable = null;
 

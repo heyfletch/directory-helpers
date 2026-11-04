@@ -153,6 +153,13 @@ class DH_OR_Store {
         return (bool) $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$t} WHERE profile_id = %d AND request_id <> %d AND status = 'sent' LIMIT 1", (int) $profile_id, (int) $request_id ) );
     }
 
+    /** Request emails really sent to this trainer this calendar year. */
+    public static function notices_this_year( $profile_id ) {
+        global $wpdb;
+        $t = DH_OR_Schema::table( 'request_routes' );
+        return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$t} WHERE profile_id = %d AND status = 'sent' AND notified_at >= %s", (int) $profile_id, substr( self::now(), 0, 4 ) . '-01-01 00:00:00' ) );
+    }
+
     /* ---------- events ---------- */
 
     public static function add_event( $request_id, $route_id, $event, $detail = array() ) {

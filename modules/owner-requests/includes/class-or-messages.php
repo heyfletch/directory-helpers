@@ -117,6 +117,18 @@ class DH_OR_Messages {
     /** The Featured Placement checkout page, linked from the offer in every trainer notice. */
     const FEATURED_URL = 'https://goodydoggy.com/featured-checkout/';
 
+    /** The offer link with the tag Google Analytics files under request emails. */
+    const FEATURED_LINK = self::FEATURED_URL . '?utm_source=request-email&utm_medium=email&utm_campaign=learning-mode';
+
+    /** Where trainers write with questions. */
+    const JOE_EMAIL = 'joe@goodydoggy.com';
+
+    /** Joe's photo for the first-email signature. */
+    public static function photo_url() {
+        $base = defined( 'DIRECTORY_HELPERS_URL' ) ? DIRECTORY_HELPERS_URL : 'https://goodydoggy.com/wp-content/plugins/directory-helpers/';
+        return preg_replace( '#^http://#', 'https://', $base ) . 'modules/owner-requests/assets/email-joe.jpg';
+    }
+
     private static function wrap( $title, $body_html, $footer_html ) {
         return '<!doctype html><html><body style="margin:0;padding:0;background:#ebf7fe;">'
             . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ebf7fe;"><tr><td align="center" style="padding:24px 12px;">'
@@ -186,6 +198,9 @@ class DH_OR_Messages {
         $offer_head = 'Get seen first by dog owners ' . ( '' !== $city_name ? 'near ' . $city_name : 'near you' );
         $offer_body = 'Featured Placement puts you at the top of ' . ( '' !== $city_name ? 'the ' . $city_name . ' dog trainers page' : 'your city\'s dog trainers page' ) . ', adds a Featured Trainer badge, and removes ads on your profile. $19 a month, with a 14-day satisfaction guarantee.';
         $offer_btn  = 'Get Featured Placement';
+        $year_count = isset( $d['year_count'] ) ? (int) $d['year_count'] : 0;
+        $total      = ( ! $first && $year_count >= 2 ) ? 'Goody Doggy has sent you ' . $year_count . ' requests this year.' : '';
+        $questions  = 'Questions? Email Joe: ' . self::JOE_EMAIL;
 
         $text  = 'Hi ' . $d['trainer_name'] . ",\n\n";
         if ( $first ) {
@@ -206,11 +221,14 @@ class DH_OR_Messages {
         $text .= "\n" . $sent_to . "\n";
         $text .= "\nRead and reply:\n" . $d['open_url'] . "\n\n";
         $text .= implode( "\n\n", $free ) . "\n\n";
-        $text .= "Joe Fletcher\nOwner, Goody Doggy\n\n";
-        if ( $offer ) {
-            $text .= $offer_head . "\n" . $offer_body . "\n" . $offer_btn . ': ' . self::FEATURED_URL . "\n\n";
+        if ( '' !== $total ) {
+            $text .= $total . "\n\n";
         }
-        $text .= '--' . "\nHow Goody Doggy requests work: " . self::TRAINER_INFO_URL . "\n";
+        $text .= "Joe Fletcher\nOwner, Goody Doggy\n" . $questions . "\n\n";
+        if ( $offer ) {
+            $text .= $offer_head . "\n" . $offer_body . "\n" . $offer_btn . ': ' . self::FEATURED_LINK . "\n\n";
+        }
+        $text .= '--' . "\nHow dog owner requests for trainers work: " . self::TRAINER_INFO_URL . "\n";
         $text .= 'Don\'t want these? Stop requests like this: ' . $d['optout_url'] . "\n";
         $text .= "You got this because your business is listed on Goody Doggy and a dog owner asked for a trainer.\n" . $d['postal'] . "\n";
 
@@ -236,17 +254,26 @@ class DH_OR_Messages {
         foreach ( $free as $line ) {
             $body .= $p . self::h( $line ) . '</p>';
         }
-        $body .= '<p style="margin:0;">Joe Fletcher<br><span style="color:#5a6a7b;">Owner, Goody Doggy</span></p>';
+        if ( '' !== $total ) {
+            $body .= $p . '<strong>' . self::h( $total ) . '</strong></p>';
+        }
+        $sig = '<p style="margin:0;">Joe Fletcher<br><span style="color:#5a6a7b;">Owner, Goody Doggy</span><br><span style="font-size:15px;">Questions? <a href="mailto:' . self::h( self::JOE_EMAIL ) . '" style="color:#0572bd;font-weight:bold;">Email Joe</a></span></p>';
+        if ( $first ) {
+            $sig = '<table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+                . '<td style="padding:0 14px 0 0;vertical-align:middle;"><img src="' . self::h( self::photo_url() ) . '" width="56" height="56" alt="Joe Fletcher" style="display:block;border:0;width:56px;height:56px;border-radius:28px;"></td>'
+                . '<td style="vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#1b2b3a;">' . $sig . '</td></tr></table>';
+        }
+        $body .= $sig;
         if ( $offer ) {
             $body .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding-top:24px;">'
                 . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff8dc;border:1px solid #ffd64f;border-radius:12px;"><tr><td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#1b2b3a;">'
                 . '<p style="margin:0 0 8px 0;font-size:18px;line-height:24px;font-weight:bold;color:#034c7c;"><span style="color:#d99a00;">&#9733;</span> ' . self::h( $offer_head ) . '</p>'
                 . '<p style="margin:0;">' . self::h( $offer_body ) . '</p>'
-                . '<p style="margin:14px 0 0 0;"><a href="' . self::h( self::FEATURED_URL ) . '" style="display:inline-block;background:#ffd64f;color:#034c7c;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px;">' . self::h( $offer_btn ) . '</a></p>'
+                . '<p style="margin:14px 0 0 0;"><a href="' . self::h( self::FEATURED_LINK ) . '" style="display:inline-block;background:#ffd64f;color:#034c7c;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:999px;">' . self::h( $offer_btn ) . '</a></p>'
                 . '</td></tr></table></td></tr></table>';
         }
 
-        $footer = '<a href="' . self::h( self::TRAINER_INFO_URL ) . '" style="color:#0572bd;">How Goody Doggy requests work</a> &nbsp;|&nbsp; '
+        $footer = '<a href="' . self::h( self::TRAINER_INFO_URL ) . '" style="color:#0572bd;">How dog owner requests for trainers work</a> &nbsp;|&nbsp; '
             . '<a href="' . self::h( $d['optout_url'] ) . '" style="color:#5a6a7b;">Stop requests like this</a><br>'
             . 'You got this because your business is listed on Goody Doggy and a dog owner asked for a trainer.<br>' . self::h( $d['postal'] );
 

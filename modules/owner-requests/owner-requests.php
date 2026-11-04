@@ -3,7 +3,7 @@
  * Owner Requests Module
  *
  * A dog owner describes a problem and a ZIP code on a city or profile page.
- * The request is checked (Gate A, Gate B), matched to up to five listed
+ * The request is checked (Gate A, Gate B), matched to up to three listed
  * trainers, and the trainers who gave their own email (lane A) get a notice.
  * The owner gets a receipt. Every outcome is counted per trainer.
  *
