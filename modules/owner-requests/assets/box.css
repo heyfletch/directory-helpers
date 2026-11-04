@@ -22,6 +22,14 @@
   box-sizing: border-box;
 }
 
+/* In the slot between the trainer list section and the banner section: the list's own bottom padding is the space above, and the banner stops pulling itself up under the box. */
+.gd2-directory-section + .dh-rb {
+  padding-top: 0;
+}
+.dh-rb + .gd2-padding-top--none {
+  margin-top: 0;
+}
+
 /* Same side gutters as the page's own containers (32px on desktop, 20px on a phone). */
 .dh-rb__inner {
   margin: 0;
