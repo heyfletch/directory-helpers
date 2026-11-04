@@ -204,6 +204,19 @@ class DH_OR_CLI {
     }
 
     /**
+     * Show the automatic pause numbers, or run the check.
+     *
+     * [--dry-run]
+     */
+    public function guard( $args, $assoc ) {
+        $r = DH_OR_Guard::check( isset( $assoc['dry-run'] ) );
+        WP_CLI::log( 'ses: ' . ( $r['ses_ok'] ? wp_json_encode( $r['ses'] ) : 'unreadable' ) );
+        WP_CLI::log( 'optouts: ' . wp_json_encode( $r['optouts'] ) );
+        WP_CLI::log( 'reasons: ' . ( $r['reasons'] ? implode( '; ', $r['reasons'] ) : 'none' ) );
+        WP_CLI::log( 'paused now: ' . ( $r['paused'] ? 'yes' : 'no' ) . ', already paused: ' . ( $r['already'] ? 'yes' : 'no' ) );
+    }
+
+    /**
      * Blank owner details older than the retention period, close unconfirmed holds after 7 days,
      * and clear dropped requests after 30 days.
      *
