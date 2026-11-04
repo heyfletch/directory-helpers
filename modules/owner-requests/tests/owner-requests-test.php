@@ -381,7 +381,7 @@ $trainer_msg = DH_OR_Messages::trainer_notice( array(
 ) );
 check( 'trainer subject is accurate', $trainer_msg['subject'], 'A dog owner near Freeport, IL is looking for a trainer' );
 check_true( 'first request introduces Joe and Goody Doggy', false !== strpos( $trainer_msg['text'], "I'm Joe, and I run Goody Doggy" ) );
-check_true( 'first request says it is free', false !== strpos( $trainer_msg['text'], 'no fee and no commission' ) );
+check_true( 'first request says it is free', false !== strpos( $trainer_msg['text'], "There's no fee, commission, or strings attached." ) );
 check_true( 'every request links the how-it-works page', false !== strpos( $trainer_msg['html'], DH_OR_Messages::TRAINER_INFO_URL ) );
 check_true( 'email carries the Goody Doggy logo', false !== strpos( $trainer_msg['html'], 'email-logo.png' ) );
 $repeat_msg = DH_OR_Messages::trainer_notice( array(
@@ -401,8 +401,9 @@ check_true( 'trainer text notes the credential reason', false !== strpos( $train
 check( 'trainer message carries no email address', (bool) preg_match( '/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[a-z]{2,}/', $trainer_msg['text'] . $trainer_msg['html'] ), false );
 
 // Learning mode (Joe's approved lead gen plan): every notice labels the request a free test and carries the Featured Placement offer.
-check_true( 'first notice labels the request a free test', false !== strpos( $trainer_msg['text'], "This request is free. There's no fee and no commission. We're testing dog owner requests right now." ) );
-check_true( 'repeat notice labels the request a free test', false !== strpos( $repeat_msg['text'], "Same as before, there's no fee. We're testing dog owner requests right now. Reply to the owner directly" ) );
+check_true( 'first notice labels the request a free test', false !== strpos( $trainer_msg['text'], "Feel free to reply to the dog owner directly. There's no fee, commission, or strings attached.\n\nWe're testing this new match-making feature on Goody Doggy, and you're one of the first trainers to receive a dog owner request for training like this. You don't need to get back to me." ) );
+check_true( 'repeat notice says it is free', false !== strpos( $repeat_msg['text'], "Feel free to reply to the dog owner directly. There's no fee, commission, or strings attached. You don't need to get back to me." ) );
+check_true( 'repeat notice skips the first-trainers line', false === strpos( $repeat_msg['text'], 'one of the first trainers' ) );
 check_true( 'offer heading names the dog owner city', false !== strpos( $trainer_msg['text'], 'Get seen first by dog owners near Freeport' ) && false === strpos( $trainer_msg['text'], 'Get seen first by dog owners near Freeport, IL' ) );
 check_true( 'offer says what Featured Placement does and costs', false !== strpos( $trainer_msg['text'], 'Featured Placement puts you at the top of the Freeport dog trainers page, adds a Featured Trainer badge, and shows fewer ads on your profile. $19 a month, with a 14-day satisfaction guarantee.' ) );
 check_true( 'offer button links the Featured checkout in text and html', false !== strpos( $trainer_msg['text'], 'Get Featured Placement: https://goodydoggy.com/featured-checkout/' ) && false !== strpos( $trainer_msg['html'], 'href="https://goodydoggy.com/featured-checkout/"' ) );
@@ -414,7 +415,7 @@ $featured_msg = DH_OR_Messages::trainer_notice( array(
     'open_url' => 'u', 'optout_url' => 'o', 'postal' => 'p', 'featured' => true,
 ) );
 check( 'a trainer who is already Featured gets no offer', (bool) preg_match( '/featured/i', $featured_msg['text'] . $featured_msg['html'] ), false );
-check_true( 'a trainer who is already Featured still gets the free test label', false !== strpos( $featured_msg['text'], "We're testing dog owner requests right now." ) );
+check_true( 'a trainer who is already Featured still gets the free test label', false !== strpos( $featured_msg['text'], "We're testing this new match-making feature on Goody Doggy" ) );
 $nocity_msg = DH_OR_Messages::trainer_notice( array(
     'trainer_name' => 'No City', 'city' => '', 'zip' => '61032', 'distance' => 3,
     'text' => 'Pulls on the leash.', 'specialties' => array(), 'dog_age' => 'adult', 'format' => 'any', 'flags' => array(), 'notified_count' => 2,
@@ -460,6 +461,7 @@ check_true( 'receipt keeps the apostrophe as a plain character', false !== strpo
 
 $all = $repeat_msg['text'] . $repeat_msg['html'] . $featured_msg['text'] . $nocity_msg['text'] . $nocity_msg['html'] . $video_msg['text'] . $video_msg['html'] . $vid_receipt['text'] . $trainer_msg['text'] . $trainer_msg['html'] . $thin_msg['text'] . $ok_msg['text'] . DH_OR_Messages::owner_confirm( array( 'first_name' => 'Jo', 'zip' => '1', 'confirm_url' => 'u', 'delete_url' => 'u', 'postal' => 'p' ) )['text'];
 check( 'no em dashes in any template', false !== strpos( $all, "\xE2\x80\x94" ), false );
+check( 'no bare owner in any template', (bool) preg_match( '/(?<!dog )\bowners?\b/i', str_replace( array( 'Owner, Goody Doggy', 'owner-requests' ), '', $all ) ), false );
 
 echo "\n{$tests} checks, {$failures} failed\n";
 exit( $failures ? 1 : 0 );

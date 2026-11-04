@@ -99,13 +99,13 @@ class DH_OR_Pages {
         }
         $body .= '<li><strong>Dog age:</strong> ' . esc_html( $age ) . '</li><li><strong>Training they want:</strong> ' . esc_html( $fmt ) . '</li></ul>';
         if ( in_array( 'aggression', $flags, true ) ) {
-            $body .= '<p>The owner mentioned a bite or aggression. You are seeing this because you hold a behavior credential.</p>';
+            $body .= '<p>The dog owner mentioned a bite or aggression. You are seeing this because you hold a behavior credential.</p>';
         }
         if ( in_array( 'medical', $flags, true ) ) {
-            $body .= '<p>The owner mentioned a health problem. We suggested seeing a vet.</p>';
+            $body .= '<p>The dog owner mentioned a health problem. We suggested seeing a vet.</p>';
         }
 
-        $body .= '<h2>Reach the owner</h2><div class="contact"><p><strong>' . esc_html( $request->owner_first_name ) . '</strong></p>'
+        $body .= '<h2>Reach the dog owner</h2><div class="contact"><p><strong>' . esc_html( $request->owner_first_name ) . '</strong></p>'
             . '<p>Email: <a href="mailto:' . esc_attr( $request->owner_email ) . '">' . esc_html( $request->owner_email ) . '</a></p>'
             . ( $request->owner_phone ? '<p>Phone: ' . esc_html( $request->owner_phone ) . '</p>' : '' ) . '</div>';
 

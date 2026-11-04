@@ -159,16 +159,16 @@ class DH_OR_Messages {
         $miles   = (int) round( $d['distance'] );
         $dist    = $miles <= 1 ? 'about 1 mile from your business' : 'about ' . $miles . ' miles from your business';
         if ( ! empty( $d['by_video'] ) ) {
-            $dist = 'not a factor. The owner is open to video sessions and your listing offers them';
+            $dist = 'not a factor. The dog owner is open to video sessions and your listing offers them';
         }
         $profile = isset( $d['profile_url'] ) ? (string) $d['profile_url'] : '';
 
         $extra_lines = array();
         if ( in_array( 'aggression', $d['flags'], true ) ) {
-            $extra_lines[] = 'The owner mentioned a bite or aggression. You are getting this because you hold a behavior credential.';
+            $extra_lines[] = 'The dog owner mentioned a bite or aggression. You are getting this because you hold a behavior credential.';
         }
         if ( in_array( 'medical', $d['flags'], true ) ) {
-            $extra_lines[] = 'The owner mentioned a health problem. We suggested seeing a vet.';
+            $extra_lines[] = 'The dog owner mentioned a health problem. We suggested seeing a vet.';
         }
         $sent_to = (int) $d['notified_count'] <= 1 ? 'You are the only trainer from our directory who got this request.' : (int) $d['notified_count'] . ' trainers got this request.';
 
@@ -176,10 +176,9 @@ class DH_OR_Messages {
         $lead  = $first
             ? 'A dog owner ' . $where . ' just asked for training help, and it sounds like the kind of training you do. Here\'s what they wrote:'
             : 'Another dog owner ' . $where . ' asked for training help on Goody Doggy, and it sounds like the kind of training you do. Here\'s what they wrote:';
-        $test  = 'We\'re testing dog owner requests right now.';
         $free  = $first
-            ? array( 'This request is free. There\'s no fee and no commission. ' . $test, 'Reply to the owner directly, and you don\'t need to get back to me. I\'m just playing matchmaker.' )
-            : array( 'Same as before, there\'s no fee. ' . $test . ' Reply to the owner directly, and you don\'t need to get back to me.' );
+            ? array( 'Feel free to reply to the dog owner directly. There\'s no fee, commission, or strings attached.', 'We\'re testing this new match-making feature on Goody Doggy, and you\'re one of the first trainers to receive a dog owner request for training like this. You don\'t need to get back to me.' )
+            : array( 'Feel free to reply to the dog owner directly. There\'s no fee, commission, or strings attached. You don\'t need to get back to me.' );
 
         // The Featured Placement offer. It names the dog owner's city, never the dog owner, since a trainer sees the dog owner's first name only after opening the request.
         $city_name  = trim( (string) preg_replace( '/,[^,]*$/', '', (string) $d['city'] ) );

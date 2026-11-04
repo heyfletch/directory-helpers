@@ -22,8 +22,8 @@ class DH_OR_Admin {
     public function menu() {
         add_submenu_page(
             'directory-helpers',
-            'Owner Requests',
-            'Owner Requests',
+            'Dog Owner Requests',
+            'Dog Owner Requests',
             'manage_options',
             'dh-owner-requests',
             array( $this, 'render' )
@@ -56,7 +56,7 @@ class DH_OR_Admin {
         }
         $s = DH_OR_Settings::all();
 
-        echo '<div class="wrap"><h1>Owner Requests</h1>' . $notice; // phpcs:ignore WordPress.Security.EscapeOutput
+        echo '<div class="wrap"><h1>Dog Owner Requests</h1>' . $notice; // phpcs:ignore WordPress.Security.EscapeOutput
         $req_id = isset( $_GET['request'] ) ? (int) $_GET['request'] : 0;
         if ( $req_id ) {
             $this->render_request( $req_id );
@@ -75,8 +75,8 @@ class DH_OR_Admin {
         foreach ( array(
             'max_trainers'       => 'Trainers per request (max)',
             'trainer_weekly_cap' => 'Requests per trainer in 7 days (cap)',
-            'owner_email_day'    => 'Requests per owner email per day',
-            'owner_email_week'   => 'Requests per owner email per 7 days',
+            'owner_email_day'    => 'Requests per dog owner email per day',
+            'owner_email_week'   => 'Requests per dog owner email per 7 days',
             'ip_day'             => 'Requests per IP per day',
             'zip_day'            => 'Requests per ZIP per day (0 = no cap)',
         ) as $k => $label ) {
