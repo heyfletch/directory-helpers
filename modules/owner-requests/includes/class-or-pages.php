@@ -76,8 +76,7 @@ class DH_OR_Pages {
         if ( $is_post ) {
             $do = isset( $_POST['do'] ) ? sanitize_key( wp_unslash( $_POST['do'] ) ) : '';
             if ( DH_OR_Flow::route_outcome( $route, $do ) ) {
-                $labels = array( 'replied' => 'Marked as replied.', 'not_fit' => 'Marked as not a fit.', 'booked' => 'Marked as already booked.' );
-                $notice = '<p class="ok">' . esc_html( $labels[ $do ] ) . ' Thank you.</p>';
+                $notice = '<p class="ok">Saved: ' . esc_html( DH_OR_Flow::OUTCOMES[ $do ] ) . '. Thank you.</p>';
                 $route  = DH_OR_Store::route_by_token( $token );
             }
         }
@@ -105,16 +104,17 @@ class DH_OR_Pages {
             $body .= '<p>The dog owner mentioned a health problem. We suggested seeing a vet.</p>';
         }
 
-        $body .= '<h2>Reach the dog owner</h2><div class="contact"><p><strong>' . esc_html( $request->owner_first_name ) . '</strong></p>'
+        $body .= '<h2>Reach the dog owner</h2><p>The dog owner requested help and is expecting outreach from up to 3 relevant trainers listed on Goody Doggy.</p><div class="contact"><p><strong>' . esc_html( $request->owner_first_name ) . '</strong></p>'
             . '<p>Email: <a href="mailto:' . esc_attr( $request->owner_email ) . '">' . esc_html( $request->owner_email ) . '</a></p>'
             . ( $request->owner_phone ? '<p>Phone: ' . esc_html( $request->owner_phone ) . '</p>' : '' ) . '</div>';
 
-        $body .= '<h2>After you reply</h2><form method="post" class="actions">'
-            . '<button name="do" value="replied">I replied</button> <button name="do" value="not_fit" class="alt">Not a fit</button> <button name="do" value="booked" class="alt">Already booked</button></form>';
-        if ( ! empty( $route->outcome ) ) {
-            $body .= '<p class="small">Last answer: ' . esc_html( str_replace( '_', ' ', $route->outcome ) ) . '.</p>';
+        $body .= '<h2>After you reply</h2><form method="post" class="actions">';
+        foreach ( DH_OR_Flow::OUTCOMES as $value => $label ) {
+            $on    = ( (string) $route->outcome === $value );
+            $body .= '<button name="do" value="' . esc_attr( $value ) . '" class="' . ( $on ? 'on' : 'alt' ) . '" aria-pressed="' . ( $on ? 'true' : 'false' ) . '">' . esc_html( $label ) . '</button>';
         }
-        $body .= '<p class="small"><a href="' . esc_url( self::url( 'optout', $token ) ) . '">Stop requests like this</a></p>';
+        $body .= '</form>';
+        $body .= '<p class="small"><a href="' . esc_url( self::url( 'optout', $token ) ) . '">Unsubscribe from these dog training requests</a></p>';
         return $this->shell( 'Dog training request', $body );
     }
 
@@ -130,7 +130,7 @@ class DH_OR_Pages {
             DH_OR_Flow::route_optout( $route );
             return $this->shell( 'Request stopped', '<p>Done. We will not send you dog owner requests again.</p>' );
         }
-        return $this->shell( 'Stop requests like this', '<p>Press the button and we will not send you dog owner requests again.</p><form method="post"><button>Stop requests</button></form>' );
+        return $this->shell( 'Unsubscribe from these dog training requests', '<p>Press the button and we will not send you dog owner requests again.</p><form method="post"><button>Unsubscribe</button></form>' );
     }
 
     /* ---------- owner confirm ---------- */
@@ -179,7 +179,7 @@ class DH_OR_Pages {
             . 'blockquote{margin:12px 0;padding:10px 16px;border-left:4px solid #ffd64f;background:#f4f7fa}'
             . '.facts{padding-left:20px}.contact{background:#ebf7fe;border-radius:10px;padding:4px 16px}'
             . 'button{font:inherit;font-weight:700;background:#0572bd;color:#fff;border:0;border-radius:999px;padding:12px 22px;cursor:pointer}'
-            . 'button.alt{background:#fff;color:#0572bd;border:2px solid #0572bd}.small{font-size:14px;color:#5a6a7b}.ok{color:#0b7545;font-weight:700}'
+            . 'button.alt{background:#fff;color:#0572bd;border:2px solid #0572bd}button.on{border:2px solid #0572bd}.actions{display:flex;flex-wrap:wrap;gap:10px}.small{font-size:14px;color:#5a6a7b}.ok{color:#0b7545;font-weight:700}'
             . '</style></head><body><div class="top"><a href="' . $home . '">Goody Doggy</a></div><main><div class="card"><h1>' . esc_html( $title ) . '</h1>' . $body . '</div></main></body></html>';
     }
 }

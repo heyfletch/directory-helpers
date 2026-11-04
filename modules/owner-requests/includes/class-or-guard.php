@@ -55,7 +55,7 @@ class DH_OR_Guard {
             }
         }
         if ( $optouts['sent'] >= self::WINDOW && $optouts['optouts'] / $optouts['sent'] > self::OPTOUT_MAX ) {
-            $reasons[] = sprintf( '%d of the last %d trainers who got a request clicked Stop requests like this', $optouts['optouts'], $optouts['sent'] );
+            $reasons[] = sprintf( '%d of the last %d trainers who got a request clicked Unsubscribe from these dog training requests', $optouts['optouts'], $optouts['sent'] );
         }
 
         $already = in_array( 'A', array_map( 'strtoupper', (array) DH_OR_Settings::get( 'paused_lanes' ) ), true );

@@ -361,9 +361,17 @@ class DH_OR_Flow {
         }
     }
 
-    /** Trainer pressed I replied, Not a fit or Already booked. */
+    /** What a trainer can report after replying, in button order. */
+    const OUTCOMES = array(
+        'replied'     => 'I contacted the dog owner',
+        'booked'      => 'Booked as a client',
+        'no_response' => 'The dog owner didn\'t reply',
+        'not_fit'     => 'Not a good fit',
+    );
+
+    /** Trainer pressed one of the OUTCOMES buttons on the request page. */
     public static function route_outcome( $route, $outcome ) {
-        if ( ! in_array( $outcome, array( 'replied', 'not_fit', 'booked' ), true ) ) {
+        if ( ! isset( self::OUTCOMES[ $outcome ] ) ) {
             return false;
         }
         $now    = DH_OR_Store::now();

@@ -391,7 +391,7 @@ $repeat_msg = DH_OR_Messages::trainer_notice( array(
 ) );
 check( 'repeat request subject', $repeat_msg['subject'], 'Another dog owner near Freeport, IL is looking for a trainer' );
 check( 'repeat request skips the introduction', strpos( $repeat_msg['text'], "I'm Joe" ), false );
-check_true( 'repeat request keeps the opt-out', false !== strpos( $repeat_msg['text'], 'Stop requests like this: o' ) );
+check_true( 'repeat request keeps the opt-out', false !== strpos( $repeat_msg['text'], 'Unsubscribe from these dog training requests: o' ) );
 check_true( 'trainer text has the open link', false !== strpos( $trainer_msg['text'], 'https://example.test/gd-request/trainer/abc/' ) );
 check_true( 'trainer html has the Read and reply button', false !== strpos( $trainer_msg['html'], 'Read and reply' ) );
 check_true( 'trainer text has the opt-out link', false !== strpos( $trainer_msg['text'], '/gd-request/optout/abc/' ) );
@@ -468,10 +468,13 @@ $total_msg = DH_OR_Messages::trainer_notice( array(
     'text' => 'Pulls on the leash.', 'specialties' => array(), 'dog_age' => 'adult', 'format' => 'any', 'flags' => array(), 'notified_count' => 1,
     'open_url' => 'u', 'optout_url' => 'o', 'postal' => 'p', 'first' => false, 'year_count' => 4,
 ) );
-check_true( 'later email shows the running total', false !== strpos( $total_msg['text'], 'Goody Doggy has sent you 4 requests this year.' ) && false !== strpos( $total_msg['html'], 'Goody Doggy has sent you 4 requests this year.' ) );
-check_true( 'first email has no running total', false === strpos( $trainer_msg['text'], 'requests this year' ) );
+check_true( 'later email shows the running total', false !== strpos( $total_msg['text'], 'Goody Doggy has sent you 4 leads for dog training clients this year.' ) && false !== strpos( $total_msg['html'], 'Goody Doggy has sent you 4 leads for dog training clients this year.' ) );
+check_true( 'first email has no running total', false === strpos( $trainer_msg['text'], 'clients this year' ) );
 check_true( 'first email has Joe\'s photo by his name', false !== strpos( $trainer_msg['html'], 'email-joe.jpg' ) );
-check_true( 'later email has no photo', false === strpos( $total_msg['html'], 'email-joe.jpg' ) );
+check_true( 'later email signature has the photo', false !== strpos( $total_msg['html'], 'email-joe.jpg' ) );
+check_true( 'unsubscribe label in the footer', false !== strpos( $total_msg['html'], 'Unsubscribe from these dog training requests</a>' ) && false === strpos( $total_msg['html'], 'Stop requests like this' ) );
+require_once $inc . 'class-or-flow.php';
+check( 'outcome buttons in order', array_values( DH_OR_Flow::OUTCOMES ), array( 'I contacted the dog owner', 'Booked as a client', 'The dog owner didn\'t reply', 'Not a good fit' ) );
 check_true( 'every email has the Questions? Email Joe link', false !== strpos( $trainer_msg['html'], 'mailto:joe@goodydoggy.com' ) && false !== strpos( $total_msg['html'], 'mailto:joe@goodydoggy.com' ) && false !== strpos( $total_msg['text'], 'Questions? Email Joe: joe@goodydoggy.com' ) );
 check_true( 'offer button carries the tracking tag', false !== strpos( $trainer_msg['html'], 'featured-checkout/?utm_source=request-email&amp;utm_medium=email&amp;utm_campaign=learning-mode' ) && false !== strpos( $trainer_msg['text'], 'featured-checkout/?utm_source=request-email&utm_medium=email&utm_campaign=learning-mode' ) );
 check_true( 'footer names the requests page by its title', false !== strpos( $trainer_msg['html'], 'How dog owner requests for trainers work' ) );
