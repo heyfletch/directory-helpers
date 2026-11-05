@@ -105,6 +105,15 @@ class DH_OR_Messages {
         return implode( ', ', $out );
     }
 
+    /** "(301) 821-2288" from a US number in any format; '' when it is not 10 digits. */
+    public static function format_phone( $raw ) {
+        $d = preg_replace( '/\D/', '', (string) $raw );
+        if ( 11 === strlen( $d ) && '1' === $d[0] ) {
+            $d = substr( $d, 1 );
+        }
+        return 10 === strlen( $d ) ? '(' . substr( $d, 0, 3 ) . ') ' . substr( $d, 3, 3 ) . '-' . substr( $d, 6 ) : '';
+    }
+
     /** Where the email logo lives (a PNG, since many inboxes block SVG). */
     public static function logo_url() {
         $base = defined( 'DIRECTORY_HELPERS_URL' ) ? DIRECTORY_HELPERS_URL : 'https://goodydoggy.com/wp-content/plugins/directory-helpers/';
@@ -324,7 +333,8 @@ class DH_OR_Messages {
             $text    = 'Hi ' . $d['first_name'] . ",\n\n";
             $text   .= 'We sent your request to ' . self::list_intro( $d['trainers'], $d['zip'] ) . "\n";
             foreach ( $d['trainers'] as $t ) {
-                $text .= '- ' . $t['name'] . ( $t['city'] ? ' (' . $t['city'] . ')' : '' ) . self::item_tag( $t ) . ': ' . $t['url'] . "\n";
+                $ph    = self::format_phone( isset( $t['phone'] ) ? $t['phone'] : '' );
+                $text .= '- ' . $t['name'] . ( $t['city'] ? ' (' . $t['city'] . ')' : '' ) . self::item_tag( $t ) . ( $ph ? ', ' . $ph : '' ) . ': ' . $t['url'] . "\n";
             }
             $text .= "\nA trainer who opens your request sees your first name, your email, and your phone if you gave one. They reply to you directly.\n";
             if ( $vet ) {
@@ -335,7 +345,9 @@ class DH_OR_Messages {
             $body  = '<p style="margin:0 0 12px 0;">Hi ' . self::h( $d['first_name'] ) . ',</p>';
             $body .= '<p style="margin:0 0 8px 0;">We sent your request to ' . self::h( self::list_intro( $d['trainers'], $d['zip'] ) ) . '</p><ul style="margin:0 0 12px 0;padding-left:20px;">';
             foreach ( $d['trainers'] as $t ) {
-                $body .= '<li><a href="' . self::h( $t['url'] ) . '" style="color:#0572bd;">' . self::h( $t['name'] ) . '</a>' . ( $t['city'] ? ' (' . self::h( $t['city'] ) . ')' : '' ) . self::h( self::item_tag( $t ) ) . '</li>';
+                $ph    = self::format_phone( isset( $t['phone'] ) ? $t['phone'] : '' );
+                $body .= '<li><a href="' . self::h( $t['url'] ) . '" style="color:#0572bd;">' . self::h( $t['name'] ) . '</a>' . ( $t['city'] ? ' (' . self::h( $t['city'] ) . ')' : '' ) . self::h( self::item_tag( $t ) )
+                    . ( $ph ? ', <a href="tel:+1' . self::h( preg_replace( '/\D/', '', $ph ) ) . '" style="color:#0572bd;">' . self::h( $ph ) . '</a>' : '' ) . '</li>';
             }
             $body .= '</ul><p style="margin:0 0 12px 0;">A trainer who opens your request sees your first name, your email, and your phone if you gave one. They reply to you directly.</p>';
             if ( $vet ) {

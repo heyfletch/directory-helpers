@@ -535,5 +535,13 @@ check( 'weekly email lines', $wm['text'], "- This week: 2 dog owner requests. La
 $wm2 = DH_OR_Report::message( DH_OR_Report::tally( array(), $now ), '2026-12-21', 'u' );
 check( 'weekly email after day 45 with no requests', $wm2['text'], "- This week: 0 dog owner requests. Last 30 days: 0.\n\nSee every city: u\n" );
 
+/* ---------------------------------------------------------------- receipt phone numbers */
+check( 'phone with +1 and dashes', DH_OR_Messages::format_phone( '+1301-821-2288' ), '(301) 821-2288' );
+check( 'phone plain ten digits', DH_OR_Messages::format_phone( '3018212288' ), '(301) 821-2288' );
+check( 'phone too short is dropped', DH_OR_Messages::format_phone( '821-2288' ), '' );
+$ph_msg = DH_OR_Messages::owner_receipt( array( 'first_name' => 'Jo', 'zip' => '20814', 'text' => 'x', 'trainers' => array( array( 'name' => 'Rollins', 'city' => 'Bethesda, Maryland', 'url' => 'https://example.test/p/r/', 'phone' => '+1301-821-2288' ), array( 'name' => 'No Phone', 'city' => '', 'url' => 'https://example.test/p/n/', 'phone' => '' ) ), 'flags' => array(), 'delete_url' => 'https://example.test/d/', 'fallback_url' => '', 'postal' => 'P' ) );
+check_true( 'receipt lists the trainer phone', false !== strpos( $ph_msg['text'], '- Rollins (Bethesda, Maryland), (301) 821-2288: https://example.test/p/r/' ) && false !== strpos( $ph_msg['html'], 'href="tel:+13018212288"' ) );
+check_true( 'receipt without a phone stays the same', false !== strpos( $ph_msg['text'], '- No Phone: https://example.test/p/n/' ) );
+
 echo "\n{$tests} checks, {$failures} failed\n";
 exit( $failures ? 1 : 0 );

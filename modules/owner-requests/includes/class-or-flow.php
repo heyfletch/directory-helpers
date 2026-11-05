@@ -257,6 +257,7 @@ class DH_OR_Flow {
                     'name' => DH_OR_Candidates::trainer_name( $r['profile_id'] ),
                     'city' => $r['city'],
                     'url'  => get_permalink( $r['profile_id'] ),
+                    'phone' => (string) get_post_meta( $r['profile_id'], 'phone', true ),
                     'by_video' => ! empty( $r['by_video'] ),
                     'far'      => ! empty( $r['is_viewed'] ) && ( ! empty( $r['unplaced'] ) || $r['distance'] > max( $radii ) ),
                 );
