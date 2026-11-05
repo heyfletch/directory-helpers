@@ -71,14 +71,14 @@ class DH_OR_Guard {
             return $result;
         }
 
-        DH_OR_Settings::update( array( 'paused_lanes' => array_values( array_unique( array_merge( (array) DH_OR_Settings::get( 'paused_lanes' ), array( 'A' ) ) ) ) ) );
+        DH_OR_Settings::update( array( 'paused_lanes' => array_values( array_unique( array_merge( (array) DH_OR_Settings::get( 'paused_lanes' ), array( 'A', 'B' ) ) ) ) ) );
         DH_OR_Store::add_event( 0, 0, 'auto_pause', array( 'reasons' => $reasons ) );
         update_option( self::STATE_OPTION, array( 'paused_at' => DH_OR_Store::now(), 'reasons' => $reasons ), false );
         wp_mail(
             self::ALERT_TO,
             'Goody Doggy paused trainer request emails',
             "Goody Doggy stopped sending dog owner requests to trainers because:\n\n- " . implode( "\n- ", $reasons )
-            . "\n\nNothing goes to trainers until you resume. Resume in WordPress, Directory Helpers, Dog Owner Requests, or ask Claude to run wp dh-requests resume --lane=A."
+            . "\n\nNothing goes to trainers until you resume. Resume in WordPress, Directory Helpers, Dog Owner Requests, or ask Claude to run wp dh-requests resume."
         );
         $result['paused'] = true;
         return $result;

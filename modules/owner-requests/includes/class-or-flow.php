@@ -205,7 +205,7 @@ class DH_OR_Flow {
         $notified  = array();
         $reachable = 0;
         foreach ( $route_rows as $rr ) {
-            if ( DH_OR_Candidates::trainer_email( $rr['route']['profile_id'] ) ) {
+            if ( DH_OR_Candidates::send_address( $rr['route']['profile_id'], $rr['route']['lane'] ) ) {
                 $reachable++;
             }
         }
@@ -213,12 +213,12 @@ class DH_OR_Flow {
         $test_inbox = DH_OR_Settings::is_test_sender( $request->owner_email ) ? (string) DH_OR_Settings::get( 'test_inbox' ) : '';
         foreach ( $route_rows as $rr ) {
             $r  = $rr['route'];
-            $to = DH_OR_Candidates::trainer_email( $r['profile_id'] );
+            $to = DH_OR_Candidates::send_address( $r['profile_id'], $r['lane'] );
             if ( '' !== $to && '' !== $test_inbox ) {
                 $to = $test_inbox;
             }
             if ( '' === $to ) {
-                DH_OR_Store::update_route( $rr['id'], array( 'status' => 'skipped', 'ledger_state' => 'none', 'ledger_note' => 'no lane A email' ) );
+                DH_OR_Store::update_route( $rr['id'], array( 'status' => 'skipped', 'ledger_state' => 'none', 'ledger_note' => 'no email' ) );
                 continue;
             }
             $msg = DH_OR_Messages::trainer_notice( array(
@@ -413,7 +413,7 @@ class DH_OR_Flow {
             if ( ! in_array( $route->status, array( 'sent', 'dry_run' ), true ) ) {
                 continue;
             }
-            $to = DH_OR_Candidates::trainer_email( $route->profile_id );
+            $to = DH_OR_Candidates::send_address( $route->profile_id, $route->lane );
             if ( $to ) {
                 $msg = DH_OR_Messages::withdrawn_trainer( array( 'trainer_name' => DH_OR_Candidates::trainer_name( $route->profile_id ), 'postal' => $postal ) );
                 DH_OR_Mailer::send( 'trainer', $to, $msg, array( 'request_id' => (int) $request->id, 'route_id' => (int) $route->id, 'profile_id' => (int) $route->profile_id, 'kind' => 'withdrawn_trainer' ) );

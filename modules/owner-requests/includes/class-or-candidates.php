@@ -8,11 +8,13 @@
  *   A  the trainer gave their own email (ACF contact_email)
  *   B  an email in the profile's contact_info data that nobody opted in
  *   C  a contact page only
- * Only lane A can be sent to in this build; B and C are loaded so the
- * request log can say how many more trainers the other lanes would add.
+ * Lanes A and B can be sent to in this build; C is loaded so the request log
+ * can say how many more trainers it would add. A profile is lane B only when
+ * one of its contact_info emails looks like the trainer's own and its mail
+ * server answers.
  *
- * Emails are never put in the candidate array; trainer_email() reads the lane A
- * address at send time.
+ * Emails are never put in the candidate array; send_address() reads the
+ * address for a route's lane at send time.
  *
  * @package Directory_Helpers
  * @subpackage Owner_Requests
@@ -25,6 +27,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 class DH_OR_Candidates {
 
     const NICHE = 'dog-trainer';
+
+    /** Free mailbox domains: no mail server lookup needed. */
+    const FREE_MAIL = array( 'gmail.com', 'googlemail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'msn.com', 'live.com', 'comcast.net', 'att.net', 'sbcglobal.net', 'verizon.net', 'ymail.com', 'rocketmail.com', 'protonmail.com', 'proton.me', 'bellsouth.net', 'cox.net', 'charter.net', 'earthlink.net', 'gmx.com', 'mail.com', 'aim.com' );
+
+    /** Words in a business name too common to tie an address to one trainer. */
+    const NAME_STOP = array( 'dogs', 'training', 'trainer', 'trainers', 'train', 'canine', 'canines', 'puppy', 'puppies', 'pups', 'academy', 'school', 'center', 'centre', 'services', 'service', 'behavior', 'behaviour', 'obedience', 'pets', 'club', 'company', 'professional', 'family', 'home', 'house', 'kennel', 'kennels', 'with', 'your', 'llc' );
+
+    /** Placeholder and platform domains that never belong to a trainer. */
+    const JUNK_DOMAINS = array( 'example.com', 'example.org', 'example.net', 'mysite.com', 'domain.com', 'yourdomain.com', 'sentry.io', 'wixpress.com', 'zendesk.com', 'squarespace.com', 'godaddy.com', 'wix.com' );
 
     /** Certifications that count as a behavior credential for aggression and medical requests. */
     const BEHAVIOR_CERTS = array( 'CBCC-KA', 'IAABC-CDBC' );
@@ -108,7 +119,7 @@ class DH_OR_Candidates {
             $featured = (int) get_post_meta( $id, 'featured', true ) > 0;
             if ( '' !== self::trainer_email( $id ) ) {
                 $lane = 'A';
-            } elseif ( isset( $b_ids[ $id ] ) ) {
+            } elseif ( isset( $b_ids[ $id ] ) && '' !== self::lane_b_email( $id ) ) {
                 $lane = 'B';
             } elseif ( '' !== trim( (string) get_post_meta( $id, 'contact_url', true ) ) ) {
                 $lane = 'C';
@@ -206,6 +217,128 @@ class DH_OR_Candidates {
             $ce = trim( (string) get_post_meta( (int) $profile_id, 'featured_billing_email', true ) );
         }
         return ( '' !== $ce && is_email( $ce ) ) ? strtolower( $ce ) : '';
+    }
+
+    /** The address a message on this lane goes to, or ''. */
+    public static function send_address( $profile_id, $lane ) {
+        if ( 'A' === $lane ) {
+            return self::trainer_email( $profile_id );
+        }
+        if ( 'B' === $lane ) {
+            return self::lane_b_email( $profile_id );
+        }
+        return '';
+    }
+
+    /**
+     * The address a lane B message goes to: the best contact_info email that looks
+     * like the trainer's own, or '' when none does or its mail server is not found.
+     */
+    public static function lane_b_email( $profile_id ) {
+        $id    = (int) $profile_id;
+        $items = array();
+        $n     = (int) get_post_meta( $id, 'contact_info', true );
+        for ( $i = 0; $i < $n; $i++ ) {
+            $items[] = array(
+                'value'  => (string) get_post_meta( $id, 'contact_info_' . $i . '_value', true ),
+                'source' => (string) get_post_meta( $id, 'contact_info_' . $i . '_source', true ),
+            );
+        }
+        $host  = (string) wp_parse_url( (string) get_post_meta( $id, 'url', true ), PHP_URL_HOST );
+        $email = self::pick_lane_b_email( $items, $host, self::trainer_name( $id ) );
+        if ( '' === $email ) {
+            return '';
+        }
+        $domain = substr( strrchr( $email, '@' ), 1 );
+        if ( ! in_array( $domain, self::FREE_MAIL, true ) && ! DH_OR_Gates::domain_can_receive( $domain ) ) {
+            return '';
+        }
+        return $email;
+    }
+
+    /**
+     * Picks one email from contact_info rows. Each row's value and source can be
+     * comma-separated lists in step. Best first: an address on the trainer's own
+     * website domain, then one listed on the trainer's Google Business profile, then
+     * one whose name part carries a distinctive word of the business name or website.
+     * Anything else is skipped.
+     *
+     * @param array  $items     Each: value, source.
+     * @param string $site_host Host of the trainer's website, or ''.
+     * @param string $title     Business name.
+     */
+    public static function pick_lane_b_email( array $items, $site_host, $title ) {
+        $site  = preg_replace( '/^www\./', '', strtolower( trim( (string) $site_host ) ) );
+        $words = array();
+        $parts = preg_split( '/[^a-z0-9]+/', strtolower( (string) $title ) );
+        if ( '' !== $site ) {
+            $parts[] = preg_replace( '/[^a-z0-9]/', '', strtok( $site, '.' ) );
+        }
+        foreach ( $parts as $w ) {
+            if ( strlen( $w ) >= 4 && ! in_array( $w, self::NAME_STOP, true ) ) {
+                $words[] = $w;
+            }
+        }
+        $best = '';
+        $rank = 4;
+        foreach ( $items as $it ) {
+            $vals = array_map( 'trim', explode( ',', (string) ( isset( $it['value'] ) ? $it['value'] : '' ) ) );
+            $srcs = array_map( 'trim', explode( ',', (string) ( isset( $it['source'] ) ? $it['source'] : '' ) ) );
+            foreach ( $vals as $k => $v ) {
+                $e = strtolower( $v );
+                if ( ! filter_var( $e, FILTER_VALIDATE_EMAIL ) ) {
+                    continue;
+                }
+                list( $local, $domain ) = explode( '@', $e, 2 );
+                if ( self::junk_email( $local, $domain ) ) {
+                    continue;
+                }
+                $src = isset( $srcs[ $k ] ) ? $srcs[ $k ] : ( 1 === count( $srcs ) ? $srcs[0] : '' );
+                if ( '' !== $site && ( $domain === $site || self::ends_with( $site, '.' . $domain ) || self::ends_with( $domain, '.' . $site ) ) ) {
+                    $r = 1;
+                } elseif ( 'google_business' === $src ) {
+                    $r = 2;
+                } elseif ( self::names_match( $local . ( in_array( $domain, self::FREE_MAIL, true ) ? '' : $domain ), $words ) ) {
+                    $r = 3;
+                } else {
+                    continue;
+                }
+                if ( $r < $rank ) {
+                    $rank = $r;
+                    $best = $e;
+                }
+            }
+        }
+        return $best;
+    }
+
+    private static function junk_email( $local, $domain ) {
+        if ( preg_match( '/^(no-?reply|no_reply|do-?not-?reply|mailer-daemon|postmaster|abuse)$/', $local ) ) {
+            return true;
+        }
+        if ( preg_match( '/\.(png|jpe?g|gif|svg|webp)$/', $domain ) ) {
+            return true;
+        }
+        foreach ( self::JUNK_DOMAINS as $bad ) {
+            if ( $domain === $bad || self::ends_with( $domain, '.' . $bad ) ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function names_match( $haystack, array $words ) {
+        $h = preg_replace( '/[^a-z0-9]/', '', $haystack );
+        foreach ( $words as $w ) {
+            if ( false !== strpos( $h, $w ) ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function ends_with( $s, $tail ) {
+        return '' !== $tail && strlen( $s ) >= strlen( $tail ) && substr( $s, -strlen( $tail ) ) === $tail;
     }
 
     /** Who a message to this trainer is addressed to. */

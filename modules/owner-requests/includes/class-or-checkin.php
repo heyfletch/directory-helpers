@@ -66,7 +66,7 @@ class DH_OR_Checkin {
                 $out[] = array( 'route' => (int) $r->id, 'trainer' => $name, 'to' => '', 'result' => 'unsubscribed, skipped' );
                 continue;
             }
-            $to = 'test' === $r->status ? (string) DH_OR_Settings::get( 'test_inbox' ) : DH_OR_Candidates::trainer_email( $r->profile_id );
+            $to = 'test' === $r->status ? (string) DH_OR_Settings::get( 'test_inbox' ) : DH_OR_Candidates::send_address( $r->profile_id, $r->lane );
             if ( '' === $to ) {
                 $out[] = array( 'route' => (int) $r->id, 'trainer' => $name, 'to' => '', 'result' => 'no email, skipped' );
                 continue;

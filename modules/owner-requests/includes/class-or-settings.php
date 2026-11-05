@@ -8,8 +8,9 @@
  *  - dry_run (on): every outbound email is written to the events table as the
  *    message it would have been, and nothing is sent.
  *
- * Lanes: only lane A (trainers who gave their own email) exists in this build.
- * Lanes B and C have no sender code, so no setting can switch them on.
+ * Lanes: A (trainers who gave their own email) and B (an email in the profile
+ * data that looks like the trainer's own) have sender code. Lane C has none,
+ * so no setting can switch it on.
  *
  * @package Directory_Helpers
  * @subpackage Owner_Requests
@@ -24,7 +25,7 @@ class DH_OR_Settings {
     const OPTION = 'dh_or_settings';
 
     /** Lanes that have sending code in this build. */
-    const LANES_BUILT = array( 'A' );
+    const LANES_BUILT = array( 'A', 'B' );
 
     public static function defaults() {
         return array(

@@ -484,5 +484,19 @@ check_true( 'every email has the Questions? Email Joe link', false !== strpos( $
 check_true( 'offer button carries the tracking tag', false !== strpos( $trainer_msg['html'], 'featured-checkout/?utm_source=request-email&amp;utm_medium=email&amp;utm_campaign=learning-mode' ) && false !== strpos( $trainer_msg['text'], 'featured-checkout/?utm_source=request-email&utm_medium=email&utm_campaign=learning-mode' ) );
 check_true( 'footer names the requests page by its title', false !== strpos( $trainer_msg['html'], 'How dog owner requests for trainers work' ) );
 
+/* ---------------------------------------------------------------- lane B address */
+require_once $inc . 'class-or-candidates.php';
+$pick = function ( $value, $source, $host, $title ) {
+    return DH_OR_Candidates::pick_lane_b_email( array( array( 'value' => $value, 'source' => $source ) ), $host, $title );
+};
+check( 'lane B: own website domain wins', $pick( 'Member@Kennelclub.org,info@siriuspup.com', 'backlinks,backlinks', 'www.siriuspup.com', 'Sirius Puppy & Dog Training' ), 'info@siriuspup.com' );
+check( 'lane B: Google Business address kept', $pick( 'pat@somewhere.net', 'google_business', 'patdogs.com', 'Pat Dogs' ), 'pat@somewhere.net' );
+check( 'lane B: source list in step with values', $pick( '+15550100,owner@other.org,helper@third.org', 'backlinks,google_business,backlinks', '', 'Zed K9' ), 'owner@other.org' );
+check( 'lane B: free mailbox with the business name kept', $pick( 'doridogtraining@gmail.com', 'backlinks', '', 'Dori Dog Training' ), 'doridogtraining@gmail.com' );
+check( 'lane B: free mailbox matching the website name kept', $pick( 'wak9training@gmail.com', 'backlinks', 'wak9training.com', 'WAK-9 Training' ), 'wak9training@gmail.com' );
+check( 'lane B: unrelated address found on another site skipped', $pick( 'customerservice@lawcommerce.com', 'backlinks', 'eliteprodogtraining.com', 'Elite Professional Dog Training' ), '' );
+check( 'lane B: placeholder and no-reply skipped', $pick( 'info@mysite.com,no_reply@example.com,noreply@doggoneright.net', 'backlinks,backlinks,backlinks', 'doggoneright.net', 'Dog Gone Right' ), '' );
+check( 'lane B: generic name words never match', $pick( 'dogtraining@gmail.com', 'backlinks', '', 'Best Dog Training' ), '' );
+
 echo "\n{$tests} checks, {$failures} failed\n";
 exit( $failures ? 1 : 0 );
