@@ -173,13 +173,13 @@ class DH_OR_Pages {
         return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             . '<meta name="robots" content="noindex,nofollow"><title>' . esc_html( $title ) . ' - Goody Doggy</title><style>'
             . 'body{margin:0;background:#f4f7fa;color:#1b2b3a;font:16px/1.5 Lexend,Arial,sans-serif}'
-            . '.top{background:#0572bd;padding:14px 20px}.top a{color:#fff;font-weight:700;text-decoration:none}'
+            . '.top{background:#0572bd;padding:14px 20px}.top a{display:inline-block}.top img{display:block;width:120px;height:auto;border:0}'
             . 'main{max-width:600px;margin:24px auto;padding:0 16px}.card{background:#fff;border:2px solid #b38900;border-radius:16px;padding:24px}'
             . 'h1{color:#034c7c;font-size:28px;line-height:1.15;margin:0 0 12px}h2{color:#034c7c;font-size:20px;margin:24px 0 8px}'
             . 'blockquote{margin:12px 0;padding:10px 16px;border-left:4px solid #ffd64f;background:#f4f7fa}'
-            . '.facts{padding-left:20px}.contact{background:#ebf7fe;border-radius:10px;padding:4px 16px}'
+            . '.facts{padding-left:20px}.contact{background:#ebf7fe;border-radius:10px;padding:16px}.contact p:first-child{margin-top:0}.contact p:last-child{margin-bottom:0}'
             . 'button{font:inherit;font-weight:700;background:#0572bd;color:#fff;border:0;border-radius:999px;padding:12px 22px;cursor:pointer}'
-            . 'button.alt{background:#fff;color:#0572bd;border:2px solid #0572bd}button.on{border:2px solid #0572bd}.actions{display:flex;flex-wrap:wrap;gap:10px}.small{font-size:14px;color:#5a6a7b}.ok{color:#0b7545;font-weight:700}'
-            . '</style></head><body><div class="top"><a href="' . $home . '">Goody Doggy</a></div><main><div class="card"><h1>' . esc_html( $title ) . '</h1>' . $body . '</div></main></body></html>';
+            . 'button.alt{background:#fff;color:#0572bd;border:2px solid #0572bd}button.on{border:2px solid #0572bd}.actions{display:flex;flex-wrap:wrap;gap:10px}.small{font-size:14px;color:#5a6a7b}.actions+.small{margin-top:32px}.ok{color:#0b7545;font-weight:700}'
+            . '</style></head><body><div class="top"><a href="' . $home . '"><img src="' . esc_url( DH_OR_Messages::logo_url() ) . '" width="120" height="49" alt="Goody Doggy"></a></div><main><div class="card"><h1>' . esc_html( $title ) . '</h1>' . $body . '</div></main></body></html>';
     }
 }
