@@ -59,8 +59,10 @@ class DH_OR_Box {
         echo $this->render(); // phpcs:ignore WordPress.Security.EscapeOutput -- built from escaped parts.
     }
 
+    /** [dh_request_box heading="h1"] makes the box title the page heading. */
     public function shortcode( $atts = array() ) {
-        return $this->render();
+        $atts = shortcode_atts( array( 'heading' => 'h2' ), $atts, 'dh_request_box' );
+        return $this->render( 'h1' === $atts['heading'] ? 'h1' : 'h2' );
     }
 
     /** Page type the box is on: city, state, profile or other. */
@@ -81,7 +83,7 @@ class DH_OR_Box {
         return array( 'type' => $type, 'post_id' => $id );
     }
 
-    public function render() {
+    public function render( $heading = 'h2' ) {
         if ( self::$rendered ) {
             return '';
         }
@@ -116,7 +118,7 @@ class DH_OR_Box {
         $out  = '<section class="dh-rb" id="ask-trainers" data-dh-rb data-source-type="' . esc_attr( $ctx['type'] ) . '" data-source-post="' . (int) $ctx['post_id'] . '"'
             . ' data-viewed-profile="' . ( 'profile' === $ctx['type'] ? (int) $ctx['post_id'] : 0 ) . '">';
         $out .= '<div class="dh-rb__inner"><div class="dh-rb__card">';
-        $out .= '<div class="dh-rb__intro"><h2 class="dh-rb__title">' . esc_html( $title ) . '</h2>';
+        $out .= '<div class="dh-rb__intro"><' . $heading . ' class="dh-rb__title">' . esc_html( $title ) . '</' . $heading . '>';
         $out .= '<p class="dh-rb__lead">' . esc_html( $lead ) . '</p><p class="dh-rb__note">' . esc_html( $note ) . '</p></div>';
         $out .= '<div class="dh-rb__form">' . do_shortcode( '[fluentform id="' . $form_id . '"]' ) . '</div>';
         $out .= '</div></div></section>';
