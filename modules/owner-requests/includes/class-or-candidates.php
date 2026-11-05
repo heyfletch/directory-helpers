@@ -35,7 +35,7 @@ class DH_OR_Candidates {
     const NAME_STOP = array( 'dogs', 'training', 'trainer', 'trainers', 'train', 'canine', 'canines', 'puppy', 'puppies', 'pups', 'academy', 'school', 'center', 'centre', 'services', 'service', 'behavior', 'behaviour', 'obedience', 'pets', 'club', 'company', 'professional', 'family', 'home', 'house', 'kennel', 'kennels', 'with', 'your', 'llc' );
 
     /** Placeholder and platform domains that never belong to a trainer. */
-    const JUNK_DOMAINS = array( 'example.com', 'example.org', 'example.net', 'mysite.com', 'domain.com', 'yourdomain.com', 'sentry.io', 'wixpress.com', 'zendesk.com', 'squarespace.com', 'godaddy.com', 'wix.com' );
+    const JUNK_DOMAINS = array( 'example.com', 'example.org', 'example.net', 'mysite.com', 'domain.com', 'yourdomain.com', 'sentry.io', 'wixpress.com', 'zendesk.com', 'squarespace.com', 'godaddy.com', 'wix.com', 'gamil.com', 'gmial.com', 'gmai.com', 'gnail.com', 'gmal.com', 'yaho.com', 'yahooo.com', 'hotmial.com', 'hotmai.com', 'outlok.com' );
 
     /** Certifications that count as a behavior credential for aggression and medical requests. */
     const BEHAVIOR_CERTS = array( 'CBCC-KA', 'IAABC-CDBC' );

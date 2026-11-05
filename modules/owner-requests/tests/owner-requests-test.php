@@ -496,6 +496,7 @@ check( 'lane B: free mailbox with the business name kept', $pick( 'doridogtraini
 check( 'lane B: free mailbox matching the website name kept', $pick( 'wak9training@gmail.com', 'backlinks', 'wak9training.com', 'WAK-9 Training' ), 'wak9training@gmail.com' );
 check( 'lane B: unrelated address found on another site skipped', $pick( 'customerservice@lawcommerce.com', 'backlinks', 'eliteprodogtraining.com', 'Elite Professional Dog Training' ), '' );
 check( 'lane B: placeholder and no-reply skipped', $pick( 'info@mysite.com,no_reply@example.com,noreply@doggoneright.net', 'backlinks,backlinks,backlinks', 'doggoneright.net', 'Dog Gone Right' ), '' );
+check( 'lane B: misspelled mailbox domain skipped', $pick( 'htcdogsports@gamil.com', 'backlinks', 'htcdogsports.com', 'HTC Dog Sports' ), '' );
 check( 'lane B: generic name words never match', $pick( 'dogtraining@gmail.com', 'backlinks', '', 'Best Dog Training' ), '' );
 
 echo "\n{$tests} checks, {$failures} failed\n";
