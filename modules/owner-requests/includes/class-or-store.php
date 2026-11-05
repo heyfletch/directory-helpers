@@ -21,6 +21,7 @@ class DH_OR_Store {
         'ip_hash'          => '',
         'consent_text'     => '',
         'owner_token_hash' => '',
+        'hire_token_hash'  => '',
     );
 
     public static function now() {
@@ -77,6 +78,15 @@ class DH_OR_Store {
         }
         $t = DH_OR_Schema::table( 'requests' );
         return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$t} WHERE owner_token_hash = %s", self::hash_token( $raw ) ) );
+    }
+
+    public static function request_by_hire_token( $raw ) {
+        global $wpdb;
+        if ( ! self::valid_token( $raw ) ) {
+            return null;
+        }
+        $t = DH_OR_Schema::table( 'requests' );
+        return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$t} WHERE hire_token_hash = %s", self::hash_token( $raw ) ) );
     }
 
     /**

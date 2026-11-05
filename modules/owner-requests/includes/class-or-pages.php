@@ -6,6 +6,7 @@
  *   /gd-request/optout/<token>/   stop requests like this (also the one-click List-Unsubscribe target)
  *   /gd-request/confirm/<token>/  the owner confirms a held request
  *   /gd-request/delete/<token>/   the owner deletes their request
+ *   /gd-request/hired/<token>/    the owner says which trainer they hired, if any
  *
  * Every page is noindex and uncached. A GET only shows a page; the actions that
  * change something are POSTs, so a mail scanner that opens a link changes
@@ -34,7 +35,7 @@ class DH_OR_Pages {
 
     public function maybe_render() {
         $path = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH ) : '';
-        if ( ! preg_match( '#^/' . self::BASE . '/(trainer|optout|confirm|delete)/([a-f0-9]{32})/?$#', $path, $m ) ) {
+        if ( ! preg_match( '#^/' . self::BASE . '/(trainer|optout|confirm|delete|hired)/([a-f0-9]{32})/?$#', $path, $m ) ) {
             return;
         }
         if ( ! DH_OR_Settings::visitor_allowed() ) {
@@ -164,6 +165,39 @@ class DH_OR_Pages {
         }
         DH_OR_Flow::delete_by_owner( $token );
         return $this->shell( 'Request deleted', '<p>Your request is deleted.</p>' );
+    }
+
+    /* ---------- owner "Did you hire?" ---------- */
+
+    private function page_hired( $token, $is_post ) {
+        $request = DH_OR_Store::request_by_hire_token( $token );
+        if ( ! $request ) {
+            return $this->shell( 'Link not found', '<p>This link is not valid, or the request was deleted.</p>' );
+        }
+        $trainers = DH_OR_Flow::hire_trainers( $request );
+        $notice   = '';
+        if ( $is_post ) {
+            $pick = isset( $_POST['pick'] ) ? sanitize_key( wp_unslash( $_POST['pick'] ) ) : '';
+            if ( DH_OR_Flow::hire_answer( $request, $pick ) ) {
+                $notice  = '<p class="ok">Saved. Thank you, ' . esc_html( $request->owner_first_name ) . '.</p>';
+                $request = DH_OR_Store::get_request( $request->id );
+            }
+        }
+        $city  = DH_OR_Candidates::nearest_city_name( (float) $request->lat, (float) $request->lng );
+        $where = $city ? 'near ' . $city : 'near ZIP ' . $request->zip;
+
+        $current = 'trainer' === $request->hire_answer ? (string) (int) $request->hire_profile_id : (string) $request->hire_answer;
+        $body    = $notice . '<p>You asked for dog training help ' . esc_html( $where ) . '. Tap the answer that fits.</p><form method="post" class="actions">';
+        $options = array();
+        foreach ( $trainers as $id => $t ) {
+            $options[ (string) $id ] = $t['name'];
+        }
+        foreach ( $options + DH_OR_Flow::HIRE_OTHER as $value => $label ) {
+            $on    = ( $current === (string) $value );
+            $body .= '<button name="pick" value="' . esc_attr( $value ) . '" class="' . ( $on ? 'on' : 'alt' ) . '" aria-pressed="' . ( $on ? 'true' : 'false' ) . '">' . esc_html( $label ) . '</button>';
+        }
+        $body .= '</form>';
+        return $this->shell( 'Did you hire a dog trainer?', $body );
     }
 
     /* ---------- shell ---------- */

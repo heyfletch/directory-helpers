@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class DH_OR_Schema {
 
-    const DB_VERSION     = '4';
+    const DB_VERSION     = '5';
     const VERSION_OPTION = 'dh_or_db_version';
 
     public static function table( $name ) {
@@ -85,13 +85,19 @@ class DH_OR_Schema {
             thin_market tinyint(1) NOT NULL DEFAULT 0,
             other_lane_count smallint(5) unsigned NOT NULL DEFAULT 0,
             owner_token_hash char(64) NOT NULL DEFAULT '',
+            hire_token_hash char(64) NOT NULL DEFAULT '',
+            hire_ask_at datetime DEFAULT NULL,
+            hire_answer varchar(20) NOT NULL DEFAULT '',
+            hire_profile_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            hire_answer_at datetime DEFAULT NULL,
             PRIMARY KEY  (id),
             KEY created_at (created_at),
             KEY status (status),
             KEY owner_email (owner_email(100)),
             KEY ip_hash (ip_hash),
             KEY zip (zip),
-            KEY owner_token_hash (owner_token_hash)
+            KEY owner_token_hash (owner_token_hash),
+            KEY hire_token_hash (hire_token_hash)
         ) {$charset};" );
 
         dbDelta( "CREATE TABLE {$routes} (

@@ -230,6 +230,39 @@ class DH_OR_CLI {
     }
 
     /**
+     * Send the "Did you hire?" emails that are due (14 to 20 days after a request went to trainers).
+     * Sends even while the hire_ask switch is off, so Claude can run it on Joe's say-so.
+     *
+     * [--dry-run]
+     */
+    public function hire_ask( $args, $assoc ) {
+        $rows = DH_OR_Hire::send_due( isset( $assoc['dry-run'] ) );
+        foreach ( $rows as $r ) {
+            WP_CLI::log( 'request ' . $r['request'] . ' -> ' . $r['to'] . ': ' . $r['result'] );
+        }
+        WP_CLI::log( count( $rows ) . ' due' );
+    }
+
+    /**
+     * Dog owner requests by city: last 7 days, last 30 days, since the start, and the hire answers.
+     */
+    public function counts() {
+        WP_CLI::log( wp_json_encode( DH_OR_Report::tally( DH_OR_Report::items(), strtotime( DH_OR_Store::now() ) ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+    }
+
+    /**
+     * Email Joe the weekly count now.
+     *
+     * [--dry-run]
+     * : Print the email instead of sending it.
+     */
+    public function weekly_report( $args, $assoc ) {
+        $r = DH_OR_Report::send( isset( $assoc['dry-run'] ) );
+        WP_CLI::log( 'Subject: ' . $r['subject'] . "\n" . $r['text'] );
+        WP_CLI::log( 'result: ' . $r['result'] );
+    }
+
+    /**
      * Blank owner details older than the retention period, close unconfirmed holds after 7 days,
      * and clear dropped requests after 30 days.
      *

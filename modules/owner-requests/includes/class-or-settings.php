@@ -58,6 +58,8 @@ class DH_OR_Settings {
             // Joe's test address (Nov 4): its requests are marked test and every trainer email goes to test_inbox instead of the trainer.
             'test_senders'       => array( 'joefletcher@gmail.com' ),
             'test_inbox'         => 'joe@goodydoggy.com',
+            // The "Did you hire?" email to dog owners at day 14 stays off until Joe approves its wording.
+            'hire_ask'           => 0,
         );
     }
 

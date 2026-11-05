@@ -95,6 +95,17 @@ class DH_OR_Admin {
         echo $counts ? '' : 'None yet.';
         echo '</p>';
 
+        // By city.
+        $t = DH_OR_Report::tally( DH_OR_Report::items(), strtotime( DH_OR_Store::now() ) );
+        echo '<h2 id="by-city">Dog owner requests by city</h2><p>Real requests that went to at least one trainer. Lead Gen Pack starts at the day 45 check (' . esc_html( DH_OR_Report::DAY45 ) . ') with ' . (int) DH_OR_Report::DAY45_MONTHLY . ' or more a month.</p>';
+        echo '<table class="widefat striped" style="max-width:640px"><thead><tr><th>City</th><th>Last 7 days</th><th>Last 30 days</th><th>Since the start</th></tr></thead><tbody>';
+        foreach ( $t['cities'] as $city => $c ) {
+            echo '<tr><td>' . esc_html( $city ) . '</td><td>' . (int) $c['week'] . '</td><td>' . (int) $c['month'] . '</td><td>' . (int) $c['all'] . '</td></tr>';
+        }
+        echo $t['cities'] ? '' : '<tr><td colspan="4">None yet.</td></tr>';
+        echo '<tr><th>All cities</th><th>' . (int) $t['week'] . '</th><th>' . (int) $t['month'] . '</th><th>' . (int) $t['all'] . '</th></tr></tbody></table>';
+        echo '<p>Hired a Goody Doggy trainer: ' . (int) $t['hired'] . ' of ' . (int) $t['answered'] . ' dog owners who answered "Did you hire?".</p>';
+
         // List.
         $rows = $wpdb->get_results( "SELECT id, created_at, status, tier, source_type, zip, matched_count, notified_count, thin_market, other_lane_count, is_test FROM {$rt} ORDER BY id DESC LIMIT 50" );
         echo '<h2>Latest requests</h2><table class="widefat striped"><thead><tr><th>ID</th><th>When</th><th>Status</th><th>Tier</th><th>Source</th><th>ZIP</th><th>Matched</th><th>Notified</th><th>Thin</th><th>Other lanes would add</th><th>Test</th></tr></thead><tbody>';

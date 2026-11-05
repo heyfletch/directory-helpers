@@ -385,6 +385,35 @@ class DH_OR_Messages {
         return array( 'subject' => $subject, 'text' => $text, 'html' => self::wrap( $subject, $body, $footer ) );
     }
 
+    /**
+     * "Did you hire?" email to the dog owner 14 days after a request went to trainers.
+     *
+     * $d: first_name, where ("near Bethesda"), trainers[] (name, city, url), answer_url, postal.
+     */
+    public static function owner_hire_ask( array $d ) {
+        $n       = count( $d['trainers'] );
+        $subject = 'Did you hire a dog trainer?';
+        $lead    = 'Two weeks ago you asked for dog training help ' . $d['where'] . ', and we sent your request to:';
+        $ask     = ( 1 === $n ? 'Did you hire ' . $d['trainers'][0]['name'] . '?' : 'Did you hire one of them?' )
+            . ' Your answer helps us send dog owners near you to the trainers who follow up.';
+        $why     = 'You got this because you asked for a dog trainer on Goody Doggy.';
+
+        $text = 'Hi ' . $d['first_name'] . ",\n\n" . $lead . "\n";
+        foreach ( $d['trainers'] as $t ) {
+            $text .= '- ' . $t['name'] . ( $t['city'] ? ' (' . $t['city'] . ')' : '' ) . "\n";
+        }
+        $text .= "\n" . $ask . "\n\nAnswer in one tap:\n" . $d['answer_url'] . "\n\n"
+            . "Joe Fletcher\nOwner, Goody Doggy\nQuestions? Email Joe: " . self::JOE_EMAIL . "\n\n--\n" . $why . "\n" . $d['postal'] . "\n";
+
+        $p    = '<p style="margin:0 0 14px 0;">';
+        $body = $p . 'Hi ' . self::h( $d['first_name'] ) . ',</p><p style="margin:0 0 8px 0;">' . self::h( $lead ) . '</p><ul style="margin:0 0 14px 0;padding-left:20px;">';
+        foreach ( $d['trainers'] as $t ) {
+            $body .= '<li><a href="' . self::h( $t['url'] ) . '" style="color:#0572bd;">' . self::h( $t['name'] ) . '</a>' . ( $t['city'] ? ' (' . self::h( $t['city'] ) . ')' : '' ) . '</li>';
+        }
+        $body .= '</ul>' . $p . self::h( $ask ) . '</p>' . self::button( $d['answer_url'], 'Answer in one tap' ) . self::signature_html();
+        return array( 'subject' => $subject, 'text' => $text, 'html' => self::wrap( $subject, $body, self::h( $why ) . '<br>' . self::h( $d['postal'] ) ) );
+    }
+
     /** Short note to a trainer when a request is withdrawn. */
     public static function withdrawn_trainer( array $d ) {
         $subject = 'Dog training request withdrawn';

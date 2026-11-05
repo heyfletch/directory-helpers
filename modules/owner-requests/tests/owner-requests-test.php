@@ -501,5 +501,39 @@ check( 'lane B: link page and marketplace addresses skipped', $pick( 'press@link
 check( 'lane B: escaped characters are not an address', $pick( 'u002f@best.friends.dog', 'website', 'best.friends.dog', 'Best Friends Dog' ), '' );
 check( 'lane B: generic name words never match', $pick( 'dogtraining@gmail.com', 'backlinks', '', 'Best Dog Training' ), '' );
 
+/* ---------------------------------------------------------------- "Did you hire?" */
+$three = array(
+    array( 'name' => 'The Polite Dog', 'city' => 'Bethesda, Maryland', 'url' => 'https://example.test/p/a/' ),
+    array( 'name' => 'Rockville K9', 'city' => 'Rockville, Maryland', 'url' => 'https://example.test/p/b/' ),
+    array( 'name' => 'Sit Happens', 'city' => '', 'url' => 'https://example.test/p/c/' ),
+);
+$ha = DH_OR_Messages::owner_hire_ask( array( 'first_name' => 'Jo', 'where' => 'near Bethesda', 'trainers' => $three, 'answer_url' => 'https://example.test/h/x/', 'postal' => 'P' ) );
+check( 'hire ask subject', $ha['subject'], 'Did you hire a dog trainer?' );
+check_true( 'hire ask names the place and every trainer', false !== strpos( $ha['text'], 'Two weeks ago you asked for dog training help near Bethesda, and we sent your request to:' ) && false !== strpos( $ha['text'], '- Rockville K9 (Rockville, Maryland)' ) && false !== strpos( $ha['text'], "- Sit Happens\n" ) );
+check_true( 'hire ask asks about them all', false !== strpos( $ha['text'], 'Did you hire one of them?' ) );
+check_true( 'hire ask has the button, photo and postal address', false !== strpos( $ha['html'], 'Answer in one tap' ) && false !== strpos( $ha['html'], 'https://example.test/h/x/' ) && false !== strpos( $ha['html'], 'email-joe.jpg' ) && false !== strpos( $ha['html'], 'asked for a dog trainer on Goody Doggy.<br>P' ) );
+$ha1 = DH_OR_Messages::owner_hire_ask( array( 'first_name' => 'Jo', 'where' => 'near Bethesda', 'trainers' => array( $three[0] ), 'answer_url' => 'https://example.test/h/x/', 'postal' => 'P' ) );
+check_true( 'hire ask with one trainer names them', false !== strpos( $ha1['text'], 'Did you hire The Polite Dog?' ) );
+check( 'hire answers besides a trainer', array_values( DH_OR_Flow::HIRE_OTHER ), array( 'A different trainer', 'No one yet' ) );
+
+/* ---------------------------------------------------------------- weekly count by city */
+require_once $inc . 'class-or-report.php';
+$now   = strtotime( '2026-11-30 12:00:00' );
+$items = array(
+    array( 'city' => 'Bethesda', 'ts' => $now - 2 * 86400, 'hire' => 'trainer' ),
+    array( 'city' => 'Bethesda', 'ts' => $now - 20 * 86400, 'hire' => 'none' ),
+    array( 'city' => 'Austin', 'ts' => $now - 3 * 86400, 'hire' => '' ),
+    array( 'city' => 'Rockville', 'ts' => $now - 40 * 86400, 'hire' => '' ),
+);
+$t = DH_OR_Report::tally( $items, $now );
+check( 'tally: week, month, all', array( $t['week'], $t['month'], $t['all'] ), array( 2, 3, 4 ) );
+check( 'tally: busiest city first', array_keys( $t['cities'] ), array( 'Bethesda', 'Austin', 'Rockville' ) );
+check( 'tally: per city', $t['cities']['Bethesda'], array( 'week' => 1, 'month' => 2, 'all' => 2 ) );
+check( 'tally: hire answers', array( $t['hired'], $t['answered'] ), array( 1, 2 ) );
+$wm = DH_OR_Report::message( $t, '2026-11-30', 'https://example.test/wp-admin/admin.php?page=dh-owner-requests#by-city' );
+check( 'weekly email lines', $wm['text'], "- This week: 2 dog owner requests. Last 30 days: 3. Lead Gen Pack starts at the December 19 check if this reaches 21 a month.\n- Top cities, last 30 days: Bethesda 2, Austin 1.\n- Hired a Goody Doggy trainer: 1 of 2 dog owners who answered.\n\nSee every city: https://example.test/wp-admin/admin.php?page=dh-owner-requests#by-city\n" );
+$wm2 = DH_OR_Report::message( DH_OR_Report::tally( array(), $now ), '2026-12-21', 'u' );
+check( 'weekly email after day 45 with no requests', $wm2['text'], "- This week: 0 dog owner requests. Last 30 days: 0.\n\nSee every city: u\n" );
+
 echo "\n{$tests} checks, {$failures} failed\n";
 exit( $failures ? 1 : 0 );

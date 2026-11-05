@@ -398,6 +398,48 @@ class DH_OR_Flow {
         DH_OR_Store::add_event( $route->request_id, $route->id, 'optout', array( 'profile_id' => (int) $route->profile_id ) );
     }
 
+    /* ---------- dog owner "Did you hire?" ---------- */
+
+    /** Answers a dog owner can tap besides a trainer's name, in button order. */
+    const HIRE_OTHER = array(
+        'other' => 'A different trainer',
+        'none'  => 'No one yet',
+    );
+
+    /** The trainers a request went to: profile id => name, city, url. */
+    public static function hire_trainers( $request ) {
+        $out = array();
+        foreach ( DH_OR_Store::routes_for( $request->id ) as $r ) {
+            if ( in_array( $r->status, array( 'sent', 'test', 'dry_run' ), true ) ) {
+                $id         = (int) $r->profile_id;
+                $out[ $id ] = array(
+                    'name' => DH_OR_Candidates::trainer_name( $id ),
+                    'city' => trim( (string) get_post_meta( $id, 'city', true ) . ', ' . (string) get_post_meta( $id, 'state', true ), ', ' ),
+                    'url'  => get_permalink( $id ),
+                );
+            }
+        }
+        return $out;
+    }
+
+    /** The dog owner tapped an answer: a trainer's profile id, 'other' or 'none'. */
+    public static function hire_answer( $request, $choice ) {
+        $choice = (string) $choice;
+        $trainers = self::hire_trainers( $request );
+        if ( ctype_digit( $choice ) && isset( $trainers[ (int) $choice ] ) ) {
+            $answer = 'trainer';
+            $pid    = (int) $choice;
+        } elseif ( isset( self::HIRE_OTHER[ $choice ] ) ) {
+            $answer = $choice;
+            $pid    = 0;
+        } else {
+            return false;
+        }
+        DH_OR_Store::update_request( $request->id, array( 'hire_answer' => $answer, 'hire_profile_id' => $pid, 'hire_answer_at' => DH_OR_Store::now() ) );
+        DH_OR_Store::add_event( $request->id, 0, 'hire_' . $answer, array( 'profile_id' => $pid ) );
+        return true;
+    }
+
     /* ---------- retract ---------- */
 
     /**
