@@ -64,7 +64,10 @@
       /* tracking never blocks the form */
     }
     try {
-      if (window.AnalyticsWP && typeof window.AnalyticsWP.event === "function") {
+      if (
+        window.AnalyticsWP &&
+        typeof window.AnalyticsWP.event === "function"
+      ) {
         window.AnalyticsWP.event(event, props);
       }
     } catch (e) {
@@ -111,6 +114,10 @@
           setHidden(form, k, params.get(k));
         }
       });
+      // The site header's Ask a dog trainer box sends ?zip=12345.
+      if (/^\d{5}$/.test(params.get("zip") || "")) {
+        setHidden(form, "zip", params.get("zip"));
+      }
       return true;
     };
     if (!fill()) {
