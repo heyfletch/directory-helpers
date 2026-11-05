@@ -32,7 +32,7 @@
   margin-top: 0;
 }
 
-/* Same side gutters as the page's own containers (32px on desktop, 20px on a phone). */
+/* Same side gutters as the page's own containers (32px on desktop, the site gutter on a phone). */
 .dh-rb__inner {
   margin: 0;
   padding: 0 32px;
@@ -367,7 +367,7 @@
     padding: 32px 0;
   }
   .dh-rb__inner {
-    padding: 0 20px;
+    padding: 0 var(--gd-gutter, 20px);
   }
   .dh-rb__card {
     padding: 24px 20px;
@@ -400,6 +400,13 @@
   }
 }
 @media (max-width: 560px) {
+  /* Inside a page's content area the section already has the gutter. */
+  .brxe-post-content .dh-rb__inner {
+    padding: 0;
+  }
+  .dh-rb__card {
+    padding: 22px 16px;
+  }
   .dh-rb fieldset {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
