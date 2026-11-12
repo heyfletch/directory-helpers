@@ -55,12 +55,42 @@ class DH_UGC_Update_Requests {
         add_filter( 'fluentform/rendering_form', array( $this, 'prefill_form' ), 10, 1 );
         add_action( 'fluentform/submission_inserted', array( $this, 'record_submission' ), 10, 3 );
         add_action( 'template_redirect', array( $this, 'nocache_token_page' ) );
+        add_filter( 'robots_txt', array( __CLASS__, 'robots_disallow_identified' ), 99, 2 );
+        add_filter( 'bricks/frontend/render_data', array( __CLASS__, 'nofollow_pid_links' ), 30 );
         add_shortcode( 'dh_update_target', array( $this, 'shortcode_update_target' ) );
 
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
             WP_CLI::add_command( 'dh-ugc issue-token', array( $this, 'cli_issue_token' ) );
             WP_CLI::add_command( 'dh-ugc resolve-token', array( $this, 'cli_resolve_token' ) );
         }
+    }
+
+    /**
+     * Keep crawlers off the per-trainer form URLs (/update-profile/?pid= and ?t=).
+     * Every profile links its own copy, so each crawl of one is a crawl a real page
+     * did not get. The bare /update-profile/ page stays crawlable.
+     */
+    public static function robots_disallow_identified( $output, $public ) {
+        $rule = 'Disallow: /update-profile/?';
+        if ( ! $public || false !== strpos( $output, $rule ) ) {
+            return $output;
+        }
+        $count  = 0;
+        $output = preg_replace( '/^(User-agent:[ \t]*\*[ \t]*\r?\n)/mi', '$1' . $rule . "\n", $output, 1, $count );
+        if ( ! $count ) {
+            $output = rtrim( $output ) . "\n\nUser-agent: *\n" . $rule . "\n";
+        }
+        return $output;
+    }
+
+    /**
+     * Mark the Owner's Box "Send us your changes" link nofollow.
+     */
+    public static function nofollow_pid_links( $content ) {
+        if ( ! is_string( $content ) || false === strpos( $content, 'href="/update-profile/?pid=' ) ) {
+            return $content;
+        }
+        return str_replace( '<a href="/update-profile/?pid=', '<a rel="nofollow" href="/update-profile/?pid=', $content );
     }
 
     /**
