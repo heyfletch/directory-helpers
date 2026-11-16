@@ -445,7 +445,7 @@ class DH_UGC_Update_Requests {
 
         $pid            = $ids[0];
         $out['post_id'] = $pid;
-        $out['title']   = get_the_title( $pid );
+        $out['title']   = html_entity_decode( get_the_title( $pid ), ENT_QUOTES, 'UTF-8' );
         $out['status']  = get_post_status( $pid );
 
         $stored = $contact ? $contact->clean_email( get_post_meta( $pid, DH_Contact_Email::META, true ) ) : '';
