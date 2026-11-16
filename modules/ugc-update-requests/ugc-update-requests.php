@@ -448,22 +448,57 @@ class DH_UGC_Update_Requests {
         $out['title']   = html_entity_decode( get_the_title( $pid ), ENT_QUOTES, 'UTF-8' );
         $out['status']  = get_post_status( $pid );
 
-        $stored = $contact ? $contact->clean_email( get_post_meta( $pid, DH_Contact_Email::META, true ) ) : '';
-        if ( $stored ) {
-            $out['send_to'] = $stored;
-            $out['basis']   = 'contact_email';
-            return $out;
+        $owned = $contact ? $this->owned_emails( $pid, $contact ) : array();
+        $site  = $contact ? $contact->domain( get_post_meta( $pid, 'url', true ) ) : '';
+        $domains = array();
+        foreach ( $owned as $e ) {
+            $domains[] = substr( strrchr( $e, '@' ), 1 );
         }
-        $site = $contact ? $contact->domain( get_post_meta( $pid, 'url', true ) ) : '';
-        if ( $contact && $email && $site && substr( strrchr( $email, '@' ), 1 ) === $site ) {
+        if ( $site ) {
+            $domains[] = $site;
+        }
+        $domains = array_values( array_unique( array_filter( $domains ) ) );
+
+        $req_domain = $email ? substr( strrchr( $email, '@' ), 1 ) : '';
+        if ( $contact && $email && ! $contact->is_free_mailbox( $email ) && in_array( $req_domain, $domains, true ) ) {
             $out['send_to'] = $email;
             $out['basis']   = 'domain';
+            return $out;
+        }
+        if ( $owned ) {
+            $out['send_to'] = $owned[0];
+            $out['basis']   = 'contact_email';
             return $out;
         }
         $out['reason'] = $site
             ? 'no stored contact email, and the requester email is not on ' . $site
             : 'no stored contact email and the profile has no website';
         return $out;
+    }
+
+
+    /**
+     * Every address the profile owns: the stored contact email plus each email in the
+     * contact_info repeater (values and types are parallel comma lists).
+     */
+    private function owned_emails( $pid, $contact ) {
+        $found  = array();
+        $stored = $contact->clean_email( get_post_meta( $pid, DH_Contact_Email::META, true ) );
+        if ( $stored ) {
+            $found[] = $stored;
+        }
+        $rows = (int) get_post_meta( $pid, 'contact_info', true );
+        for ( $i = 0; $i < $rows; $i++ ) {
+            $values = array_map( 'trim', explode( ',', (string) get_post_meta( $pid, "contact_info_{$i}_value", true ) ) );
+            $types  = array_map( 'trim', explode( ',', (string) get_post_meta( $pid, "contact_info_{$i}_type", true ) ) );
+            foreach ( $values as $k => $v ) {
+                $e = $contact->clean_email( $v );
+                if ( $e && ( ! isset( $types[ $k ] ) || 'mail' === $types[ $k ] ) ) {
+                    $found[] = $e;
+                }
+            }
+        }
+        return array_values( array_unique( $found ) );
     }
 
     /**
