@@ -974,6 +974,12 @@ class Directory_Helpers {
                 'description' => __('Up to three nearby trainers per ZIP code and topic for the free training course emails, Featured first. REST: POST /wp-json/dh/v1/course-picks with the X-Course-Key header (option dh_course_picks_key). Uses the Owner Requests matcher.', 'directory-helpers'),
                 'file' => DIRECTORY_HELPERS_PATH . 'modules/course-picks/course-picks.php',
                 'class' => 'DH_Course_Picks'
+            ),
+            'course-box' => array(
+                'name' => __('Course Box', 'directory-helpers'),
+                'description' => __('Free training course signup box: full box after guide page content, slim box under the request box on city, state and profile pages, [dh_course_box placement="" size="full|slim"] anywhere. Tracks puppy_box_view and puppy_signup to GA4 and AnalyticsWP. Kill switch option dh_course_box_off.', 'directory-helpers'),
+                'file' => DIRECTORY_HELPERS_PATH . 'modules/course-box/course-box.php',
+                'class' => 'DH_Course_Box'
             )
             // Add more modules here as needed
         );

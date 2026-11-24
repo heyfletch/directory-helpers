@@ -1,0 +1,28 @@
+/* Free training course box. Layout and form styles come from the Owner Requests box (.dh-rb); this file only sets the course look. */
+.dh-cb .dh-cb__card {
+  background: var(--rb-mist);
+  border-color: var(--rb-blue);
+}
+.dh-cb .dh-cb__note a {
+  color: var(--rb-blue-deep);
+  font-weight: 600;
+}
+
+/* Under the request box: the request box's own bottom padding is the space above. */
+.dh-rb + .dh-cb {
+  padding-top: 0;
+}
+.dh-cb + #brxe-kyoamc,
+.dh-cb + #brxe-revsah {
+  margin-top: 0;
+}
+
+/* Slim: smaller heading. */
+.dh-cb--slim .dh-cb__title {
+  font-size: clamp(1.375rem, 1.1rem + 1vw, 1.875rem);
+}
+
+/* After guide text: the guide's own container width, no extra side gutters. */
+.dh-cb--full .dh-rb__inner {
+  padding: 0;
+}
