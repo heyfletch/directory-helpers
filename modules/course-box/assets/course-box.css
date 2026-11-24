@@ -367,6 +367,13 @@
   .dh-cb--feature fieldset {
     grid-template-columns: minmax(0, 1fr);
   }
+  .dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-input--content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-form-check-label {
+    min-height: 56px;
+  }
   .dh-cbf__mail:nth-child(n + 3) {
     display: none;
   }
