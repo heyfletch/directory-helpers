@@ -60,3 +60,313 @@
 .gd2-section:has(> .gd2-container > .brxe-shortcode > .dh-cb) {
   padding-bottom: 30px;
 }
+
+/* ---- Feature layout (homepage band): pitch with a live inbox preview on the left, the form on the right ---- */
+.dh-cb--feature {
+  padding-block: 0;
+}
+.dh-cbf {
+  display: grid;
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+  gap: 48px;
+  align-items: center;
+  padding: 48px;
+  background: var(--rb-mist);
+  border: 2px solid var(--rb-blue);
+  border-radius: 22px;
+  box-shadow: 0 3px 0 var(--rb-blue-deep);
+}
+.dh-cbf__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 6px 14px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rb-ink);
+  background: var(--rb-yellow);
+  border-radius: 999px;
+}
+.dh-cbf__title {
+  margin: 0 0 14px;
+  font-family: var(--gd-font-display, "Bricolage Grotesque", Lexend, system-ui, sans-serif);
+  font-size: clamp(2rem, 1.4rem + 2vw, 3rem);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--rb-blue-deep);
+  text-wrap: balance;
+}
+.dh-cbf__lead {
+  max-width: 34em;
+  margin: 0 0 24px;
+  font-size: 1.125rem;
+  line-height: 1.55;
+}
+
+/* The inbox preview */
+.dh-cbf__inbox {
+  margin: 0 0 20px;
+  background: #fff;
+  border: 1.5px solid var(--rb-line);
+  border-radius: 16px;
+  box-shadow: 0 14px 28px -14px rgba(3, 76, 124, 0.45);
+  overflow: hidden;
+}
+.dh-cbf__inbox-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--rb-slate);
+  background: var(--rb-sky);
+}
+.dh-cbf__for {
+  padding: 2px 10px;
+  color: #fff;
+  background: var(--rb-blue);
+  border-radius: 999px;
+}
+.dh-cbf__mails {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dh-cbf__mail {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--rb-line);
+}
+.dh-cbf__mail:first-child {
+  border-top: 0;
+}
+.dh-cbf__from {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--rb-yellow) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23034c7c'%3E%3Ccircle cx='11' cy='4' r='2'/%3E%3Ccircle cx='18' cy='8' r='2'/%3E%3Ccircle cx='20' cy='16' r='2'/%3E%3Cpath d='M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z'/%3E%3C/svg%3E") center / 18px no-repeat;
+}
+.dh-cbf__text {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.dh-cbf__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: var(--rb-slate);
+}
+.dh-cbf__top b {
+  font-weight: 600;
+  color: var(--rb-ink);
+}
+.dh-cbf__top em {
+  font-style: normal;
+}
+.dh-cbf__subj {
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--rb-ink);
+}
+.dh-cbf__prev {
+  overflow: hidden;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--rb-slate);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dh-cbf__mail.is-new {
+  animation: dh-cbf-in 0.35s var(--gd-ease, ease-out);
+}
+@keyframes dh-cbf-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dh-cbf__mail.is-new {
+    animation: none;
+  }
+}
+
+/* Promise row */
+.dh-cbf__trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dh-cbf__trust li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+.dh-cbf__trust li::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gd-green, #0fa361) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / 11px no-repeat;
+}
+
+/* The form card */
+.dh-cbf__form {
+  padding: 32px;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 14px 28px -14px rgba(3, 76, 124, 0.45);
+}
+.dh-cb--feature fieldset {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 16px;
+}
+.dh-cb--feature .ff-el-group {
+  grid-column: span 1;
+}
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]),
+.dh-cb--feature .ff-el-group:has(input[name="email"]) {
+  grid-column: 1 / -1;
+}
+
+/* Dog type: four tappable cards */
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-input--content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-form-check {
+  margin: 0;
+}
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-form-check-label {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-height: 64px;
+  height: 100%;
+  margin: 0;
+  padding: 10px 14px 10px 44px;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--rb-ink);
+  background: #fff;
+  border: 2px solid var(--rb-line);
+  border-radius: 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    transform 0.1s;
+}
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-form-check-label:hover {
+  border-color: var(--rb-blue);
+}
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-form-check-label:has(input:checked) {
+  background: var(--rb-mist);
+  border-color: var(--rb-blue);
+  box-shadow: 0 3px 0 var(--rb-blue-deep);
+}
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-form-check-label:has(input:focus-visible) {
+  outline: 3px solid var(--rb-yellow);
+  outline-offset: 2px;
+}
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]) input[type="radio"] {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0;
+  accent-color: var(--rb-blue);
+}
+.dh-cb--feature .ff-el-group:has(input[name="dog_type"]) .ff-el-form-check-label > span::after {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--rb-slate);
+}
+.dh-cb--feature input[value="young_puppy"] + span::after {
+  content: "New at home";
+}
+.dh-cb--feature input[value="teenage_dog"] + span::after {
+  content: "Training slipping";
+}
+.dh-cb--feature input[value="adult_dog"] + span::after {
+  content: "Ready for more";
+}
+.dh-cb--feature input[value="rescue"] + span::after {
+  content: "Still settling in";
+}
+.dh-cb--feature .ff_submit_btn_wrapper .ff-btn-submit {
+  width: 100%;
+  font-size: 1.125rem;
+}
+.dh-cbf__after,
+.dh-cbf__source {
+  margin: 14px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--rb-slate);
+  text-align: center;
+}
+.dh-cbf__after {
+  font-weight: 500;
+  color: var(--rb-ink);
+}
+.dh-cbf__source {
+  margin-top: 6px;
+  font-size: 0.8125rem;
+}
+.dh-cbf__source a {
+  color: var(--rb-blue-deep);
+  font-weight: 600;
+}
+.dh-cbf__form:has(.ff-message-success) .dh-cbf__after {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .dh-cbf {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    padding: 32px;
+  }
+}
+@media (max-width: 560px) {
+  .dh-cbf {
+    padding: 22px 16px;
+    border-radius: 18px;
+  }
+  .dh-cbf__form {
+    padding: 22px 16px;
+  }
+  .dh-cb--feature fieldset {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dh-cbf__mail:nth-child(n + 3) {
+    display: none;
+  }
+}

@@ -95,9 +95,46 @@
       });
   }
 
+  /* Feature layout: the inbox preview shows the first lessons for the dog type the visitor picks. */
+  function watchPicks() {
+    var boxes = document.querySelectorAll(".dh-cb--feature[data-lessons]");
+    Array.prototype.forEach.call(boxes, function (box) {
+      var data;
+      try {
+        data = JSON.parse(box.getAttribute("data-lessons"));
+      } catch (e) {
+        return;
+      }
+      var label = box.querySelector(".dh-cbf__for");
+      var rows = box.querySelectorAll(".dh-cbf__mail");
+      box.addEventListener("change", function (e) {
+        var t = e.target;
+        if (!t || t.name !== "dog_type" || !data[t.value]) {
+          return;
+        }
+        var pick = data[t.value];
+        if (label) {
+          label.textContent = pick.label;
+        }
+        Array.prototype.forEach.call(rows, function (row, i) {
+          var week = pick.weeks[i];
+          if (!week) {
+            return;
+          }
+          row.querySelector(".dh-cbf__subj").textContent = week[0];
+          row.querySelector(".dh-cbf__prev").textContent = week[1];
+          row.classList.remove("is-new");
+          void row.offsetWidth;
+          row.classList.add("is-new");
+        });
+      });
+    });
+  }
+
   function start() {
     watchViews();
     watchSubmits();
+    watchPicks();
   }
 
   if (document.readyState === "loading") {
