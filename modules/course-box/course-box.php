@@ -10,7 +10,8 @@
  *
  * Tracking: puppy_box_view (once, when the box scrolls into view) and puppy_signup (successful submit,
  * before the confirm click) go to GA4 and AnalyticsWP with placement and page_url. The landing page
- * (LANDING_ID) carries its own form; the script tracks it with placement "landing".
+ * (LANDING_ID) and the puppy guides carry their own copy of the form; the script tracks those as
+ * "landing" and "guide".
  *
  * Kill switch: option dh_course_box_off = 1 hides every injected box.
  *
@@ -99,6 +100,10 @@ class DH_Course_Box {
         if ( ! is_page() || ! self::is_guide( get_queried_object_id() ) ) {
             return $html;
         }
+        // Puppy guides already carry the course form inside their text; those get tracking only.
+        if ( false !== strpos( $html, 'fluent_form_' . self::form_id() ) || false !== strpos( $html, 'data-form_id="' . self::form_id() . '"' ) ) {
+            return $html;
+        }
         return $html . $this->render( 'guide', 'full' );
     }
 
@@ -134,7 +139,7 @@ class DH_Course_Box {
     }
 
     public function landing_assets() {
-        if ( is_page( self::LANDING_ID ) ) {
+        if ( is_page( self::LANDING_ID ) || ( is_page() && self::is_guide( get_queried_object_id() ) ) ) {
             $this->enqueue_script();
         }
     }
@@ -153,6 +158,9 @@ class DH_Course_Box {
         $dir = __DIR__ . '/assets/';
         $url = DIRECTORY_HELPERS_URL . 'modules/course-box/assets/';
         wp_enqueue_script( 'dh-course-box', $url . 'course-box.js', array(), (string) filemtime( $dir . 'course-box.js' ), true );
-        wp_add_inline_script( 'dh-course-box', 'window.dhCourseBox=' . wp_json_encode( array( 'formId' => self::form_id() ) ) . ';', 'before' );
+        wp_add_inline_script( 'dh-course-box', 'window.dhCourseBox=' . wp_json_encode( array(
+            'formId'    => self::form_id(),
+            'placement' => is_page( self::LANDING_ID ) ? 'landing' : ( is_page() && self::is_guide( get_queried_object_id() ) ? 'guide' : 'other' ),
+        ) ) . ';', 'before' );
     }
 }

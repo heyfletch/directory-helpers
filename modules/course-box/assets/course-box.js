@@ -3,7 +3,7 @@
  * puppy_box_view: once per box, when it scrolls into view.
  * puppy_signup: a successful Fluent Forms submit of the course form (before the confirm click).
  * Both go to GA4 (gtag, queued in dataLayer) and AnalyticsWP with placement and page_url.
- * The landing page form has no [data-dh-cb] wrapper and is tracked as placement "landing".
+ * Forms with no [data-dh-cb] wrapper (landing page, puppy guides) use the page placement from PHP.
  */
 (function () {
   var cfg = window.dhCourseBox || {};
@@ -32,7 +32,9 @@
 
   function placementOf(el) {
     var box = el && el.closest ? el.closest("[data-dh-cb]") : null;
-    return box ? box.getAttribute("data-placement") || "other" : "landing";
+    return box
+      ? box.getAttribute("data-placement") || "other"
+      : cfg.placement || "other";
   }
 
   function courseForms() {
