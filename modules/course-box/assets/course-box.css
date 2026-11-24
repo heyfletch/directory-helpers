@@ -26,3 +26,28 @@
 .dh-cb--full .dh-rb__inner {
   padding: 0;
 }
+
+/* Question pages reset every div's padding and display (.gdq in bricks-child/gd-questions.css); restore the box there. */
+.brx-body .gdq section.dh-cb {
+  padding: 48px 0 64px;
+}
+.brx-body .gdq .dh-cb .dh-rb__inner {
+  width: min(var(--gd-content), 100% - 2 * var(--gd-gutter));
+  margin-inline: auto;
+  padding: 0;
+}
+.brx-body .gdq .dh-cb .dh-rb__card {
+  padding: 36px;
+}
+.brx-body .gdq .dh-cb .dh-rb__intro {
+  display: block;
+  margin: 0 0 28px;
+}
+.brx-body .gdq .dh-cb .dh-rb__intro > * + * {
+  margin-top: 8px;
+}
+@media (max-width: 900px) {
+  .brx-body .gdq .dh-cb .dh-rb__card {
+    padding: 24px 20px;
+  }
+}
