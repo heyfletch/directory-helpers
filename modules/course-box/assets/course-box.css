@@ -51,3 +51,8 @@
     padding: 24px 20px;
   }
 }
+
+/* Inside a site section (homepage band): the section's own padding is the space around the box. */
+.gd2-section .brxe-shortcode > .dh-cb {
+  padding-block: 0;
+}
