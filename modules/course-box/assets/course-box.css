@@ -58,5 +58,5 @@
 }
 /* The banner section below brings its own top space, so the band drops its bottom padding. */
 .gd2-section:has(> .gd2-container > .brxe-shortcode > .dh-cb) {
-  padding-bottom: 0;
+  padding-bottom: 30px;
 }
