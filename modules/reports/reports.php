@@ -445,6 +445,7 @@ class DH_Reports {
         add_filter('wp_robots', array(__CLASS__, 'robots'), 99);
         add_filter('body_class', array(__CLASS__, 'body_class'));
         add_action('wp_head', array(__CLASS__, 'print_head'), 2);
+        add_action('wp_enqueue_scripts', array(__CLASS__, 'enqueue_tracking'));
 
         get_header();
         echo '<main id="brx-content" class="dh-reports-main">';
@@ -455,6 +456,11 @@ class DH_Reports {
         echo '</main>';
         get_footer();
         exit;
+    }
+
+    public static function enqueue_tracking() {
+        $dir = plugin_dir_path(__FILE__) . 'assets/reports-track.js';
+        wp_enqueue_script('dh-reports-track', plugin_dir_url(__FILE__) . 'assets/reports-track.js', array(), file_exists($dir) ? (string) filemtime($dir) : null, true);
     }
 
     private static function ribbon($post_id, $bundle_id, $as_of) {
